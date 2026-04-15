@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.gamemodules.mapper.BattleRecordElfMapper">
+
+    <!-- 根据战斗ID查询精灵状态 -->
+    <select id="selectByBattleId" resultType="cn.iocoder.gamemodules.entity.BattleRecordElf">
+        SELECT * FROM battle_record_elf
+        WHERE battle_id = #{battleId}
+    </select>
+
+</mapper>

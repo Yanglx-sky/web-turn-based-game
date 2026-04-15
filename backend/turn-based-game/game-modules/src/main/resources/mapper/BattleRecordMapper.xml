@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.gamemodules.mapper.BattleRecordMapper">
+
+    <!-- 根据用户ID查询当前战斗（状态为0战斗中或3断线暂停） -->
+    <select id="selectCurrentBattleByUserId" resultType="cn.iocoder.gamemodules.entity.BattleRecord">
+        SELECT * FROM battle_record
+        WHERE user_id = #{userId} AND (status = 0 OR status = 3)
+        ORDER BY create_time DESC
+        LIMIT 1
+    </select>
+
+    <!-- 查询超时的断线战斗（状态为3且offline_time超过90秒） -->
+    <select id="selectTimeoutBattles" resultType="cn.iocoder.gamemodules.entity.BattleRecord">
+        SELECT * FROM battle_record
+        WHERE status = 3 AND offline_time &lt; #{thresholdTime}
+    </select>
+
+</mapper>

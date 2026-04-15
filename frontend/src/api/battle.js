@@ -1,0 +1,73 @@
+import api from './axios'
+
+export const battleApi = {
+  // 开始战斗
+  startBattle: (userElfId, levelId) => {
+    return api.post('/api/battle', {}, {
+      params: {
+        userElfId,
+        levelId
+      }
+    })
+  },
+  
+  // 获取当前战斗状态
+  getCurrentBattle: () => {
+    return api.get('/api/battle')
+  },
+  
+  // 更新战斗状态
+  updateBattleStatus: (status) => {
+    return api.put('/api/battle/status', { status })
+  },
+  
+  // 玩家逃跑
+  flee: () => {
+    return api.put('/api/battle/status', { status: 'flee' })
+  },
+  
+  // 放弃战斗
+  abandonBattle: () => {
+    return api.put('/api/battle/status', { status: 'abandon' })
+  },
+  
+  // 普通攻击
+  normalAttack: () => {
+    return api.post('/api/battle/action', { type: 'attack' })
+  },
+  
+  // 使用技能
+  useSkill: (skillId) => {
+    return api.post('/api/battle/action', { type: 'skill', skillId })
+  },
+  
+  // 切换精灵
+  switchElf: (elfId) => {
+    return api.post('/api/battle/action', { type: 'switch', elfId })
+  },
+  
+  // 战斗结算
+  battleSettlement: () => {
+    return api.post('/api/battle/settlement')
+  },
+  
+  // 获取AI战报总结
+  getBattleSummary: () => {
+    return api.get('/api/battle/ai/summary')
+  },
+  
+  // 获取战斗策略推荐
+  getStrategyRecommendation: (levelId) => {
+    return api.get(`/api/battle/ai/strategy?levelId=${levelId}`)
+  },
+
+  // 断线重连
+  reconnect: () => {
+    return api.get('/api/battle')
+  },
+
+  // 玩家离线
+  playerOffline: () => {
+    return api.put('/api/battle/status', { status: 'offline' })
+  }
+}
