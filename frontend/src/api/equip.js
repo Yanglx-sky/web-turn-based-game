@@ -3,22 +3,22 @@ import api from './axios'
 export const equipApi = {
   // 获取所有装备
   getAllEquips: () => {
-    return api.get('/api/equip/all')
+    return api.get('/api/equips')
   },
   
   // 根据类型获取装备
   getEquipsByType: (type) => {
-    return api.get(`/api/equip/type/${type}`)
+    return api.get(`/api/equips/type/${type}`)
   },
   
   // 获取装备详情
   getEquipById: (id) => {
-    return api.get(`/api/equip/detail/${id}`)
+    return api.get(`/api/equips/detail/${id}`)
   },
   
   // 购买装备
   buyEquip: (equipId) => {
-    return api.post('/api/equip/buy', {}, {
+    return api.post('/api/equips', null, {
       params: {
         equipId
       }
@@ -26,8 +26,8 @@ export const equipApi = {
   },
   
   // 装备武器
-  equipWeapon: (userId, elfId, weaponId) => {
-    return api.post('/api/equip/weapon/equip', {}, {
+  equipWeapon: (elfId, weaponId) => {
+    return api.put('/api/equips/weapon', null, {
       params: {
         elfId,
         weaponId
@@ -36,8 +36,8 @@ export const equipApi = {
   },
   
   // 装备防具
-  equipArmor: (userId, elfId, armorId) => {
-    return api.post('/api/equip/armor/equip', {}, {
+  equipArmor: (elfId, armorId) => {
+    return api.put('/api/equips/armor', null, {
       params: {
         elfId,
         userBagId: armorId
@@ -47,7 +47,7 @@ export const equipApi = {
   
   // 卸下武器
   unequipWeapon: (elfId) => {
-    return api.post('/api/equip/weapon/unequip', {}, {
+    return api.delete('/api/equips/weapon', {
       params: {
         elfId
       }
@@ -56,7 +56,7 @@ export const equipApi = {
   
   // 卸下防具
   unequipArmor: (elfId) => {
-    return api.post('/api/equip/armor/unequip', {}, {
+    return api.delete('/api/equips/armor', {
       params: {
         elfId
       }
@@ -65,7 +65,7 @@ export const equipApi = {
   
   // 获取用户拥有的指定类型装备
   getUserEquipsByType: (type) => {
-    return api.get('/api/equip/user/type', {
+    return api.get('/api/equips/user/type', {
       params: {
         type
       }

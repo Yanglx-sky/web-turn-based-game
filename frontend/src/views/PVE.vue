@@ -155,7 +155,7 @@ const fetchLevels = async () => {
       
       // 获取用户关卡星级和评分
       try {
-        const levelStarsResponse = await api.get(`/user/level-stars?userId=${user.id}`)
+        const levelStarsResponse = await api.get('/api/users/me/level-stars')
         if (levelStarsResponse.code === 200) {
           // 将数据转换为以关卡ID为键的对象
           const starsMap = {}
@@ -189,11 +189,11 @@ const fetchBattleElves = async () => {
       return
     }
     const user = JSON.parse(userStr)
-    const response = await userElfApi.getBattleElves(user.id)
+    const response = await userElfApi.getBattleElves()
     if (response.code === 200) {
       battleElves.value = response.data
       // 获取战斗策略推荐
-      await fetchStrategyRecommendation(user.id, selectedLevelId.value)
+      await fetchStrategyRecommendation(selectedLevelId.value)
     } else {
       battleElvesError.value = '获取出战精灵失败'
     }
@@ -206,11 +206,11 @@ const fetchBattleElves = async () => {
 }
 
 // 获取战斗策略推荐
-const fetchStrategyRecommendation = async (userId, levelId) => {
+const fetchStrategyRecommendation = async (levelId) => {
   try {
     strategyLoading.value = true
     strategyError.value = ''
-    const response = await battleApi.getStrategyRecommendation(userId, levelId)
+    const response = await battleApi.getStrategyRecommendation(levelId)
     if (response.code === 200) {
       strategyRecommendation.value = response.data.recommendation
     } else {

@@ -149,20 +149,6 @@ public class TrainServiceImpl implements TrainService {
         return Result.success(res);
     }
 
-    // 计算系别克制倍数
-    private double calculateElementMultiplier(int attackerElement, int defenderElement) {
-        // 1: 火系, 2: 水系, 3: 草系
-        double[][] multiplierMatrix = {
-            {1.0, 0.5, 2.0}, // 火系攻击
-            {2.0, 1.0, 0.5}, // 水系攻击
-            {0.5, 2.0, 1.0}  // 草系攻击
-        };
-        if (attackerElement >= 1 && attackerElement <= 3 && defenderElement >= 1 && defenderElement <= 3) {
-            return multiplierMatrix[attackerElement - 1][defenderElement - 1];
-        }
-        return 1.0;
-    }
-
     @Override
     public Result<Map<String, Object>> normalAttack(Long userId) {
         TrainState trainState = userTrainStates.get(userId);
@@ -177,20 +163,24 @@ public class TrainServiceImpl implements TrainService {
         int playerElement = BattleUtils.getElfElementType(trainState.currentPlayerElf, elfMapper);
         int mannequinElement = trainState.currentMannequin.getType();
         
-        // 1. 先手方（玩家）行动：先造成伤害
-        // 玩家精灵普通攻击
-        int finalDamage = BattleUtils.calculateNormalDamage(trainState.currentPlayerElf.getAttack(), trainState.currentMannequin.getDefense());
+        // 1. 玩家行动：普通攻击
+        int damage = BattleUtils.calculateNormalDamage(trainState.currentPlayerElf.getAttack(), trainState.currentMannequin.getDefense());
         double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
-        finalDamage = (int) (finalDamage * multiplier);
+        int finalDamage = (int) (damage * multiplier);
         
         trainState.mannequinHp -= finalDamage;
-        String attackLog = "你的精灵使用普通攻击";
+        String attackLog = BattleUtils.generateAttackLog(
+                trainState.currentPlayerElf.getElfId().toString(), 
+                "attack", 
+                null, 
+                finalDamage);
+        
         if (multiplier > 1) {
             attackLog += "，效果拔群";
         } else if (multiplier < 1) {
             attackLog += "，效果不佳";
         }
-        attackLog += "，造成 " + finalDamage + " 点伤害";
+        
         trainState.trainLog.add(attackLog);
         trainState.battleLogManager.addLog(attackLog);
 
@@ -208,72 +198,8 @@ public class TrainServiceImpl implements TrainService {
 
         // 训练人偶反击（如果设置为主动攻击）
         if (trainState.currentMannequin.getIsAttack() == 1) {
-            // 训练人偶使用技能
-            QueryWrapper<TrainMannequinSkill> skillWrapper = new QueryWrapper<>();
-            skillWrapper.eq("mannequin_id", trainState.currentMannequin.getId());
-            List<TrainMannequinSkill> mannequinSkills = trainMannequinSkillMapper.selectList(skillWrapper);
-            if (!mannequinSkills.isEmpty()) {
-                // 随机选择一个技能
-                TrainMannequinSkill mannequinSkill = mannequinSkills.get((int) (Math.random() * mannequinSkills.size()));
-                Skill mannequinSkillInfo = skillMapper.selectById(mannequinSkill.getSkillId());
-                if (mannequinSkillInfo != null) {
-                    // 检查MP是否足够
-                    if (trainState.mannequinMp >= mannequinSkillInfo.getCostMp()) {
-                        // 消耗MP
-                        trainState.mannequinMp -= mannequinSkillInfo.getCostMp();
-                        
-                        // 2. 后手方（训练人偶）行动：先消耗MP，再造成伤害
-                        int finalMannequinDamage = BattleUtils.calculateSkillDamage(mannequinSkillInfo, trainState.currentMannequin.getAttack(), trainState.currentPlayerElf.getDefense(), mannequinElement, playerElement);
-                        double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                        
-                        trainState.playerElfHp -= finalMannequinDamage;
-                        String skillLog = "训练人偶使用技能 " + mannequinSkillInfo.getSkillName();
-                        if (mannequinMultiplier > 1) {
-                            skillLog += "，效果拔群";
-                        } else if (mannequinMultiplier < 1) {
-                            skillLog += "，效果不佳";
-                        }
-                        skillLog += "，造成 " + finalMannequinDamage + " 点伤害";
-                        trainState.trainLog.add(skillLog);
-                        trainState.battleLogManager.addLog(skillLog);
-                    } else {
-                        // MP不足，使用普通攻击
-                    // 2. 后手方（训练人偶）行动：使用普通攻击
-                    int finalMannequinDamage = trainState.currentMannequin.getAttack();
-                    double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                    finalMannequinDamage = (int) (finalMannequinDamage * mannequinMultiplier);
-                        
-                        trainState.playerElfHp -= finalMannequinDamage;
-                        String attackLog2 = "训练人偶MP不足，使用普通攻击";
-                        if (mannequinMultiplier > 1) {
-                            attackLog2 += "，效果拔群";
-                        } else if (mannequinMultiplier < 1) {
-                            attackLog2 += "，效果不佳";
-                        }
-                        attackLog2 += "，造成 " + finalMannequinDamage + " 点伤害";
-                        trainState.trainLog.add(attackLog2);
-                        trainState.battleLogManager.addLog(attackLog2);
-                    }
-                }
-            } else {
-                // 普通攻击
-            // 2. 后手方（训练人偶）行动：使用普通攻击
-            int finalMannequinDamage = trainState.currentMannequin.getAttack();
-            double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-            finalMannequinDamage = (int) (finalMannequinDamage * mannequinMultiplier);
-                
-                trainState.playerElfHp -= finalMannequinDamage;
-                String attackLog2 = "训练人偶反击";
-                if (mannequinMultiplier > 1) {
-                    attackLog2 += "，效果拔群";
-                } else if (mannequinMultiplier < 1) {
-                    attackLog2 += "，效果不佳";
-                }
-                attackLog2 += "，造成 " + finalMannequinDamage + " 点伤害";
-                trainState.trainLog.add(attackLog2);
-                trainState.battleLogManager.addLog(attackLog2);
-            }
-
+            executeMannequinAction(trainState, playerElement, mannequinElement);
+            
             // 检查玩家精灵是否被击败
             if (trainState.playerElfHp <= 0) {
                 trainState.playerElfHp = 0;
@@ -287,13 +213,7 @@ public class TrainServiceImpl implements TrainService {
             }
         }
 
-        Map<String, Object> res = new HashMap<>();
-        res.put("trainLog", trainState.trainLog);
-        res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
-        res.put("playerElfHp", trainState.playerElfHp);
-        res.put("elfMp", trainState.currentPlayerElf.getMp());
-        res.put("mannequinHp", trainState.mannequinHp);
-        res.put("mannequinMp", trainState.mannequinMp);
+        Map<String, Object> res = buildTrainResult(trainState);
         return Result.success(res);
     }
 
@@ -326,17 +246,24 @@ public class TrainServiceImpl implements TrainService {
         trainState.currentPlayerElf.setMp(trainState.currentPlayerElf.getMp() - skill.getCostMp());
         
         // 玩家精灵使用技能
-        int finalDamage = BattleUtils.calculateSkillDamage(skill, trainState.currentPlayerElf.getAttack(), trainState.currentMannequin.getDefense(), playerElement, mannequinElement);
+        int damage = BattleUtils.calculateSkillDamage(skill, trainState.currentPlayerElf.getAttack(), 
+                trainState.currentMannequin.getDefense(), playerElement, mannequinElement);
         double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
+        int finalDamage = (int) (damage * multiplier);
         
         trainState.mannequinHp -= finalDamage;
-        String skillLog = "你的精灵使用技能 " + skill.getSkillName();
+        String skillLog = BattleUtils.generateAttackLog(
+                trainState.currentPlayerElf.getElfId().toString(), 
+                "skill", 
+                skill.getSkillName(), 
+                finalDamage);
+        
         if (multiplier > 1) {
             skillLog += "，效果拔群";
         } else if (multiplier < 1) {
             skillLog += "，效果不佳";
         }
-        skillLog += "，造成 " + finalDamage + " 点伤害";
+        
         trainState.trainLog.add(skillLog);
         trainState.battleLogManager.addLog(skillLog);
 
@@ -354,72 +281,8 @@ public class TrainServiceImpl implements TrainService {
 
         // 训练人偶反击（如果设置为主动攻击）
         if (trainState.currentMannequin.getIsAttack() == 1) {
-            // 训练人偶使用技能
-            QueryWrapper<TrainMannequinSkill> skillWrapper = new QueryWrapper<>();
-            skillWrapper.eq("mannequin_id", trainState.currentMannequin.getId());
-            List<TrainMannequinSkill> mannequinSkills = trainMannequinSkillMapper.selectList(skillWrapper);
-            if (!mannequinSkills.isEmpty()) {
-                // 随机选择一个技能
-                TrainMannequinSkill mannequinSkill = mannequinSkills.get((int) (Math.random() * mannequinSkills.size()));
-                Skill mannequinSkillInfo = skillMapper.selectById(mannequinSkill.getSkillId());
-                if (mannequinSkillInfo != null) {
-                    // 检查MP是否足够
-                    if (trainState.mannequinMp >= mannequinSkillInfo.getCostMp()) {
-                        // 消耗MP
-                        trainState.mannequinMp -= mannequinSkillInfo.getCostMp();
-                        
-                        // 2. 后手方（训练人偶）行动：先消耗MP，再造成伤害
-                        int finalMannequinDamage = BattleUtils.calculateSkillDamage(mannequinSkillInfo, trainState.currentMannequin.getAttack(), trainState.currentPlayerElf.getDefense(), mannequinElement, playerElement);
-                        double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                        
-                        trainState.playerElfHp -= finalMannequinDamage;
-                        String mannequinSkillLog = "训练人偶使用技能 " + mannequinSkillInfo.getSkillName();
-                        if (mannequinMultiplier > 1) {
-                            mannequinSkillLog += "，效果拔群";
-                        } else if (mannequinMultiplier < 1) {
-                            mannequinSkillLog += "，效果不佳";
-                        }
-                        mannequinSkillLog += "，造成 " + finalMannequinDamage + " 点伤害";
-                        trainState.trainLog.add(mannequinSkillLog);
-                        trainState.battleLogManager.addLog(mannequinSkillLog);
-                    } else {
-                        // MP不足，使用普通攻击
-                        // 2. 后手方（训练人偶）行动：使用普通攻击
-                        int finalMannequinDamage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), trainState.currentPlayerElf.getDefense());
-                        double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                        finalMannequinDamage = (int) (finalMannequinDamage * mannequinMultiplier);
-                        
-                        trainState.playerElfHp -= finalMannequinDamage;
-                        String attackLog = "训练人偶MP不足，使用普通攻击";
-                        if (mannequinMultiplier > 1) {
-                            attackLog += "，效果拔群";
-                        } else if (mannequinMultiplier < 1) {
-                            attackLog += "，效果不佳";
-                        }
-                        attackLog += "，造成 " + finalMannequinDamage + " 点伤害";
-                        trainState.trainLog.add(attackLog);
-                        trainState.battleLogManager.addLog(attackLog);
-                    }
-                }
-            } else {
-                // 普通攻击
-                // 2. 后手方（训练人偶）行动：使用普通攻击
-                int finalMannequinDamage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), trainState.currentPlayerElf.getDefense());
-                double mannequinMultiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                finalMannequinDamage = (int) (finalMannequinDamage * mannequinMultiplier);
-                
-                trainState.playerElfHp -= finalMannequinDamage;
-                String attackLog = "训练人偶反击";
-                if (mannequinMultiplier > 1) {
-                    attackLog += "，效果拔群";
-                } else if (mannequinMultiplier < 1) {
-                    attackLog += "，效果不佳";
-                }
-                attackLog += "，造成 " + finalMannequinDamage + " 点伤害";
-                trainState.trainLog.add(attackLog);
-                trainState.battleLogManager.addLog(attackLog);
-            }
-
+            executeMannequinAction(trainState, playerElement, mannequinElement);
+            
             // 检查玩家精灵是否被击败
             if (trainState.playerElfHp <= 0) {
                 trainState.playerElfHp = 0;
@@ -433,13 +296,7 @@ public class TrainServiceImpl implements TrainService {
             }
         }
 
-        Map<String, Object> res = new HashMap<>();
-        res.put("trainLog", trainState.trainLog);
-        res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
-        res.put("playerElfHp", trainState.playerElfHp);
-        res.put("elfMp", trainState.currentPlayerElf.getMp());
-        res.put("mannequinHp", trainState.mannequinHp);
-        res.put("mannequinMp", trainState.mannequinMp);
+        Map<String, Object> res = buildTrainResult(trainState);
         return Result.success(res);
     }
 
@@ -524,17 +381,11 @@ public class TrainServiceImpl implements TrainService {
         String elfName = (String) targetElfMap.get("elfName");
         trainState.trainLog.add("切换精灵：" + (elfName != null ? elfName : "精灵 " + newElf.getElfId()) + "，等级: " + newElf.getLevel());
 
-        Map<String, Object> res = new HashMap<>();
+        Map<String, Object> res = buildTrainResult(trainState);
         res.put("elf", newElf);
         res.put("elfName", elfName);
         res.put("elfElementType", BattleUtils.getElfElementType(newElf, elfMapper));
         res.put("msg", "精灵切换成功");
-        res.put("trainLog", trainState.trainLog);
-        res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
-        res.put("playerElfHp", trainState.playerElfHp);
-        res.put("elfMp", newElf.getMp());
-        res.put("mannequinHp", trainState.mannequinHp);
-        res.put("mannequinMp", trainState.mannequinMp);
 
         return Result.success(res);
     }
@@ -642,6 +493,95 @@ public class TrainServiceImpl implements TrainService {
         Map<String, Object> res = new HashMap<>();
         res.put("records", recordList);
         return Result.success(res);
+    }
+
+    /**
+     * 执行训练人偶的行动（技能或普通攻击）
+     */
+    private void executeMannequinAction(TrainState trainState, int playerElement, int mannequinElement) {
+        QueryWrapper<TrainMannequinSkill> skillWrapper = new QueryWrapper<>();
+        skillWrapper.eq("mannequin_id", trainState.currentMannequin.getId());
+        List<TrainMannequinSkill> mannequinSkills = trainMannequinSkillMapper.selectList(skillWrapper);
+        
+        String actionLog;
+        
+        if (!mannequinSkills.isEmpty()) {
+            // 随机选择一个技能
+            TrainMannequinSkill mannequinSkill = mannequinSkills.get((int) (Math.random() * mannequinSkills.size()));
+            Skill mannequinSkillInfo = skillMapper.selectById(mannequinSkill.getSkillId());
+            
+            if (mannequinSkillInfo != null && trainState.mannequinMp >= mannequinSkillInfo.getCostMp()) {
+                // 使用技能
+                trainState.mannequinMp -= mannequinSkillInfo.getCostMp();
+                
+                int damage = BattleUtils.calculateSkillDamage(mannequinSkillInfo, 
+                        trainState.currentMannequin.getAttack(), 
+                        trainState.currentPlayerElf.getDefense(), 
+                        mannequinElement, playerElement);
+                double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
+                int finalDamage = (int) (damage * multiplier);
+                
+                trainState.playerElfHp -= finalDamage;
+                
+                actionLog = BattleUtils.generateEnemyAttackLog("训练人偶", finalDamage);
+                actionLog = "训练人偶使用技能 " + mannequinSkillInfo.getSkillName() + "，造成 " + finalDamage + " 点伤害";
+                
+                if (multiplier > 1) {
+                    actionLog += "，效果拔群";
+                } else if (multiplier < 1) {
+                    actionLog += "，效果不佳";
+                }
+            } else {
+                // MP不足或无技能，使用普通攻击
+                int damage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), 
+                        trainState.currentPlayerElf.getDefense());
+                double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
+                int finalDamage = (int) (damage * multiplier);
+                
+                trainState.playerElfHp -= finalDamage;
+                
+                actionLog = "训练人偶MP不足，使用普通攻击，造成 " + finalDamage + " 点伤害";
+                
+                if (multiplier > 1) {
+                    actionLog += "，效果拔群";
+                } else if (multiplier < 1) {
+                    actionLog += "，效果不佳";
+                }
+            }
+        } else {
+            // 无技能，使用普通攻击
+            int damage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), 
+                    trainState.currentPlayerElf.getDefense());
+            double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
+            int finalDamage = (int) (damage * multiplier);
+            
+            trainState.playerElfHp -= finalDamage;
+            
+            actionLog = BattleUtils.generateEnemyAttackLog("训练人偶", finalDamage);
+            
+            if (multiplier > 1) {
+                actionLog += "，效果拔群";
+            } else if (multiplier < 1) {
+                actionLog += "，效果不佳";
+            }
+        }
+        
+        trainState.trainLog.add(actionLog);
+        trainState.battleLogManager.addLog(actionLog);
+    }
+
+    /**
+     * 构建训练结果响应
+     */
+    private Map<String, Object> buildTrainResult(TrainState trainState) {
+        Map<String, Object> res = new HashMap<>();
+        res.put("trainLog", trainState.trainLog);
+        res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
+        res.put("playerElfHp", trainState.playerElfHp);
+        res.put("elfMp", trainState.currentPlayerElf.getMp());
+        res.put("mannequinHp", trainState.mannequinHp);
+        res.put("mannequinMp", trainState.mannequinMp);
+        return res;
     }
 
     private String getMannequinTypeName(Integer type) {

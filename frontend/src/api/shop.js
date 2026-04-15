@@ -1,28 +1,24 @@
 import api from './axios'
 
 export const shopApi = {
-  // 获取所有商品
   getAllItems: () => {
-    return api.get('/api/equip/all')
+    return api.get('/api/equips')
   },
   
-  // 根据类型获取商品
   getItemsByType: (type) => {
-    return api.get(`/api/equip/type/${type}`)
+    return api.get(`/api/equips/type/${type}`)
   },
   
-  // 购买商品
   buyItem: (shopItemId) => {
-    return api.post('/api/equip/buy', {}, {
+    return api.post('/api/equips', null, {
       params: {
         equipId: shopItemId
       }
     })
   },
   
-  // 获取用户拥有的指定类型装备
   getUserEquipsByType: (userId, type) => {
-    return api.get('/api/equip/user/type', {
+    return api.get('/api/equips/user/type', {
       params: {
         type
       }

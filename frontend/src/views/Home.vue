@@ -263,7 +263,7 @@ const loadStarterElves = async () => {
     console.log('调用elfApi.getStarterElves()')
     // 直接使用fetch API测试，添加时间戳参数
     const timestamp = new Date().getTime()
-    const url = `http://localhost:8080/elf/starter?t=${timestamp}`
+    const url = `http://localhost:8080/api/elves/starter?t=${timestamp}`
     console.log('请求URL:', url)
     const fetchResponse = await fetch(url, {
       headers: {

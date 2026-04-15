@@ -1,5 +1,7 @@
 package cn.iocoder.gamemodules.service.impl;
 
+import cn.iocoder.gamecommon.constants.RedisKeyConstant;
+import cn.iocoder.gamecommon.exception.BattleException;
 import cn.iocoder.gamecommon.interceptor.BattleSecurityInterceptor;
 import cn.iocoder.gamecommon.result.Result;
 import cn.iocoder.gamemodules.entity.*;
@@ -9,9 +11,11 @@ import cn.iocoder.gamemodules.service.UserService;
 import cn.iocoder.gamemodules.util.BattleUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,6 +52,10 @@ public class BattleServiceImpl implements BattleService {
     
     @Autowired
     private UserService userService;
+    
+    // ==================== Redis相关 ====================
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional
@@ -288,317 +296,156 @@ public class BattleServiceImpl implements BattleService {
     @Override
     @Transactional
     public Result<Map<String, Object>> normalAttack(Long userId) {
-        // 根据userId查询当前战斗
-        BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
-        if (battleRecord == null) {
-            return Result.error("当前没有进行中的战斗");
-        }
-
-        // 查询精灵状态
-        List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
-        if (elves.isEmpty()) {
-            return Result.error("精灵信息不存在");
-        }
-        BattleRecordElf userElfRecord = elves.get(0);
-
-        // 查询怪物状态
-        List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
-        if (monsters.isEmpty()) {
-            return Result.error("怪物信息不存在");
-        }
-        BattleRecordMonster monsterRecord = monsters.get(0);
-
-        // 查询用户精灵信息，获取攻击属性
-        UserElf userElf = userElfMapper.selectById(userElfRecord.getElfId());
-        if (userElf == null) {
-            return Result.error("精灵信息不存在");
-        }
-
-        // 查询精灵模板，获取精灵名称
-        Elf elf = elfMapper.selectById(userElf.getElfId());
-        if (elf == null) {
-            return Result.error("精灵模板不存在");
-        }
-
-        // 查询怪物实体，获取防御属性
-        Monster monster = monsterMapper.selectById(monsterRecord.getMonsterId());
-        if (monster == null) {
-            return Result.error("怪物信息不存在");
-        }
-
-        // 计算普通攻击伤害（使用用户精灵的攻击力）
-        int damage = BattleUtils.calculateNormalDamage(userElf.getAttack(), monster.getDefense());
-        
-        // 记录原始血量用于战斗日志
-        int originalMonsterHp = monsterRecord.getCurrentHp();
-
-        // 更新怪物血量
-        monsterRecord.setCurrentHp(monsterRecord.getCurrentHp() - damage);
-        if (monsterRecord.getCurrentHp() < 0) {
-            monsterRecord.setCurrentHp(0);
-        }
-        monsterRecord.setUpdateTime(LocalDateTime.now());
-        battleRecordMonsterMapper.updateById(monsterRecord);
-
-        // 检查怪物是否死亡
-        boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
-        
-        // 查询关卡信息用于奖励计算
-        Level level = levelMapper.selectById(battleRecord.getLevelId());
-        
-        // 构建战斗日志
-        String attackLog = String.format("你的精灵%s使用普通攻击，造成了%d点伤害", 
-            elf.getElfName(), damage);
-        
-        String hpLog = String.format("敌人HP: %d/%d → %d/%d", 
-            originalMonsterHp, monster.getHp(), monsterRecord.getCurrentHp(), monster.getHp());
-        
-        // 增加回合数
-        battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
-        battleRecordMapper.updateById(battleRecord);
-
-        // 构建回合日志
-        Map<String, Object> roundData = new HashMap<>();
-        roundData.put("round", battleRecord.getCurrentRound());
-        List<String> logs = new ArrayList<>();
-        logs.add(attackLog);
-        logs.add(hpLog);
-
-        if (monsterDead) {
-            // 更新战斗状态为胜利
-            battleRecord.setStatus(1); // 1=胜利
+        try {
+            // 1. 加载战斗实体
+            Map<String, Object> entities = BattleUtils.loadBattleEntities(
+                    userId, battleRecordMapper, battleRecordElfMapper, battleRecordMonsterMapper,
+                    userElfMapper, elfMapper, monsterMapper, levelMapper);
+            
+            BattleRecord battleRecord = (BattleRecord) entities.get("battleRecord");
+            Level level = (Level) entities.get("level");
+            BattleRecordElf userElfRecord = (BattleRecordElf) entities.get("userElfRecord");
+            BattleRecordMonster monsterRecord = (BattleRecordMonster) entities.get("monsterRecord");
+            UserElf userElf = (UserElf) entities.get("userElf");
+            Elf elf = (Elf) entities.get("elf");
+            Monster monster = (Monster) entities.get("monster");
+            
+            // 2. 执行普通攻击
+            int damage = BattleUtils.executePlayerAttack("attack", null, userElfRecord, userElf, elf, monster, skillMapper);
+            
+            // 3. 更新怪物血量
+            int originalMonsterHp = BattleUtils.updateMonsterHp(monsterRecord, damage, battleRecordMonsterMapper);
+            
+            // 4. 增加回合数
+            battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
             battleRecordMapper.updateById(battleRecord);
             
-            // 计算奖励
-            int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
-            int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+            // 5. 判断怪物是否死亡
+            boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
             
-            // 给精灵增加经验
-            userElf.setExp(userElf.getExp() + expReward);
-            userElfMapper.updateById(userElf);
+            // 6. 构建战斗日志
+            String attackLog = BattleUtils.generateAttackLog(elf.getElfName(), "attack", null, damage);
+            List<String> logs;
             
-            // 发放金币奖励
-            userService.addGold(userId, (long) goldReward);
-            
-            // 清理用户战斗状态
-            battleSecurityInterceptor.updateBattleStatus(userId, false);
-            
-            logs.add("战斗胜利！获得经验：" + expReward + "，金币：" + goldReward);
-        } else {
-            // 敌人反击
-            int enemyDamage = BattleUtils.calculateNormalDamage(monster.getAttack(), userElf.getDefense());
-            System.out.println("[DEBUG] 敌人攻击 - 怪物攻击力:" + monster.getAttack() + ", 玩家防御力:" + userElf.getDefense() + ", 计算伤害:" + enemyDamage);
-            userElfRecord.setCurrentHp(userElfRecord.getCurrentHp() - enemyDamage);
-            if (userElfRecord.getCurrentHp() < 0) {
-                userElfRecord.setCurrentHp(0);
+            if (monsterDead) {
+                // 处理胜利
+                BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
+                        battleSecurityInterceptor, userService, this::checkAndDeductDailyLimit);
+                
+                int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
+                int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+                int[] actualReward = checkAndDeductDailyLimit(userId, new Integer[]{expReward, goldReward});
+                
+                String victoryLog = BattleUtils.generateVictoryLog(actualReward[0], actualReward[1], expReward, goldReward);
+                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(), 
+                        monsterRecord.getCurrentHp(), null, true, false);
+                logs.add(victoryLog);
+            } else {
+                // 敌人反击
+                int enemyDamage = BattleUtils.executeEnemyCounterattack(userElfRecord, userElf, monster, battleRecordElfMapper);
+                String enemyAttackLog = BattleUtils.generateEnemyAttackLog(monster.getMonsterName(), enemyDamage);
+                
+                boolean playerDead = userElfRecord.getCurrentHp() <= 0;
+                if (playerDead) {
+                    battleRecord.setStatus(2); // 2=失败
+                    battleRecordMapper.updateById(battleRecord);
+                    battleSecurityInterceptor.updateBattleStatus(userId, false);
+                }
+                
+                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
+                        monsterRecord.getCurrentHp(), enemyAttackLog, false, playerDead);
             }
-            userElfRecord.setUpdateTime(LocalDateTime.now());
-            battleRecordElfMapper.updateById(userElfRecord);
             
-            String enemyAttackLog = String.format("怪物%s使用普通攻击，造成了%d点伤害",
-                monster.getMonsterName(), enemyDamage);
-            logs.add(enemyAttackLog);
+            // 7. 构建返回结果
+            Map<String, Object> result = BattleUtils.buildBattleResult(
+                    battleRecord, userElfRecord, userElf, monsterRecord, monster, level, monsterDead, logs);
             
-            // 检查玩家精灵是否死亡
-            if (userElfRecord.getCurrentHp() <= 0) {
-                battleRecord.setStatus(2); // 2=失败
-                battleRecordMapper.updateById(battleRecord);
-                battleSecurityInterceptor.updateBattleStatus(userId, false);
-                logs.add("战斗失败！你的精灵被击败了");
-            }
+            return Result.success(result);
+            
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
         }
-        
-        roundData.put("logs", logs);
-        
-        List<Map<String, Object>> roundLogsList = new ArrayList<>();
-        roundLogsList.add(roundData);
-
-        // 构建返回结果
-        Map<String, Object> result = new HashMap<>();
-        result.put("status", monsterDead ? 1 : 0); // 1=胜利，0=战斗中
-        result.put("roundLogs", roundLogsList);
-        result.put("monsterHp", monsterRecord.getCurrentHp());
-        result.put("monsterMaxHp", monster.getHp());
-        result.put("playerElfHp", userElfRecord.getCurrentHp());
-        result.put("playerElfHpMax", userElf.getMaxHp());
-        result.put("elfMp", userElfRecord.getCurrentMp());
-        result.put("elfMpMax", userElf.getMaxMp());
-        
-        if (monsterDead && level != null) {
-            result.put("expReward", level.getRewardExp() != null ? level.getRewardExp() : 100);
-            result.put("goldReward", level.getRewardGold() != null ? level.getRewardGold() : 50);
-        }
-
-        return Result.success(result);
     }
 
     @Override
     @Transactional
     public Result<Map<String, Object>> useSkill(Long userId, Integer skillId) {
-        // 根据userId查询当前战斗
-        BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
-        if (battleRecord == null) {
-            return Result.error("当前没有进行中的战斗");
-        }
-
-        // 查询关卡信息
-        Level level = levelMapper.selectById(battleRecord.getLevelId());
-        
-        // 查询精灵状态
-        List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
-        if (elves.isEmpty()) {
-            return Result.error("精灵信息不存在");
-        }
-        BattleRecordElf userElfRecord = elves.get(0);
-
-        // 查询怪物状态
-        List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
-        if (monsters.isEmpty()) {
-            return Result.error("怪物信息不存在");
-        }
-        BattleRecordMonster monsterRecord = monsters.get(0);
-
-        // 查询用户精灵信息，获取攻击属性
-        UserElf userElf = userElfMapper.selectById(userElfRecord.getElfId());
-        if (userElf == null) {
-            return Result.error("精灵信息不存在");
-        }
-
-        // 查询精灵模板，获取系别属性
-        Elf elf = elfMapper.selectById(userElf.getElfId());
-        if (elf == null) {
-            return Result.error("精灵信息不存在");
-        }
-
-        // 查询怪物实体，获取防御属性和系别属性
-        Monster monster = monsterMapper.selectById(monsterRecord.getMonsterId());
-        if (monster == null) {
-            return Result.error("怪物信息不存在");
-        }
-
-        // 根据skillId查询技能信息
-        Skill skill = skillMapper.selectById(skillId);
-        if (skill == null) {
-            return Result.error("技能不存在");
-        }
-
-        // 获取技能MP消耗
-        int mpCost = skill.getCostMp();
-
-        // 检查MP是否足够
-        if (userElfRecord.getCurrentMp() < mpCost) {
-            return Result.error("MP不足");
-        }
-
-        // 记录原始血量用于战斗日志
-        int originalElfMp = userElfRecord.getCurrentMp();
-        int originalMonsterHp = monsterRecord.getCurrentHp();
-
-        // 更新精灵MP
-        userElfRecord.setCurrentMp(userElfRecord.getCurrentMp() - mpCost);
-        userElfRecord.setUpdateTime(LocalDateTime.now());
-        battleRecordElfMapper.updateById(userElfRecord);
-
-        // 计算技能伤害（使用用户精灵的攻击力）
-        int damage = BattleUtils.calculateSkillDamage(skill, userElf.getAttack(), monster.getDefense(), elf.getElementType(), monster.getElementType());
-
-        // 更新怪物血量
-        monsterRecord.setCurrentHp(monsterRecord.getCurrentHp() - damage);
-        if (monsterRecord.getCurrentHp() < 0) {
-            monsterRecord.setCurrentHp(0);
-        }
-        monsterRecord.setUpdateTime(LocalDateTime.now());
-        battleRecordMonsterMapper.updateById(monsterRecord);
-
-        // 增加回合数
-        battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
-        battleRecordMapper.updateById(battleRecord);
-
-        // 构建战斗日志
-        String skillLog = String.format("你的精灵%s使用技能 %s，造成了%d点伤害", 
-            elf.getElfName(), skill.getSkillName(), damage);
-        
-        String hpLog = String.format("敌人HP: %d/%d → %d/%d", 
-            originalMonsterHp, monster.getHp(), monsterRecord.getCurrentHp(), monster.getHp());
-
-        // 检查怪物是否死亡
-        boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
-        
-        // 构建回合日志
-        Map<String, Object> roundData = new HashMap<>();
-        roundData.put("round", battleRecord.getCurrentRound());
-        List<String> logs = new ArrayList<>();
-        logs.add(skillLog);
-        logs.add(hpLog);
-        
-        if (monsterDead) {
-            // 更新战斗状态为胜利
-            battleRecord.setStatus(1); // 1=胜利
+        try {
+            // 1. 加载战斗实体
+            Map<String, Object> entities = BattleUtils.loadBattleEntities(
+                    userId, battleRecordMapper, battleRecordElfMapper, battleRecordMonsterMapper,
+                    userElfMapper, elfMapper, monsterMapper, levelMapper);
+            
+            BattleRecord battleRecord = (BattleRecord) entities.get("battleRecord");
+            Level level = (Level) entities.get("level");
+            BattleRecordElf userElfRecord = (BattleRecordElf) entities.get("userElfRecord");
+            BattleRecordMonster monsterRecord = (BattleRecordMonster) entities.get("monsterRecord");
+            UserElf userElf = (UserElf) entities.get("userElf");
+            Elf elf = (Elf) entities.get("elf");
+            Monster monster = (Monster) entities.get("monster");
+            
+            // 2. 查询技能信息
+            Skill skill = skillMapper.selectById(skillId);
+            if (skill == null) {
+                return Result.error("技能不存在");
+            }
+            
+            // 3. 执行技能攻击
+            int damage = BattleUtils.executePlayerAttack("skill", skillId, userElfRecord, userElf, elf, monster, skillMapper);
+            
+            // 4. 更新怪物血量（MP已在executePlayerAttack中扣除）
+            battleRecordElfMapper.updateById(userElfRecord);
+            int originalMonsterHp = BattleUtils.updateMonsterHp(monsterRecord, damage, battleRecordMonsterMapper);
+            
+            // 5. 增加回合数
+            battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
             battleRecordMapper.updateById(battleRecord);
             
-            // 计算奖励
-            int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
-            int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+            // 6. 判断怪物是否死亡
+            boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
             
-            // 给精灵增加经验
-            userElf.setExp(userElf.getExp() + expReward);
-            userElfMapper.updateById(userElf);
+            // 7. 构建战斗日志
+            String attackLog = BattleUtils.generateAttackLog(elf.getElfName(), "skill", skill.getSkillName(), damage);
+            List<String> logs;
             
-            // 发放金币奖励
-            userService.addGold(userId, (long) goldReward);
-            
-            // 清理用户战斗状态
-            battleSecurityInterceptor.updateBattleStatus(userId, false);
-            
-            skillLog += "\n战斗胜利！获得经验：" + expReward + "，金币：" + goldReward;
-        } else {
-            // 敌人反击
-            int enemyDamage = BattleUtils.calculateNormalDamage(monster.getAttack(), userElf.getDefense());
-            System.out.println("[DEBUG] 敌人攻击 - 怪物攻击力:" + monster.getAttack() + ", 玩家防御力:" + userElf.getDefense() + ", 计算伤害:" + enemyDamage);
-            userElfRecord.setCurrentHp(userElfRecord.getCurrentHp() - enemyDamage);
-            if (userElfRecord.getCurrentHp() < 0) {
-                userElfRecord.setCurrentHp(0);
+            if (monsterDead) {
+                // 处理胜利
+                BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
+                        battleSecurityInterceptor, userService, this::checkAndDeductDailyLimit);
+                
+                int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
+                int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+                int[] actualReward = checkAndDeductDailyLimit(userId, new Integer[]{expReward, goldReward});
+                
+                String victoryLog = BattleUtils.generateVictoryLog(actualReward[0], actualReward[1], expReward, goldReward);
+                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
+                        monsterRecord.getCurrentHp(), null, true, false);
+                logs.add(victoryLog);
+            } else {
+                // 敌人反击
+                int enemyDamage = BattleUtils.executeEnemyCounterattack(userElfRecord, userElf, monster, battleRecordElfMapper);
+                String enemyAttackLog = BattleUtils.generateEnemyAttackLog(monster.getMonsterName(), enemyDamage);
+                
+                boolean playerDead = userElfRecord.getCurrentHp() <= 0;
+                if (playerDead) {
+                    battleRecord.setStatus(2); // 2=失败
+                    battleRecordMapper.updateById(battleRecord);
+                    battleSecurityInterceptor.updateBattleStatus(userId, false);
+                }
+                
+                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
+                        monsterRecord.getCurrentHp(), enemyAttackLog, false, playerDead);
             }
-            userElfRecord.setUpdateTime(LocalDateTime.now());
-            battleRecordElfMapper.updateById(userElfRecord);
             
-            String enemyAttackLog = String.format("怪物%s使用普通攻击，造成了%d点伤害",
-                monster.getMonsterName(), enemyDamage);
-            logs.add(enemyAttackLog);
+            // 8. 构建返回结果
+            Map<String, Object> result = BattleUtils.buildBattleResult(
+                    battleRecord, userElfRecord, userElf, monsterRecord, monster, level, monsterDead, logs);
             
-            // 检查玩家精灵是否死亡
-            if (userElfRecord.getCurrentHp() <= 0) {
-                battleRecord.setStatus(2); // 2=失败
-                battleRecordMapper.updateById(battleRecord);
-                battleSecurityInterceptor.updateBattleStatus(userId, false);
-                logs.add("战斗失败！你的精灵被击败了");
-            }
+            return Result.success(result);
+            
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
         }
-        
-        roundData.put("logs", logs);
-        
-        List<Map<String, Object>> roundLogsList = new ArrayList<>();
-        roundLogsList.add(roundData);
-
-        // 构建返回结果
-        Map<String, Object> result = new HashMap<>();
-        result.put("status", monsterDead ? 1 : 0); // 1=胜利，0=战斗中
-        result.put("roundLogs", roundLogsList);
-        result.put("playerElfHp", userElfRecord.getCurrentHp());
-        result.put("playerElfHpMax", userElf.getMaxHp());
-        result.put("elfMp", userElfRecord.getCurrentMp());
-        result.put("elfMpMax", userElf.getMaxMp());
-        result.put("monsterHp", monsterRecord.getCurrentHp());
-        result.put("monsterMaxHp", monster.getHp());
-        result.put("monsterMp", monsterRecord.getCurrentMp());
-        result.put("monsterMaxMp", monster.getMp());
-        
-        if (monsterDead && level != null) {
-            result.put("expReward", level.getRewardExp() != null ? level.getRewardExp() : 100);
-            result.put("goldReward", level.getRewardGold() != null ? level.getRewardGold() : 50);
-        }
-
-        return Result.success(result);
     }
 
     @Override
@@ -693,5 +540,253 @@ public class BattleServiceImpl implements BattleService {
             monster.setUpdateTime(LocalDateTime.now());
             battleRecordMonsterMapper.updateById(monster);
         }
+    }
+
+    // ==================== 以下为战斗监控+一致性+每日收益上限功能实现 ====================
+
+    /**
+     * 提交战斗行动（带回合校验和幂等性）
+     * 核心：防连点、防重复扣血、回合顺序校验
+     */
+    @Override
+    @Transactional
+    public Result<Map<String, Object>> submitAction(Long userId, Integer round, String actionType, Integer skillId, Long elfId) {
+        // 1. 校验出招冷却时间（防连点、防脚本）
+        if (!checkActionCooldown(userId)) {
+            throw BattleException.actionTooFast();
+        }
+        
+        // 2. 查询当前战斗
+        BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+        if (battleRecord == null) {
+            throw BattleException.battleNotFound();
+        }
+        
+        String battleId = battleRecord.getBattleId();
+        
+        // 3. 校验战斗状态
+        if (battleRecord.getStatus() != 0) {
+            throw BattleException.battleEnded();
+        }
+        
+        // 4. 校验回合顺序（拒绝乱序/重复）
+        Integer currentRound = battleRecord.getCurrentRound();
+        if (round == null || !round.equals(currentRound)) {
+            throw BattleException.invalidRound();
+        }
+        
+        // 5. 幂等性校验：检查该回合是否已提交过动作
+        String actionKey = RedisKeyConstant.buildBattleActionKey(battleId, round);
+        String existingAction = stringRedisTemplate.opsForValue().get(actionKey);
+        if (existingAction != null) {
+            throw BattleException.duplicateAction();
+        }
+        
+        // 6. 执行对应的战斗动作
+        Result<Map<String, Object>> result;
+        switch (actionType) {
+            case "attack":
+                result = normalAttack(userId);
+                break;
+            case "skill":
+                if (skillId == null) {
+                    return Result.error("缺少skillId参数");
+                }
+                result = useSkill(userId, skillId);
+                break;
+            case "switch":
+                if (elfId == null) {
+                    return Result.error("缺少elfId参数");
+                }
+                result = switchElf(userId, elfId);
+                break;
+            default:
+                return Result.error("无效的动作类型");
+        }
+        
+        // 7. 记录已执行的动作（幂等标记）
+        stringRedisTemplate.opsForValue().set(actionKey, actionType, 
+                Duration.ofSeconds(RedisKeyConstant.BATTLE_SESSION_EXPIRE_SEC));
+        
+        // 8. 更新出招冷却时间
+        updateActionCooldown(userId);
+        
+        return result;
+    }
+
+    /**
+     * 领取战斗奖励（必须战斗胜利才能调用）
+     * 核心：权限控制、幂等发奖、每日收益上限
+     */
+    @Override
+    @Transactional
+    public Result<Map<String, Object>> claimReward(Long userId, Integer levelId, String battleId) {
+        // 1. 校验战斗胜利标记（必须战斗胜利）
+        String victoryKey = RedisKeyConstant.buildBattleVictoryKey(userId, levelId);
+        String victoryBattleId = stringRedisTemplate.opsForValue().get(victoryKey);
+        
+        if (victoryBattleId == null || !victoryBattleId.equals(battleId)) {
+            throw BattleException.noRewardPermission();
+        }
+        
+        // 2. 幂等性校验：检查是否已领取奖励
+        String rewardKey = RedisKeyConstant.buildBattleRewardKey(userId, levelId, battleId);
+        Boolean claimed = stringRedisTemplate.hasKey(rewardKey);
+        if (Boolean.TRUE.equals(claimed)) {
+            throw BattleException.rewardAlreadyClaimed();
+        }
+        
+        // 3. 查询关卡奖励配置
+        Level level = levelMapper.selectById(levelId);
+        if (level == null) {
+            return Result.error("关卡不存在");
+        }
+        
+        int expReward = level.getRewardExp() != null ? level.getRewardExp() : 100;
+        int goldReward = level.getRewardGold() != null ? level.getRewardGold() : 50;
+        
+        // 4. 检查并扣除每日收益配额
+        int[] actualReward = checkAndDeductDailyLimit(userId, new Integer[]{expReward, goldReward});
+        int actualExp = actualReward[0];
+        int actualGold = actualReward[1];
+        
+        // 5. 发放奖励
+        if (actualExp > 0) {
+            // 查询当前出战精灵并增加经验
+            BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+            if (battleRecord != null) {
+                List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+                if (!elves.isEmpty()) {
+                    UserElf userElf = userElfMapper.selectById(elves.get(0).getElfId());
+                    if (userElf != null) {
+                        userElf.setExp(userElf.getExp() + actualExp);
+                        userElfMapper.updateById(userElf);
+                    }
+                }
+            }
+        }
+        
+        if (actualGold > 0) {
+            userService.addGold(userId, (long) actualGold);
+        }
+        
+        // 6. 标记奖励已领取（幂等标记）
+        stringRedisTemplate.opsForValue().set(rewardKey, "1", 
+                Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
+        
+        // 7. 构建返回结果
+        Map<String, Object> result = new HashMap<>();
+        result.put("expReward", expReward);
+        result.put("goldReward", goldReward);
+        result.put("actualExp", actualExp);
+        result.put("actualGold", actualGold);
+        result.put("expLimitReached", actualExp < expReward);
+        result.put("goldLimitReached", actualGold < goldReward);
+        
+        return Result.success(result);
+    }
+
+    /**
+     * 获取今日收益信息
+     */
+    @Override
+    public Result<Map<String, Object>> getDailyRewardInfo(Long userId) {
+        String expKey = RedisKeyConstant.buildDailyExpKey(userId);
+        String goldKey = RedisKeyConstant.buildDailyGoldKey(userId);
+        
+        String expStr = stringRedisTemplate.opsForValue().get(expKey);
+        String goldStr = stringRedisTemplate.opsForValue().get(goldKey);
+        
+        int todayExp = expStr != null ? Integer.parseInt(expStr) : 0;
+        int todayGold = goldStr != null ? Integer.parseInt(goldStr) : 0;
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("todayExp", todayExp);
+        result.put("todayGold", todayGold);
+        result.put("expLimit", RedisKeyConstant.DAILY_EXP_LIMIT);
+        result.put("goldLimit", RedisKeyConstant.DAILY_GOLD_LIMIT);
+        result.put("expRemaining", RedisKeyConstant.DAILY_EXP_LIMIT - todayExp);
+        result.put("goldRemaining", RedisKeyConstant.DAILY_GOLD_LIMIT - todayGold);
+        
+        return Result.success(result);
+    }
+
+    /**
+     * 校验出招冷却时间
+     * 返回true表示可以出招，false表示冷却中
+     */
+    @Override
+    public boolean checkActionCooldown(Long userId) {
+        String cooldownKey = RedisKeyConstant.buildCooldownKey(userId);
+        String lastActionTime = stringRedisTemplate.opsForValue().get(cooldownKey);
+        
+        if (lastActionTime == null) {
+            return true;
+        }
+        
+        long lastTime = Long.parseLong(lastActionTime);
+        long currentTime = System.currentTimeMillis();
+        
+        return (currentTime - lastTime) >= RedisKeyConstant.MIN_ACTION_INTERVAL_MS;
+    }
+
+    /**
+     * 更新出招冷却时间
+     */
+    @Override
+    public void updateActionCooldown(Long userId) {
+        String cooldownKey = RedisKeyConstant.buildCooldownKey(userId);
+        stringRedisTemplate.opsForValue().set(cooldownKey, 
+                String.valueOf(System.currentTimeMillis()), 
+                Duration.ofSeconds(RedisKeyConstant.COOLDOWN_EXPIRE_SEC));
+    }
+
+    /**
+     * 检查并扣除每日收益配额
+     * 返回实际可获得的 [经验, 金币]
+     */
+    @Override
+    public int[] checkAndDeductDailyLimit(Long userId, Integer[] rewards) {
+        int exp = rewards[0];
+        int gold = rewards[1];
+        
+        String expKey = RedisKeyConstant.buildDailyExpKey(userId);
+        String goldKey = RedisKeyConstant.buildDailyGoldKey(userId);
+        
+        // 获取今日已获得收益
+        String expStr = stringRedisTemplate.opsForValue().get(expKey);
+        String goldStr = stringRedisTemplate.opsForValue().get(goldKey);
+        
+        int currentExp = expStr != null ? Integer.parseInt(expStr) : 0;
+        int currentGold = goldStr != null ? Integer.parseInt(goldStr) : 0;
+        
+        // 计算实际可获得的收益
+        int actualExp = Math.min(exp, RedisKeyConstant.DAILY_EXP_LIMIT - currentExp);
+        int actualGold = Math.min(gold, RedisKeyConstant.DAILY_GOLD_LIMIT - currentGold);
+        
+        // 不能为负数
+        actualExp = Math.max(actualExp, 0);
+        actualGold = Math.max(actualGold, 0);
+        
+        // 更新Redis中的每日收益（使用increment原子操作）
+        if (actualExp > 0) {
+            stringRedisTemplate.opsForValue().increment(expKey, actualExp);
+            stringRedisTemplate.expire(expKey, Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
+        }
+        if (actualGold > 0) {
+            stringRedisTemplate.opsForValue().increment(goldKey, actualGold);
+            stringRedisTemplate.expire(goldKey, Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
+        }
+        
+        return new int[]{actualExp, actualGold};
+    }
+    
+    /**
+     * 记录战斗胜利标记（内部方法，供战斗胜利时调用）
+     */
+    private void recordBattleVictory(Long userId, Integer levelId, String battleId) {
+        String victoryKey = RedisKeyConstant.buildBattleVictoryKey(userId, levelId);
+        stringRedisTemplate.opsForValue().set(victoryKey, battleId, 
+                Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
     }
 }

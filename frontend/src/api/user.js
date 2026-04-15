@@ -2,17 +2,17 @@ import api from './axios'
 
 export const userApi = {
   // 注册
-  register: (data) => api.post('/user/register', data),
+  register: (data) => api.post('/api/users/register', data),
   // 登录
-  login: (data) => api.post('/user/login', data),
+  login: (data) => api.post('/api/users/login', data),
   // 获取用户信息
-  getUserInfo: () => api.get('/user/info'),
+  getUserInfo: () => api.get('/api/users/me'),
   // 修改密码
-  updatePassword: (data) => api.post('/user/update-password', data),
+  updatePassword: (data) => api.put('/api/users/me/password', data),
   // 修改资料
-  updateUserInfo: (data) => api.post('/user/update-info', data),
+  updateUserInfo: (data) => api.put('/api/users/me', data),
   // 获取用户精灵数量
-  getElfCount: () => api.get('/user/elf-count'),
+  getElfCount: () => api.get('/api/users/me/elves/count'),
   // 获取用户资产
-  getUserAsset: () => api.get('/user/asset')
+  getUserAsset: () => api.get('/api/users/me/assets')
 }

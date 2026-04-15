@@ -1,82 +1,106 @@
 <template>
-  <div class="chat-container">
-    <div class="chat-sidebar">
-      <!-- 频道列表 -->
-      <div class="channel-section">
-        <h3>频道</h3>
-        <div class="channel-list">
-          <div 
-            v-for="channel in channels" 
-            :key="channel.id"
-            class="channel-item"
-            :class="{ active: currentChannel?.id === channel.id }"
-            @click="switchChannel(channel)"
-          >
-            {{ channel.channelName }}
-          </div>
+  <div class="home-container">
+    <!-- 顶部导航栏 -->
+    <nav class="nav-bar">
+      <div class="nav-logo">洛克王国</div>
+      <div class="nav-menu">
+          <button class="nav-btn" @click="navigateTo('/')">首页</button>
+          <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
+          <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
+          <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
+          <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
+          <button class="nav-btn" @click="navigateTo('/train')">训练</button>
+          <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
+          <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
+          <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
+          <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
+          <button class="nav-btn" @click="logout">退出</button>
         </div>
-      </div>
+    </nav>
+
+    <!-- 主内容区域 -->
+    <div class="main-content">
+      <h1>聊天系统</h1>
       
-      <!-- 好友列表 -->
-      <div class="friend-section">
-        <h3>好友</h3>
-        <div class="friend-list">
-          <div 
-            v-for="friend in friends" 
-            :key="friend.friendId"
-            class="friend-item"
-            :class="{ active: currentFriend?.friendId === friend.friendId }"
-            @click="switchFriend(friend)"
-          >
-            <span class="friend-name">{{ friend.remark || `用户${friend.friendId}` }}</span>
-            <span v-if="unreadCounts[friend.friendId]" class="unread-badge">
-              {{ unreadCounts[friend.friendId] }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="chat-main">
-      <!-- 聊天头部 -->
-      <div class="chat-header">
-        <h3>{{ chatTitle }}</h3>
-        <div class="connection-status" :class="{ connected: isConnected }">
-          {{ isConnected ? '已连接' : '未连接' }}
-        </div>
-      </div>
-      
-      <!-- 消息列表 -->
-      <div class="message-list" ref="messageListRef">
-        <div v-if="loading" class="loading">加载中...</div>
-        <div v-else-if="messages.length === 0" class="empty">暂无消息</div>
-        <template v-else>
-          <div v-if="hasMore" class="load-more" @click="loadMoreMessages">
-            加载更多
-          </div>
-          <div 
-            v-for="msg in messages" 
-            :key="msg.id"
-            class="message-item"
-            :class="{ self: isSelfMessage(msg) }"
-          >
-            <div class="message-info">
-              <span class="sender">{{ getSenderName(msg) }}</span>
-              <span class="time">{{ formatTime(msg.sendTime) }}</span>
+      <div class="chat-container">
+        <!-- 侧边栏 -->
+        <div class="chat-sidebar">
+          <!-- 频道列表 -->
+          <div class="section channel-section">
+            <h3>频道</h3>
+            <div class="channel-list">
+              <div 
+                v-for="channel in channels" 
+                :key="channel.id"
+                class="channel-item"
+                :class="{ active: currentChannel?.id === channel.id }"
+                @click="switchChannel(channel)"
+              >
+                {{ channel.channelName }}
+              </div>
             </div>
-            <div class="message-content">{{ msg.content }}</div>
           </div>
-        </template>
-      </div>
-      
-      <!-- 输入框 -->
-      <div class="chat-input">
-        <textarea 
-          v-model="inputMessage"
-          placeholder="输入消息..."
-          @keydown.enter.prevent="sendMessage"
-        ></textarea>
-        <button @click="sendMessage" :disabled="!canSend">发送</button>
+          
+          <!-- 好友列表 -->
+          <div class="section friend-section">
+            <h3>好友</h3>
+            <div class="friend-list">
+              <div 
+                v-for="friend in friends" 
+                :key="friend.friendId"
+                class="friend-item"
+                :class="{ active: currentFriend?.friendId === friend.friendId }"
+                @click="switchFriend(friend)"
+              >
+                <span class="friend-name">{{ friend.remark || `用户${friend.friendId}` }}</span>
+                <span v-if="unreadCounts[friend.friendId]" class="unread-badge">
+                  {{ unreadCounts[friend.friendId] }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 聊天主区域 -->
+        <div class="chat-main">
+          <!-- 聊天头部 -->
+          <div class="chat-header">
+            <h3>{{ chatTitle }}</h3>
+          </div>
+          
+          <!-- 消息列表 -->
+          <div class="message-list" ref="messageListRef">
+            <div v-if="loading" class="loading">加载中...</div>
+            <div v-else-if="messages.length === 0" class="empty">暂无消息</div>
+            <template v-else>
+              <div v-if="hasMore" class="load-more" @click="loadMoreMessages">
+                加载更多
+              </div>
+              <div 
+                v-for="msg in messages" 
+                :key="msg.id"
+                class="message-item"
+                :class="{ self: isSelfMessage(msg) }"
+              >
+                <div class="message-info">
+                  <span class="sender">{{ getSenderName(msg) }}</span>
+                  <span class="time">{{ formatTime(msg.sendTime) }}</span>
+                </div>
+                <div class="message-content">{{ msg.content }}</div>
+              </div>
+            </template>
+          </div>
+          
+          <!-- 输入框 -->
+          <div class="chat-input">
+            <textarea 
+              v-model="inputMessage"
+              placeholder="输入消息..."
+              @keydown.enter.prevent="sendMessage"
+            ></textarea>
+            <button @click="sendMessage" :disabled="!canSend" class="action-btn send-btn">发送</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -84,7 +108,20 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { chatApi, friendApi } from '../api/chat'
+
+const router = useRouter()
+
+const navigateTo = (path) => {
+  router.push(path)
+}
+
+const logout = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  router.push('/auth')
+}
 
 // 状态
 const channels = ref([])
@@ -285,7 +322,7 @@ const initWebSocket = () => {
   const token = localStorage.getItem('token')
   if (!token) return
   
-  const wsUrl = `ws://localhost:8080/ws/chat?token=${token}`
+  const wsUrl = `ws://localhost:8080/api/ws/chat?token=${token}`
   ws = new WebSocket(wsUrl)
   
   ws.onopen = () => {
@@ -432,79 +469,166 @@ const generateUUID = () => {
 </script>
 
 <style scoped>
+.home-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6f00 100%);
+  padding: 20px;
+}
+
+.nav-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 140, 0, 0.9);
+  padding: 15px 30px;
+  border-radius: 10px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.nav-menu {
+  display: flex;
+  gap: 20px;
+}
+
+.nav-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+  background: white;
+  color: #ff8c00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+}
+
+.nav-logo {
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.connection-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid white;
+}
+
+.connection-status.connected {
+  background: rgba(76, 175, 80, 0.8);
+  color: white;
+}
+
+.main-content {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  padding: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: #ff8c00;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 .chat-container {
   display: flex;
-  height: 100vh;
-  background: #f5f5f5;
+  height: 70vh;
+  background: rgba(245, 245, 245, 0.8);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .chat-sidebar {
-  width: 250px;
-  background: #fff;
+  width: 280px;
+  background: white;
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
 }
 
-.channel-section,
-.friend-section {
-  padding: 15px;
+.section {
+  padding: 20px;
   border-bottom: 1px solid #e0e0e0;
 }
 
-.channel-section h3,
-.friend-section h3 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  color: #333;
+.section h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #ff8c00;
+  font-weight: bold;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
 }
 
 .channel-list,
 .friend-list {
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
 .channel-item,
 .friend-item {
-  padding: 10px;
+  padding: 12px 15px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s;
+  border-radius: 8px;
+  transition: all 0.3s ease;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 8px;
 }
 
 .channel-item:hover,
 .friend-item:hover {
-  background: #f0f0f0;
+  background: rgba(255, 140, 0, 0.1);
+  transform: translateX(5px);
 }
 
 .channel-item.active,
 .friend-item.active {
-  background: #e3f2fd;
+  background: rgba(255, 140, 0, 0.2);
+  border-left: 4px solid #ff8c00;
 }
 
 .unread-badge {
   background: #ff4444;
   color: white;
   border-radius: 50%;
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 12px;
-  min-width: 18px;
+  font-weight: bold;
+  min-width: 20px;
   text-align: center;
+  box-shadow: 0 2px 4px rgba(255, 68, 68, 0.3);
 }
 
 .chat-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  background: white;
 }
 
 .chat-header {
-  padding: 15px;
-  background: #fff;
+  padding: 20px;
+  background: rgba(255, 140, 0, 0.1);
   border-bottom: 1px solid #e0e0e0;
   display: flex;
   justify-content: space-between;
@@ -513,45 +637,50 @@ const generateUUID = () => {
 
 .chat-header h3 {
   margin: 0;
-  font-size: 18px;
-}
-
-.connection-status {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  background: #ffebee;
-  color: #c62828;
-}
-
-.connection-status.connected {
-  background: #e8f5e9;
-  color: #2e7d32;
+  font-size: 20px;
+  color: #333;
+  font-weight: bold;
 }
 
 .message-list {
   flex: 1;
-  padding: 15px;
+  padding: 20px;
   overflow-y: auto;
+  background: #f9f9f9;
 }
 
 .loading,
 .empty {
   text-align: center;
-  padding: 40px;
+  padding: 60px;
   color: #999;
+  font-size: 16px;
 }
 
 .load-more {
   text-align: center;
-  padding: 10px;
-  color: #1976d2;
+  padding: 15px;
+  color: #ff8c00;
   cursor: pointer;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.load-more:hover {
+  color: #ff6f00;
+  background: rgba(255, 140, 0, 0.1);
+  border-radius: 8px;
 }
 
 .message-item {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   max-width: 70%;
+  animation: messageFadeIn 0.5s ease;
+}
+
+@keyframes messageFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .message-item.self {
@@ -562,53 +691,103 @@ const generateUUID = () => {
 .message-info {
   font-size: 12px;
   color: #666;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .message-item.self .message-info {
-  color: #1976d2;
+  color: #ff8c00;
 }
 
 .message-content {
   display: inline-block;
-  padding: 10px 15px;
-  background: #fff;
-  border-radius: 8px;
+  padding: 12px 18px;
+  background: white;
+  border-radius: 12px;
   word-break: break-word;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
 }
 
 .message-item.self .message-content {
-  background: #e3f2fd;
+  background: rgba(255, 140, 0, 0.1);
+  border-color: #ff8c00;
 }
 
 .chat-input {
-  padding: 15px;
-  background: #fff;
+  padding: 20px;
+  background: white;
   border-top: 1px solid #e0e0e0;
   display: flex;
-  gap: 10px;
+  gap: 15px;
+  align-items: flex-end;
 }
 
 .chat-input textarea {
   flex: 1;
-  padding: 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
   resize: none;
-  height: 60px;
+  height: 80px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
 }
 
-.chat-input button {
-  padding: 10px 30px;
-  background: #1976d2;
-  color: white;
+.chat-input textarea:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1);
+}
+
+.action-btn {
+  padding: 12px 30px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.chat-input button:disabled {
+.send-btn {
+  background: #ff8c00;
+  color: white;
+  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.3);
+}
+
+.send-btn:hover {
+  background: #ff6f00;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(255, 140, 0, 0.4);
+}
+
+.send-btn:disabled {
   background: #ccc;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ff8c00;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff6f00;
 }
 </style>

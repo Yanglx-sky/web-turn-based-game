@@ -146,14 +146,25 @@ const initSession = async () => {
       body: `userId=${user.id}&title=新对话&scene=common`
     })
     
-    if (!response.ok) {
-      throw new Error('创建会话失败')
+    console.log('响应状态:', response.status)
+    console.log('响应OK:', response.ok)
+    
+    const result = await response.json()
+    console.log('完整响应数据:', JSON.stringify(result, null, 2))
+
+    // 兼容多种响应格式
+    const errorCode = result.code || result.status || result.errorCode
+    const errorMsg = result.msg || result.message || result.error || result.errorMessage
+
+    if (errorCode !== 200 && errorCode !== 0) {
+      console.error('后端返回错误:', errorMsg, '完整数据:', result)
+      throw new Error(errorMsg || '创建会话失败')
     }
-    
-    const sessionIdLong = await response.json()
-    
-    // 确保sessionIdLong是数字类型
-    if (typeof sessionIdLong !== 'number') {
+
+    const sessionIdLong = result.data
+    console.log('sessionId:', sessionIdLong)
+
+    if (typeof sessionIdLong !== 'number' && typeof sessionIdLong !== 'string') {
       throw new Error('会话ID格式错误')
     }
     
@@ -172,7 +183,22 @@ const initSession = async () => {
   } catch (error) {
     console.error('初始化会话失败:', error)
     sessionId.value = ''
-    alert('初始化AI会话失败，请刷新页面重试')
+
+    // 显示友好的错误提示
+    const errorMsg = error.message || '初始化AI会话失败'
+    console.log('错误信息:', errorMsg)
+
+    if (errorMsg.includes('额度') || errorMsg.includes('上限') || errorMsg.includes('限制') || errorMsg.includes('次数')) {
+      // 记录错误时间，避免频繁重试
+      sessionStorage.setItem('aiSessionErrorTime', Date.now().toString())
+
+      alert('⚠️ AI使用提示\n\n' + errorMsg + '\n\n💡 建议：\n• 请明天再试（每日额度会重置）\n• 或联系客服提升额度')
+    } else if (errorMsg.includes('登录') || errorMsg.includes('权限') || errorMsg.includes('token')) {
+      alert('🔐 登录已过期\n\n请重新登录后再试')
+      router.push('/auth')
+    } else {
+      alert('❌ 初始化失败\n\n' + errorMsg + '\n\n请刷新页面重试')
+    }
   }
 }
 
@@ -182,10 +208,28 @@ const sendMessage = async () => {
   
   // 验证sessionId是否有效
   if (!sessionId.value || typeof sessionId.value !== 'string' || sessionId.value === '') {
-    console.error('会话ID无效，重新初始化会话')
+    console.log('会话ID无效，尝试重新初始化会话')
+
+    // 检查是否已经因为额度问题初始化失败过
+    const lastErrorTime = sessionStorage.getItem('aiSessionErrorTime')
+    const now = Date.now()
+
+    if (lastErrorTime && (now - parseInt(lastErrorTime)) < 60000) {
+      // 1分钟内已经失败过，不再重试
+      console.log('1分钟内已因额度问题失败，不再重试')
+      chatMessages.value.push({
+        role: 'ai',
+        content: '⚠️ 今日AI调用次数已达上限\n\n请明天再试，或联系客服提升额度',
+        time: new Date().toLocaleTimeString()
+      })
+      userInput.value = ''
+      return
+    }
+
     await initSession()
     if (!sessionId.value) {
-      alert('会话初始化失败，请刷新页面重试')
+      // initSession 已经显示了错误提示，这里只需要清空输入
+      userInput.value = ''
       return
     }
   }
@@ -236,7 +280,24 @@ const sendMessage = async () => {
     })
     
     if (!response.ok) {
-      throw new Error('获取AI回复失败')
+      // 尝试解析错误信息
+      let errorMsg = '获取AI回复失败'
+      try {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const errorResult = await response.json()
+          console.log('流式接口错误响应:', errorResult)
+          errorMsg = errorResult.msg || errorResult.message || errorResult.error || errorMsg
+        } else {
+          // 如果不是JSON，可能是纯文本错误
+          const errorText = await response.text()
+          console.log('流式接口错误文本:', errorText)
+          errorMsg = errorText || errorMsg
+        }
+      } catch (e) {
+        console.error('解析错误响应失败:', e)
+      }
+      throw new Error(errorMsg)
     }
     
     // 读取响应流
@@ -267,9 +328,24 @@ const sendMessage = async () => {
   } catch (error) {
     console.error('发送消息失败:', error)
     isStreaming.value = false
+
+    // 显示友好的错误提示
+    const errorMsg = error.message || '发送消息失败'
+    console.log('发送消息错误:', errorMsg)
+
+    let displayMessage = '❌ ' + errorMsg
+    if (errorMsg.includes('额度') || errorMsg.includes('上限') || errorMsg.includes('限制') || errorMsg.includes('次数')) {
+      displayMessage = '⚠️ AI使用额度已达上限\n\n' + errorMsg + '\n\n请明天再试，或联系客服提升额度'
+      // 记录错误时间，避免频繁重试
+      sessionStorage.setItem('aiSessionErrorTime', Date.now().toString())
+    } else if (errorMsg.includes('登录') || errorMsg.includes('权限')) {
+      displayMessage = '🔐 登录已过期，请重新登录'
+      setTimeout(() => router.push('/auth'), 2000)
+    }
+
     chatMessages.value.push({
       role: 'ai',
-      content: '发送消息失败，请稍后重试',
+      content: displayMessage,
       time: new Date().toLocaleTimeString()
     })
   } finally {

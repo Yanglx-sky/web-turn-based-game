@@ -315,4 +315,73 @@ public class BattleController {
                 return "未知";
         }
     }
+    
+    // ==================== 以下为战斗监控+一致性+每日收益上限功能接口 ====================
+    
+    /**
+     * 提交战斗行动（带回合校验和幂等性）
+     */
+    @PostMapping("/submit")
+    @Operation(summary = "提交战斗行动", description = "提交战斗行动，包含回合校验和幂等性保障")
+    public Result<?> submitAction(
+            HttpServletRequest request,
+            @Parameter(description = "回合号", required = true) @RequestParam Integer round,
+            @Parameter(description = "动作类型: attack/skill/switch", required = true) @RequestParam String type,
+            @Parameter(description = "技能ID") @RequestParam(required = false) Integer skillId,
+            @Parameter(description = "精灵ID") @RequestParam(required = false) Long elfId) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.submitAction(userId, round, type, skillId, elfId);
+        } catch (Exception e) {
+            return Result.error("提交动作失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 领取战斗奖励
+     */
+    @PostMapping("/reward")
+    @Operation(summary = "领取战斗奖励", description = "战斗胜利后领取奖励，需验证战斗胜利标记")
+    public Result<?> claimReward(
+            HttpServletRequest request,
+            @Parameter(description = "关卡ID", required = true) @RequestParam Integer levelId,
+            @Parameter(description = "战斗ID", required = true) @RequestParam String battleId) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.claimReward(userId, levelId, battleId);
+        } catch (Exception e) {
+            return Result.error("领取奖励失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取今日收益信息
+     */
+    @GetMapping("/daily-info")
+    @Operation(summary = "获取今日收益信息", description = "获取今日经验、金币收益和剩余配额")
+    public Result<?> getDailyRewardInfo(HttpServletRequest request) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.getDailyRewardInfo(userId);
+        } catch (Exception e) {
+            return Result.error("获取收益信息失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 从请求头获取token
+     */
+    private String getToken(HttpServletRequest request) {
+        String token = request.getHeader("Authorization");
+        if (token == null || token.isEmpty()) {
+            throw new RuntimeException("未登录，无权限访问");
+        }
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        return token;
+    }
 }

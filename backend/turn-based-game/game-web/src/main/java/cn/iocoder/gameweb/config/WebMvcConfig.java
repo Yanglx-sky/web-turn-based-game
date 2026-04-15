@@ -1,12 +1,12 @@
 package cn.iocoder.gameweb.config;
 
 import cn.iocoder.gamecommon.interceptor.AILimitInterceptor;
-import cn.iocoder.gamecommon.interceptor.AuthInterceptor;
+import cn.iocoder.gamecommon.interceptor.AuthLoginInterceptor;
 import cn.iocoder.gamecommon.interceptor.BattleSecurityInterceptor;
 import cn.iocoder.gamecommon.interceptor.LogInterceptor;
-import cn.iocoder.gamecommon.interceptor.LoginInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -18,16 +18,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     @Autowired
-    private LoginInterceptor loginInterceptor;
-
-    @Autowired
     private BattleSecurityInterceptor battleSecurityInterceptor;
 
     @Autowired
     private AILimitInterceptor aiLimitInterceptor;
 
     @Autowired
-    private AuthInterceptor authInterceptor;
+    private AuthLoginInterceptor authLoginInterceptor;
 
     @Autowired
     private LogInterceptor logInterceptor;
@@ -41,14 +38,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // Knife4j文档路径
         String[] docPaths = {"/doc.html", "/v3/api-docs/**", "/webjars/**", "/swagger-ui/**", "/swagger-resources/**", "/favicon.ico"};
 
-        // 登录拦截器
-        registry.addInterceptor(loginInterceptor)
-                .addPathPatterns("/**")
-                .excludePathPatterns("/users/login", "/users/register", "/users/captcha")
-                .excludePathPatterns(docPaths);
-
-        // 接口鉴权拦截器
-        registry.addInterceptor(authInterceptor)
+        // 登录和鉴权拦截器
+        registry.addInterceptor(authLoginInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns("/users/login", "/users/register", "/users/captcha")
                 .excludePathPatterns(docPaths);
@@ -60,5 +51,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // AI调用限流拦截器
         registry.addInterceptor(aiLimitInterceptor)
                 .addPathPatterns("/ai/**");
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:5173")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }
