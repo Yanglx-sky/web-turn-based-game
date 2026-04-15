@@ -1,0 +1,16 @@
+- main [ref=e4]:
+  - generic [ref=e6]:
+    - heading "洛克王国：世界" [level=1] [ref=e7]
+    - heading "登录" [level=2] [ref=e8]
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: 手机号
+        - textbox "手机号" [ref=e12]
+      - generic [ref=e13]:
+        - generic [ref=e14]: 密码
+        - textbox "密码" [ref=e15]
+      - button "登录" [ref=e16] [cursor=pointer]
+    - paragraph [ref=e17]:
+      - text: 还没有账号？
+      - link "立即注册" [ref=e18] [cursor=pointer]:
+        - /url: "#"
