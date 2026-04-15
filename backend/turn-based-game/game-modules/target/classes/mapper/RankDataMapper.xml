@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.gamemodules.mapper.RankDataMapper">
+
+    <select id="selectByRankType" resultType="cn.iocoder.gamemodules.entity.RankData">
+        SELECT * FROM rank_data
+        WHERE rank_type = #{rankType}
+        ORDER BY score DESC, update_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectByRankTypeAndUserId" resultType="cn.iocoder.gamemodules.entity.RankData">
+        SELECT * FROM rank_data
+        WHERE rank_type = #{rankType} AND user_id = #{userId}
+    </select>
+
+    <update id="updateRankByRankType">
+        UPDATE rank_data rd
+        JOIN (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC, update_time ASC) as new_rank
+            FROM rank_data
+            WHERE rank_type = #{rankType}
+        ) as ranked ON rd.id = ranked.id
+        SET rd.rank_num = ranked.new_rank
+        WHERE rd.rank_type = #{rankType}
+    </update>
+
+</mapper>

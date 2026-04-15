@@ -54,41 +54,86 @@
         </div>
       </div>
       
+      <!-- HUD层：血条等信息 -->
+      <div class="battle-hud-container">
+        <!-- 玩家 HUD (左上角) -->
+        <div class="hud-pane hud-player" v-if="playerElf && playerElf.elfId">
+          <div class="hud-header">
+            <h4>{{ playerElf.elfName || `精灵 ${playerElf.elfId}` }}</h4>
+            <span class="hud-level">Lv.{{ playerElf.level }}</span>
+          </div>
+          <p class="hud-type">系别: {{ getElementType(playerElf.elementType) }}</p>
+          <div class="hp-bar-container">
+            <span class="bar-label">HP</span>
+            <div class="hp-bar">
+              <div class="hp-fill" :style="{ width: playerHpPercentage + '%' }"></div>
+            </div>
+            <span class="bar-text">{{ Math.max(0, playerElf.hp) }}/{{ playerElf.maxHp }}</span>
+          </div>
+          <div class="mp-bar-container">
+            <span class="bar-label">MP</span>
+            <div class="mp-bar">
+              <div class="mp-fill" :style="{ width: (playerElf.maxMp > 0 ? (playerElf.mp / playerElf.maxMp * 100) : 0) + '%' }"></div>
+            </div>
+            <span class="bar-text">{{ playerElf.mp }}/{{ playerElf.maxMp }}</span>
+          </div>
+        </div>
+        <div class="hud-pane hud-player" v-else>
+          <div class="hud-header"><h4>未选择精灵</h4></div>
+          <p>请进入战斗选择精灵</p>
+        </div>
+
+        <!-- 敌人 HUD (右上角) -->
+        <div class="hud-pane hud-enemy">
+          <div class="hud-header">
+            <h4>{{ enemyName }}</h4>
+            <span class="hud-level">Lv.1</span>
+          </div>
+          <p class="hud-type">系别: {{ getElementType(enemyElementType) }}</p>
+          <div class="hp-bar-container">
+            <span class="bar-label">HP</span>
+            <div class="hp-bar">
+              <div class="hp-fill hp-danger" v-if="enemyHpPercentage <= 20" :style="{ width: enemyHpPercentage + '%' }"></div>
+              <div class="hp-fill" v-else :style="{ width: enemyHpPercentage + '%' }"></div>
+            </div>
+            <span class="bar-text">{{ Math.max(0, enemyHp) }}/{{ enemyMaxHp }}</span>
+          </div>
+          <div class="mp-bar-container">
+            <span class="bar-label">MP</span>
+            <div class="mp-bar">
+              <div class="mp-fill" :style="{ width: (enemyMaxMp > 0 ? (enemyMp / enemyMaxMp * 100) : 0) + '%' }"></div>
+            </div>
+            <span class="bar-text">{{ enemyMp }}/{{ enemyMaxMp }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 战斗场景 -->
       <div class="battle-field">
+        <div class="particle-layer" v-if="particleActive">
+          <div class="particle-effect" :class="particleType"></div>
+        </div>
+        
         <!-- 玩家精灵 -->
         <div class="player-section">
           <h3>我的精灵</h3>
-          <div class="elf-card player-elf" :class="{ 'attacking': attackingSide === 'player' && attackAnimation, 'hurt': isPlayerHurt }" v-if="playerElf && playerElf.elfId">
+          <div class="elf-avatar player-elf" :class="{ 'attacking': attackingSide === 'player' && attackAnimation, 'hurt': isPlayerHurt, 'knockback-left': isPlayerHurt }" v-if="playerElf && playerElf.elfId">
             <div class="elf-image">
               <img :src="getElfImage(playerElf.elfId)" :alt="playerElf.elfName || `精灵 ${playerElf.elfId}`" />
             </div>
-            <div class="elf-info">
-              <h4>{{ playerElf.elfName || `精灵 ${playerElf.elfId}` }}</h4>
-              <p>等级: {{ playerElf.level }}</p>
-              <p>系别: {{ getElementType(playerElf.elementType) }}</p>
-              <div class="hp-bar">
-                <div class="hp-fill" :style="{ width: playerHpPercentage + '%' }"></div>
-              </div>
-              <p>HP: {{ Math.max(0, playerElf.hp) }}/{{ playerElf.maxHp }}</p>
-              <p>MP: {{ playerElf.mp }}/{{ playerElf.maxMp }}</p>
-              <div class="skill-name" v-if="attackingSide === 'player' && attackAnimation">
-                {{ currentSkill }}
-              </div>
+            <div class="skill-name" v-if="attackingSide === 'player' && attackAnimation">
+              {{ currentSkill }}
             </div>
           </div>
-          <div v-else class="elf-card player-elf">
-            <div class="elf-info">
-              <h4>未选择精灵</h4>
-              <p>请进入战斗选择精灵</p>
-            </div>
+          <div v-else class="elf-avatar player-elf">
+            <div class="elf-image"><img src="/src/assets/hero.png" alt="无精灵" /></div>
           </div>
         </div>
         
         <!-- 敌人精灵 -->
         <div class="enemy-section">
           <h3>敌人</h3>
-          <div class="elf-card enemy-elf" :class="{ 'attacking': attackingSide === 'enemy' && attackAnimation, 'hurt': isEnemyHurt }">
+          <div class="elf-avatar enemy-elf" :class="{ 'attacking': attackingSide === 'enemy' && attackAnimation, 'hurt': isEnemyHurt, 'knockback-right': isEnemyHurt }">
             <div class="elf-image">
               <img src="/src/assets/photo/t01ad4c8a8c1b78d5e9.jpg" alt="迪莫" v-if="enemyName === '迪莫'" />
               <img src="/src/assets/photo/78714861ed8311a9d5af0982af3bf12196230622.jpg" alt="焰阳火灵" v-else-if="enemyName === '焰阳火灵'" />
@@ -99,42 +144,35 @@
               <img src="/src/assets/photo/草-训练人偶.png" alt="草系训练人偶" v-else-if="enemyName.includes('训练人偶') && enemyElementType === 3" />
               <img src="/src/assets/hero.png" alt="敌人" v-else />
             </div>
-            <div class="elf-info">
-              <h4>{{ enemyName }}</h4>
-              <p>等级: 1</p>
-              <p>系别: {{ getElementType(enemyElementType) }}</p>
-              <div class="hp-bar">
-                <div class="hp-fill" :style="{ width: enemyHpPercentage + '%' }"></div>
-              </div>
-              <p>HP: {{ Math.max(0, enemyHp) }}/{{ enemyMaxHp }}</p>
-              <p>MP: {{ enemyMp }}/{{ enemyMaxMp }}</p>
-              <div class="skill-name" v-if="attackingSide === 'enemy' && attackAnimation">
-                {{ currentSkill }}
-              </div>
+            <div class="skill-name" v-if="attackingSide === 'enemy' && attackAnimation">
+              {{ currentSkill }}
             </div>
           </div>
         </div>
       </div>
       
-      <!-- 技能选择 -->
-      <div v-if="showSkills" class="skills-section">
-        <h4>选择技能</h4>
-        <div class="skills-grid">
-          <button v-for="skill in skills" :key="skill.id" @click="useSelectedSkill(skill)" class="skill-btn">
-            {{ skill.skillName }} (MP: {{ skill.costMp }})
-          </button>
-        </div>
-      </div>
-      
-      <!-- 战斗操作 -->
-      <div class="battle-actions">
-        <h3>战斗操作</h3>
-        <div class="action-buttons">
-          <button @click="attack" class="action-btn attack-btn">攻击</button>
-          <button @click="useSkill" class="action-btn skill-btn">技能</button>
+      <!-- 战斗操作 (底部统一操作条) -->
+      <div class="bottom-action-bar">
+        <div class="action-buttons-wrapper">
+          <button @click="attack" class="action-btn attack-btn"><i class="icon-sword"></i>普通攻击</button>
+          
+          <div class="action-divider"></div>
+
+          <!-- 技能快速列表 -->
+          <div class="skill-quick-bar" v-if="skills && skills.length > 0">
+            <button v-for="skill in skills" :key="skill.id" @click="useSelectedSkill(skill)" class="action-btn skill-btn" :title="'消耗MP: ' + skill.costMp">
+              {{ skill.skillName }} <span class="mp-cost">{{ skill.costMp }}MP</span>
+            </button>
+          </div>
+          <div class="skill-quick-bar" v-else>
+            <span class="no-skills-msg">无可用技能</span>
+          </div>
+          
+          <div class="action-divider"></div>
+          
           <button @click="switchElf" class="action-btn switch-btn">更换精灵</button>
-          <button @click="flee" class="action-btn flee-btn">逃跑</button>
           <button @click="showPotions = true" class="action-btn potion-btn">药品</button>
+          <button @click="flee" class="action-btn flee-btn">逃跑</button>
         </div>
       </div>
       
@@ -335,6 +373,9 @@ const countdownTimer = ref(null)
 const attackingSide = ref(null) // 'player' 或 'enemy'
 const currentSkill = ref('')
 const attackAnimation = ref(false)
+// 粒子特效
+const particleActive = ref(false)
+const particleType = ref('')
 // 受伤效果
 const isPlayerHurt = ref(false)
 const isEnemyHurt = ref(false)
@@ -643,9 +684,24 @@ const triggerAttackAnimations = (battleLog, battleData) => {
         // 触发动画
         attackAnimation.value = true
         
+        let pType = 'particle-impact'
+        if (skillName.includes('火')) pType = 'particle-fireball'
+        if (skillName.includes('水')) pType = 'particle-water'
+        if (skillName.includes('草') || skillName.includes('叶')) pType = 'particle-leaf'
+        
+        // Setup particle directions
+        if (log.includes('你的精灵')) {
+          particleType.value = pType + ' player-to-enemy'
+        } else {
+          particleType.value = pType + ' enemy-to-player'
+        }
+        particleActive.value = true
+        
         // 动画持续1秒
         setTimeout(() => {
           attackAnimation.value = false
+          particleActive.value = false
+          particleType.value = ''
           // 延迟重置攻击方，确保动画显示完整
           setTimeout(() => {
             attackingSide.value = null // 重置攻击方
@@ -2252,103 +2308,342 @@ h1 {
   100% { opacity: 0; transform: translateY(-10px); }
 }
 
-.hp-bar {
+.hp-bar, .mp-bar {
   width: 100%;
   height: 10px;
   background: #e0e0e0;
   border-radius: 5px;
   overflow: hidden;
-  margin: 10px 0;
+  margin: 0;
+  flex: 1;
 }
 
-.hp-fill {
+.hp-fill, .mp-fill {
   height: 100%;
   background: #4caf50;
-  transition: width 0.5s ease;
+  transition: width 0.5s ease, background-color 0.3s ease;
 }
 
-/* 战斗操作 */
-.battle-actions {
-  margin-bottom: 30px;
-  padding: 20px;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 10px;
+.hp-fill.hp-danger {
+  background: #f44336;
 }
 
-.action-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin: 20px 0;
-}
-
-.action-btn {
-  padding: 15px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.attack-btn {
-  background: #ff5722;
-  color: white;
-}
-
-.skill-btn {
+.mp-fill {
   background: #2196f3;
-  color: white;
 }
 
-.switch-btn {
-  background: #ffeb3b;
+/* 战斗控制台 (HUD) */
+.battle-container {
+  position: relative;
+}
+
+.battle-hud-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-pane {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 15px;
+  width: 260px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  pointer-events: auto;
+  backdrop-filter: blur(5px);
+}
+
+.hud-player {
+  top: 20px;
+  left: 20px;
+  border-color: #4caf50;
+}
+
+.hud-enemy {
+  top: 20px;
+  right: 20px;
+  border-color: #f44336;
+}
+
+.hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+.hud-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
   color: #333;
 }
 
-.flee-btn {
-  background: #9e9e9e;
-  color: white;
+.hud-level {
+  font-weight: bold;
+  color: #ff8c00;
+  font-size: 0.9rem;
 }
 
-.potion-btn {
-  background: #4caf50;
-  color: white;
-  grid-column: span 2;
+.hud-type {
+  margin: 0 0 10px 0;
+  font-size: 0.85rem;
+  color: #666;
 }
 
-.action-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.skills-section {
-  margin-top: 20px;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-}
-
-.skills-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.hp-bar-container, .mp-bar-container {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.bar-label {
+  font-weight: bold;
+  font-size: 0.8rem;
+  width: 25px;
+}
+
+.hp-bar-container .bar-label {
+  color: #4caf50;
+}
+
+.mp-bar-container .bar-label {
+  color: #2196f3;
+}
+
+.bar-text {
+  font-size: 0.8rem;
+  color: #555;
+  width: 50px;
+  text-align: right;
+}
+
+/* 精灵头像 */
+.elf-avatar {
+  background: transparent;
+  border: none;
+  padding: 10px;
+  margin: 10px;
+  display: inline-block;
+  position: relative;
+}
+
+/* 受击特效 (闪白 + 闪红 + 击退) */
+.elf-avatar.hurt {
+  animation: hurtFlash 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.elf-avatar.knockback-right {
+  animation: hurtFlash 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, knockbackRight 0.5s ease-out;
+}
+
+.elf-avatar.knockback-left {
+  animation: hurtFlash 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, knockbackLeft 0.5s ease-out;
+}
+
+@keyframes hurtFlash {
+  0% { filter: brightness(1) drop-shadow(0 0 0 red); }
+  25% { filter: brightness(2) drop-shadow(0 0 10px white); }
+  50% { filter: brightness(0.5) sepia(1) hue-rotate(315deg) saturate(300%) drop-shadow(0 0 20px red); }
+  100% { filter: brightness(1) drop-shadow(0 0 0 red); }
+}
+
+@keyframes knockbackRight {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(30px) rotate(5deg); }
+  75% { transform: translateX(-10px) rotate(-2deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes knockbackLeft {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-30px) rotate(-5deg); }
+  75% { transform: translateX(10px) rotate(2deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+
+/* 粒子特效层 */
+.particle-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.particle-effect {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.particle-effect.player-to-enemy {
+  left: 20%;
+  animation: flyRight 0.8s ease-in forwards;
+}
+
+.particle-effect.enemy-to-player {
+  right: 20%;
+  animation: flyLeft 0.8s ease-in forwards;
+}
+
+.particle-fireball {
+  background: radial-gradient(circle, #fff, #ffeb3b, #ff5722);
+  box-shadow: 0 0 20px #ff5722, 0 0 40px #ff9800, inset 0 0 10px #fff;
+  filter: blur(1px);
+}
+
+.particle-water {
+  background: radial-gradient(circle, #e0f7fa, #03a9f4, #01579b);
+  box-shadow: 0 0 20px #03a9f4, 0 0 40px #0288d1, inset 0 0 10px #fff;
+  border-radius: 40% 60% 50% 50%;
+}
+
+.particle-leaf {
+  background: radial-gradient(circle, #f1f8e9, #8bc34a, #33691e);
+  box-shadow: 0 0 20px #8bc34a;
+  border-radius: 0 50% 0 50%;
+  transform: rotate(45deg);
+}
+
+.particle-impact {
+  background: radial-gradient(circle, #fff, #e0e0e0);
+  box-shadow: 0 0 15px #fff;
+}
+
+@keyframes flyRight {
+  0% { transform: translate(0, 0) scale(0.5); opacity: 0.8; }
+  25% { transform: translate(150px, -20px) scale(1); opacity: 1; }
+  75% { transform: translate(500px, 10px) scale(1.5); opacity: 1; }
+  90% { transform: translate(550px, 0) scale(2); opacity: 0.9; }
+  100% { transform: translate(600px, 0) scale(3); opacity: 0; border-radius: 10%; }
+}
+
+@keyframes flyLeft {
+  0% { transform: translate(0, 0) scale(0.5); opacity: 0.8; }
+  25% { transform: translate(-150px, -20px) scale(1); opacity: 1; }
+  75% { transform: translate(-500px, 10px) scale(1.5); opacity: 1; }
+  90% { transform: translate(-550px, 0) scale(2); opacity: 0.9; }
+  100% { transform: translate(-600px, 0) scale(3); opacity: 0; border-radius: 10%; }
+}
+
+/* 战斗操作 (底部固定操作栏) */
+.bottom-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 15px 0 25px 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 70%, transparent 100%);
+  display: flex;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
+.action-buttons-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 12px 25px;
+  border-radius: 40px;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow-x: auto;
+  max-width: 95%;
+}
+
+.action-divider {
+  width: 2px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 5px;
+}
+
+.skill-quick-bar {
+  display: flex;
+  gap: 10px;
+}
+
+.no-skills-msg {
+  color: #aaa;
+  font-size: 0.9rem;
+  padding: 0 15px;
+  font-style: italic;
+}
+
+.action-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 25px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attack-btn {
+  background: linear-gradient(135deg, #ff9800, #ff5722);
+  color: white;
+  box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4);
 }
 
 .skill-btn {
-  padding: 10px;
-  background: #e3f2fd;
-  border: 1px solid #2196f3;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  background: linear-gradient(135deg, #42a5f5, #1976d2);
+  color: white;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
 }
 
-.skill-btn:hover {
-  background: #bbdefb;
+.mp-cost {
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.switch-btn {
+  background: linear-gradient(135deg, #ffee58, #fbc02d);
+  color: #333;
+  box-shadow: 0 4px 15px rgba(251, 192, 45, 0.4);
+}
+
+.potion-btn {
+  background: linear-gradient(135deg, #66bb6a, #388e3c);
+  color: white;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+.flee-btn {
+  background: linear-gradient(135deg, #bdbdbd, #757575);
+  color: white;
+  box-shadow: 0 4px 15px rgba(117, 117, 117, 0.4);
+}
+
+.action-btn:hover {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn:active {
+  transform: translateY(2px);
 }
 
 /* 战斗日志 */
