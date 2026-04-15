@@ -4,6 +4,9 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router'
 
+// 引入全局样式
+import './styles/global.css'
+
 const app = createApp(App)
 const pinia = createPinia()
 

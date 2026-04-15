@@ -1,6 +1,5 @@
 <template>
   <div id="app">
-    <!-- 主内容 -->
     <main>
       <router-view />
     </main>
@@ -8,28 +7,10 @@
 </template>
 
 <script setup>
-// App.vue 现在只作为路由容器，不需要额外的逻辑
+// App.vue 作为路由容器
+// 全局样式已通过 main.js 引入
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: Arial, sans-serif;
-  line-height: 1.6;
-  color: #333;
-  background-color: #f9f9f9;
-}
-
-#app {
-  min-height: 100vh;
-}
-
-main {
-  min-height: 100vh;
-}
+/* 基础重置 - 全局样式在 styles/global.css 中定义 */
 </style>

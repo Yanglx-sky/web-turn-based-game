@@ -1,0 +1,168 @@
+/* ============================================
+   深色主题设计令牌 - 回合制游戏
+   ============================================ */
+
+:root {
+  /* === 核心背景色调 === */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --bg-elevated: #1f4068;
+  --bg-card: #233554;
+
+  /* === 战斗场景氛围色 === */
+  --battle-bg: #0d1b2a;
+  --battle-gradient-start: #1b263b;
+  --battle-gradient-end: #415a77;
+
+  /* === 属性系别色 === */
+  /* 火系 - 炽热橙红 */
+  --fire-primary: #ff6b35;
+  --fire-secondary: #f7931e;
+  --fire-glow: rgba(255, 107, 53, 0.4);
+
+  /* 水系 - 深蓝 */
+  --water-primary: #4cc9f0;
+  --water-secondary: #4895ef;
+  --water-glow: rgba(76, 201, 240, 0.4);
+
+  /* 草系 - 自然绿 */
+  --grass-primary: #7cb518;
+  --grass-secondary: #5fa8d3;
+  --grass-glow: rgba(124, 181, 24, 0.4);
+
+  /* 光系 - 神圣白金 */
+  --light-primary: #f0e6d3;
+  --light-secondary: #d4af37;
+  --light-glow: rgba(240, 230, 211, 0.3);
+
+  /* === 状态指示色 === */
+  --hp-high: #4ade80;
+  --hp-medium: #fbbf24;
+  --hp-low: #ef4444;
+  --hp-critical: #dc2626;
+
+  --mp-color: #60a5fa;
+  --mp-secondary: #3b82f6;
+
+  /* === 文字色 === */
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-accent: #fbbf24;
+  --text-inverse: #1e293b;
+
+  /* === 边框/分割线 === */
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-visible: rgba(255, 255, 255, 0.2);
+  --border-glow: rgba(255, 255, 255, 0.3);
+
+  /* === 交互元素 === */
+  --btn-attack: #ef4444;
+  --btn-attack-hover: #dc2626;
+
+  --btn-skill: #3b82f6;
+  --btn-skill-hover: #2563eb;
+
+  --btn-switch: #22c55e;
+  --btn-switch-hover: #16a34a;
+
+  --btn-item: #f59e0b;
+  --btn-item-hover: #d97706;
+
+  --btn-flee: #64748b;
+  --btn-flee-hover: #475569;
+
+  /* === 动画效果 === */
+  --flash-white: #ffffff;
+  --glow-attack: rgba(239, 68, 68, 0.6);
+  --glow-skill: rgba(59, 130, 246, 0.6);
+
+  /* === 间距系统 (4pt scale) === */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+  --space-5xl: 96px;
+
+  /* === 圆角 === */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* === 字体 === */
+  --font-display: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-body: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* === 字号 === */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
+  /* === 动画时长 === */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-attack: 800ms;
+  --duration-skill: 1000ms;
+
+  /* === z-index层级 === */
+  --z-bg: 0;
+  --z-sprite: 10;
+  --z-effect: 20;
+  --z-ui: 30;
+  --z-popup: 100;
+  --z-modal: 200;
+  --z-overlay: 300;
+
+  /* === 阴影 === */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.1);
+
+  /* === 渐变 === */
+  --gradient-fire: linear-gradient(135deg, #ff6b35, #f7931e);
+  --gradient-water: linear-gradient(135deg, #4cc9f0, #4895ef);
+  --gradient-grass: linear-gradient(135deg, #7cb518, #5fa8d3);
+  --gradient-dark: linear-gradient(180deg, #1a1a2e, #16213e);
+  --gradient-battle: linear-gradient(135deg, #0d1b2a 0%, #1b263b 50%, #415a77 100%);
+}
+
+/* === 属性系别CSS类 === */
+.element-fire {
+  --element-color: var(--fire-primary);
+  --element-secondary: var(--fire-secondary);
+  --element-glow: var(--fire-glow);
+}
+
+.element-water {
+  --element-color: var(--water-primary);
+  --element-secondary: var(--water-secondary);
+  --element-glow: var(--water-glow);
+}
+
+.element-grass {
+  --element-color: var(--grass-primary);
+  --element-secondary: var(--grass-secondary);
+  --element-glow: var(--grass-glow);
+}
+
+.element-light {
+  --element-color: var(--light-primary);
+  --element-secondary: var(--light-secondary);
+  --element-glow: var(--light-glow);
+}

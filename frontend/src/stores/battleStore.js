@@ -1,98 +1,216 @@
 import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
 
-export const useBattleStore = defineStore('battle', {
-  state: () => ({
-    // 战斗信息
-    battleId: null,
-    currentRound: 1,
-    levelId: null,
-    status: 0, // 0=战斗中 1=胜利 2=失败 3=断线暂停
-    
-    // 精灵列表
-    elves: [],
-    
-    // 怪物列表
-    monsters: [],
-    
-    // 网络状态
-    isOnline: true,
-    reconnecting: false,
-    
-    // 断线重连相关
-    hasPendingBattle: false,
-    pendingBattleData: null
-  }),
-  
-  getters: {
-    // 获取当前战斗的精灵
-    currentElf: (state) => {
-      return state.elves.find(elf => elf.elf_state === 0) || null
-    },
-    
-    // 获取所有存活的怪物
-    aliveMonsters: (state) => {
-      return state.monsters.filter(monster => monster.is_alive === 1)
+export const useBattleStore = defineStore('battle', () => {
+  // === 核心状态 ===
+  const battleId = ref(null)
+  const battleType = ref('level') // 'level' | 'train'
+  const currentRound = ref(1)
+  const levelId = ref(null)
+  const status = ref(0) // 0=战斗中, 1=胜利, 2=失败, 3=断线暂停
+  const countdown = ref(30)
+
+  // === 精灵状态 ===
+  const elves = ref([])
+  const monsters = ref([])
+  const playerSprite = ref(null)
+  const enemySprite = ref(null)
+
+  // === 技能/物品状态 ===
+  const skills = ref([])
+  const potions = ref([])
+
+  // === 战斗日志 ===
+  const battleLogs = ref([])
+
+  // === 网络状态 ===
+  const isOnline = ref(true)
+  const reconnecting = ref(false)
+  const hasPendingBattle = ref(false)
+  const pendingBattleData = ref(null)
+
+  // === 计算属性 ===
+  const currentElf = computed(() => {
+    return elves.value.find(elf => elf.elf_state === 0) || elves.value[0] || null
+  })
+
+  const aliveMonsters = computed(() => {
+    return monsters.value.filter(monster => monster.is_alive === 1)
+  })
+
+  const isBattleActive = computed(() => status.value === 0)
+
+  const playerHpPercent = computed(() => {
+    if (!playerSprite.value) return 0
+    return Math.max(0, Math.min(100, (playerSprite.value.hp / playerSprite.value.maxHp) * 100))
+  })
+
+  const enemyHpPercent = computed(() => {
+    if (!enemySprite.value) return 0
+    return Math.max(0, Math.min(100, (enemySprite.value.hp / enemySprite.value.maxHp) * 100))
+  })
+
+  // === Actions ===
+
+  function initBattle(battleData) {
+    battleId.value = battleData.battleId
+    battleType.value = battleData.type || 'level'
+    currentRound.value = battleData.currentRound || 1
+    levelId.value = battleData.levelId
+    status.value = battleData.status || 0
+
+    elves.value = battleData.elves || []
+    monsters.value = battleData.monsters || []
+
+    playerSprite.value = battleData.playerSprite || null
+    enemySprite.value = battleData.enemySprite || (monsters.value[0] || null)
+
+    skills.value = battleData.skills || []
+    potions.value = battleData.potions || []
+
+    battleLogs.value = battleData.logs || ['战斗开始！']
+    hasPendingBattle.value = false
+    pendingBattleData.value = null
+  }
+
+  function updateBattleState(state) {
+    currentRound.value = state.currentRound || currentRound.value
+    status.value = state.status || status.value
+
+    // 更新精灵状态
+    if (state.elves) {
+      elves.value = state.elves
     }
-  },
-  
-  actions: {
-    // 初始化战斗状态
-    initBattle(battleData) {
-      this.battleId = battleData.battleId
-      this.currentRound = battleData.currentRound || 1
-      this.levelId = battleData.levelId
-      this.status = battleData.status || 0
-      this.elves = battleData.elves || []
-      this.monsters = battleData.monsters || []
-      this.hasPendingBattle = false
-      this.pendingBattleData = null
-    },
-    
-    // 保存战斗状态
-    saveBattleState(state) {
-      this.currentRound = state.currentRound
-      this.elves = state.elves
-      this.monsters = state.monsters
-      this.status = state.status
-    },
-    
-    // 设置网络状态
-    setOnlineStatus(status) {
-      this.isOnline = status
-    },
-    
-    // 设置重连状态
-    setReconnecting(status) {
-      this.reconnecting = status
-    },
-    
-    // 设置待恢复的战斗
-    setPendingBattle(data) {
-      this.hasPendingBattle = !!data
-      this.pendingBattleData = data
-    },
-    
-    // 清空战斗状态
-    clearBattleState() {
-      this.battleId = null
-      this.currentRound = 1
-      this.levelId = null
-      this.status = 0
-      this.elves = []
-      this.monsters = []
-      this.hasPendingBattle = false
-      this.pendingBattleData = null
+
+    // 更新怪物状态
+    if (state.monsters) {
+      monsters.value = state.monsters
     }
-  },
-  
-  // 持久化存储
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        key: 'battle-state',
-        storage: localStorage
+
+    // 更新血量
+    if (playerSprite.value && state.playerElfHp !== undefined) {
+      playerSprite.value.hp = state.playerElfHp
+      playerSprite.value.mp = state.elfMp || playerSprite.value.mp
+    }
+
+    if (enemySprite.value && state.monsterHp !== undefined) {
+      enemySprite.value.hp = state.monsterHp
+      enemySprite.value.mp = state.monsterMp || enemySprite.value.mp
+    }
+
+    // 更新日志
+    if (state.roundLogs) {
+      const newLogs = state.roundLogs.flatMap(r => r.logs || [r])
+      battleLogs.value = [...battleLogs.value, ...newLogs]
+    }
+
+    // 精灵切换
+    if (state.switchedElf) {
+      playerSprite.value = state.switchedElf
+      skills.value = state.skills || []
+    }
+  }
+
+  function setOnlineStatus(online) {
+    isOnline.value = online
+  }
+
+  function setReconnecting(reconnect) {
+    reconnecting.value = reconnect
+  }
+
+  function setPendingBattle(data) {
+    hasPendingBattle.value = !!data
+    pendingBattleData.value = data
+  }
+
+  function addBattleLog(log) {
+    battleLogs.value.push(log)
+  }
+
+  function clearBattleState() {
+    battleId.value = null
+    battleType.value = 'level'
+    currentRound.value = 1
+    levelId.value = null
+    status.value = 0
+    countdown.value = 30
+    elves.value = []
+    monsters.value = []
+    playerSprite.value = null
+    enemySprite.value = null
+    skills.value = []
+    potions.value = []
+    battleLogs.value = []
+    hasPendingBattle.value = false
+    pendingBattleData.value = null
+    isOnline.value = true
+    reconnecting.value = false
+  }
+
+  // === 断线重连 ===
+  function markOffline() {
+    status.value = 3
+    if (battleId.value) {
+      hasPendingBattle.value = true
+      pendingBattleData.value = {
+        battleId: battleId.value,
+        currentRound: currentRound.value,
+        levelId: levelId.value,
+        elves: elves.value,
+        monsters: monsters.value
       }
-    ]
+    }
+  }
+
+  function recoverFromOffline() {
+    status.value = 0
+    hasPendingBattle.value = false
+    pendingBattleData.value = null
+  }
+
+  return {
+    // State
+    battleId,
+    battleType,
+    currentRound,
+    levelId,
+    status,
+    countdown,
+    elves,
+    monsters,
+    playerSprite,
+    enemySprite,
+    skills,
+    potions,
+    battleLogs,
+    isOnline,
+    reconnecting,
+    hasPendingBattle,
+    pendingBattleData,
+
+    // Computed
+    currentElf,
+    aliveMonsters,
+    isBattleActive,
+    playerHpPercent,
+    enemyHpPercent,
+
+    // Actions
+    initBattle,
+    updateBattleState,
+    setOnlineStatus,
+    setReconnecting,
+    setPendingBattle,
+    addBattleLog,
+    clearBattleState,
+    markOffline,
+    recoverFromOffline
+  }
+}, {
+  persist: {
+    key: 'battle-state',
+    storage: localStorage,
+    paths: ['battleId', 'battleType', 'currentRound', 'levelId', 'status', 'elves', 'monsters', 'hasPendingBattle', 'pendingBattleData']
   }
 })
