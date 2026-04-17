@@ -1,7 +1,7 @@
 <template>
   <div class="bag-container">
     <!-- 顶部导航栏 -->
-    <div class="nav-bar">
+    <nav class="nav-bar">
       <div class="nav-logo">洛克王国</div>
       <div class="nav-menu">
         <button @click="navigateTo('/')" class="nav-btn">首页</button>
@@ -16,7 +16,7 @@
         <button @click="navigateTo('/achievement')" class="nav-btn">成就</button>
         <button @click="logout" class="nav-btn">退出</button>
       </div>
-    </div>
+    </nav>
 
     <h1>我的背包</h1>
     
@@ -249,53 +249,6 @@ onMounted(() => {
   min-height: 100vh;
   background: white;
   padding: 20px;
-}
-
-.nav-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(255, 140, 0, 0.9);
-  padding: 15px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-.nav-logo {
-  font-size: 24px;
-  font-weight: bold;
-  color: white;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 20px;
-}
-
-.nav-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid white;
-  color: white;
-  padding: 10px 20px;
-  border-radius: 25px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.nav-btn:hover {
-  background: white;
-  color: #ff8c00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
-}
-
-.nav-btn.active {
-  background: white;
-  color: #ff8c00;
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
 }
 
 h1 {

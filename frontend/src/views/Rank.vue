@@ -187,54 +187,6 @@ onMounted(async () => {
   font-family: 'Arial', sans-serif;
 }
 
-/* 导航栏 */
-.nav-bar {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ff6b00;
-  text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: transparent;
-  color: white;
-  border: 1px solid #ff6b00;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-  background: #ff6b00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
-}
-
-.nav-btn.active {
-  background: #ff6b00;
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
-}
-
 /* 主内容区 */
 .main-content {
   max-width: 1000px;
