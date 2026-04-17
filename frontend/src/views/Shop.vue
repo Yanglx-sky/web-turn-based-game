@@ -1,22 +1,6 @@
 <template>
   <div class="shop-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button @click="navigateTo('/')" class="nav-btn">首页</button>
-        <button @click="navigateTo('/elves')" class="nav-btn">我的精灵</button>
-        <button @click="navigateTo('/pve')" class="nav-btn">冒险</button>
-        <button @click="navigateTo('/shop')" class="nav-btn active">商店</button>
-        <button @click="navigateTo('/bag')" class="nav-btn">背包</button>
-        <button @click="navigateTo('/train')" class="nav-btn">训练</button>
-        <button @click="navigateTo('/rank')" class="nav-btn">排行榜</button>
-        <button @click="navigateTo('/ai')" class="nav-btn">AI助手</button>
-        <button @click="navigateTo('/chat')" class="nav-btn">聊天</button>
-        <button @click="navigateTo('/achievement')" class="nav-btn">成就</button>
-        <button @click="logout" class="nav-btn">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
 
     <h1>装备商店</h1>
     
@@ -91,6 +75,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { shopApi } from '../api/shop'
 import { userApi } from '../api/user'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 const gold = ref(0)

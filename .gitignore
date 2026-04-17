@@ -32,3 +32,6 @@ Thumbs.db
 
 # Claude design context (optional, can be committed if wanted)
 .impeccable.md
+# Tool-generated files
+.playwright-mcp/
+*.png

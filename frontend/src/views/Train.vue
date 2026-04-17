@@ -1,32 +1,50 @@
 <template>
   <div class="train-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button class="nav-btn" @click="navigateTo('/')">首页</button>
-        <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-        <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-        <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-        <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-        <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-        <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-        <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
-        <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-        <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-        <button class="nav-btn" @click="logout">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
     
     <div class="main-content">
-      <h2>单人训练</h2>
+      <section class="train-hero">
+        <div class="train-hero__copy">
+          <p class="train-kicker">训练准备台</p>
+          <h2>单人训练</h2>
+          <p class="train-subtitle">设定训练人偶的属性、元素与行为节奏，进入一场只为打磨技能循环而生的战斗。</p>
+        </div>
+        <div class="train-hero__preview" :class="getElementColorClass(mannequinForm.type)">
+          <div class="preview-badge">{{ mannequinTypeName }}</div>
+          <div class="preview-orb"></div>
+          <div class="preview-grid">
+            <div class="preview-stat">
+              <span>攻击</span>
+              <strong>{{ mannequinForm.attack }}</strong>
+            </div>
+            <div class="preview-stat">
+              <span>防御</span>
+              <strong>{{ mannequinForm.defense }}</strong>
+            </div>
+            <div class="preview-stat">
+              <span>生命</span>
+              <strong>{{ mannequinForm.hp }}</strong>
+            </div>
+            <div class="preview-stat">
+              <span>蓝量</span>
+              <strong>{{ mannequinForm.mp }}</strong>
+            </div>
+          </div>
+          <p class="preview-caption">{{ mannequinBehaviorLabel }} · {{ mannequinPowerRank }}</p>
+        </div>
+      </section>
       
       <!-- 训练人偶创建表单 -->
       <div v-if="!inTrain && !showResult" class="create-mannequin">
         <div class="header">
-          <h3>创建训练人偶</h3>
+          <div>
+            <p class="panel-kicker">模拟配置</p>
+            <h3>创建训练人偶</h3>
+          </div>
+          <div class="mode-chip" :class="getElementColorClass(mannequinForm.type)">{{ mannequinBehaviorLabel }}</div>
         </div>
-        <form @submit.prevent="createMannequin">
+        <form @submit.prevent="createMannequin" class="mannequin-form">
+          <div class="form-grid">
           <div class="form-group">
             <label>伤害</label>
             <input type="number" v-model.number="mannequinForm.attack" min="1" required>
@@ -62,7 +80,11 @@
               <option value="1">是</option>
             </select>
           </div>
+          </div>
+          <div class="form-footer">
+            <p class="form-tip">训练流程与跳转逻辑保持不变，只升级视觉氛围与信息层次。</p>
           <button type="submit" class="btn create-btn">创建并开始训练</button>
+          </div>
         </form>
       </div>
       
@@ -127,9 +149,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { trainApi } from '../api/train'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 
@@ -157,6 +180,16 @@ const playerElf = ref({})
 const mannequin = ref({})
 const playerElfHp = ref(0)
 const mannequinHp = ref(0)
+
+const mannequinTypeName = computed(() => getMannequinTypeName(mannequinForm.value.type))
+const mannequinBehaviorLabel = computed(() => mannequinForm.value.isAttack === 1 ? '主动进攻模式' : '防守陪练模式')
+const mannequinPowerRank = computed(() => {
+  const score = mannequinForm.value.attack + mannequinForm.value.defense + mannequinForm.value.speed + mannequinForm.value.hp / 10 + mannequinForm.value.mp / 10
+  if (score >= 220) return '战力评级 S'
+  if (score >= 180) return '战力评级 A'
+  if (score >= 140) return '战力评级 B'
+  return '战力评级 C'
+})
 
 // 创建训练人偶并开始训练
 const createMannequin = async () => {
@@ -696,6 +729,316 @@ h2 {
   .result-buttons .btn {
     width: 100%;
     max-width: 200px;
+  }
+}
+
+/* Game-style training prep overrides */
+.train-container {
+  min-height: 100vh;
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+}
+
+.main-content {
+  max-width: 1320px;
+  margin: 18px auto 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.train-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 420px);
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 22px;
+}
+
+.train-kicker {
+  margin-bottom: 12px;
+  color: rgba(255, 214, 148, 0.78);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.train-subtitle {
+  max-width: 720px;
+  margin-top: 14px;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: rgba(246, 236, 220, 0.72);
+}
+
+.train-hero h2 {
+  margin: 0;
+  text-align: left;
+  color: #fff0d5;
+  font-size: clamp(2.2rem, 4vw, 3.3rem);
+  text-shadow: 0 12px 30px rgba(255, 133, 36, 0.2);
+}
+
+.train-hero__preview,
+.create-mannequin,
+.train-battle,
+.train-result {
+  border: 1px solid rgba(255, 195, 112, 0.14);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(15, 19, 31, 0.96), rgba(9, 12, 19, 0.96));
+  box-shadow:
+    0 22px 42px rgba(5, 9, 15, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.train-hero__preview {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+}
+
+.preview-badge {
+  display: inline-flex;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff1d4;
+  font-weight: 700;
+}
+
+.preview-orb {
+  width: 150px;
+  height: 150px;
+  margin: 26px auto 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(255, 209, 133, 0.74) 28%, rgba(255, 148, 64, 0.18) 58%, rgba(255, 148, 64, 0));
+  box-shadow: 0 0 42px rgba(255, 174, 94, 0.3);
+}
+
+.train-hero__preview.element-water .preview-orb {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(174, 232, 255, 0.74) 28%, rgba(95, 174, 255, 0.18) 58%, rgba(95, 174, 255, 0));
+  box-shadow: 0 0 42px rgba(112, 188, 255, 0.3);
+}
+
+.train-hero__preview.element-grass .preview-orb {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(220, 255, 194, 0.74) 28%, rgba(96, 201, 108, 0.18) 58%, rgba(96, 201, 108, 0));
+  box-shadow: 0 0 42px rgba(96, 201, 108, 0.3);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preview-stat {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.preview-stat span {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(246, 236, 220, 0.62);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+}
+
+.preview-stat strong {
+  font-size: 1.35rem;
+  color: #fff3db;
+}
+
+.preview-caption {
+  margin-top: 16px;
+  color: rgba(255, 233, 195, 0.78);
+  font-weight: 700;
+}
+
+.create-mannequin,
+.train-battle,
+.train-result {
+  padding: 26px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.panel-kicker {
+  margin-bottom: 8px;
+  color: rgba(255, 214, 148, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.header h3 {
+  color: #fff0d5;
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff0d5;
+  font-weight: 700;
+}
+
+.mode-chip.element-water {
+  background: rgba(83, 168, 255, 0.16);
+}
+
+.mode-chip.element-grass {
+  background: rgba(98, 206, 109, 0.16);
+}
+
+.mannequin-form {
+  display: grid;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  margin-bottom: 10px;
+  color: rgba(247, 237, 220, 0.8);
+}
+
+.form-group input,
+.form-group select {
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff3db;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: rgba(255, 182, 81, 0.62);
+  box-shadow: 0 0 0 3px rgba(255, 167, 81, 0.12);
+}
+
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.form-tip {
+  max-width: 520px;
+  color: rgba(246, 236, 220, 0.62);
+  line-height: 1.7;
+}
+
+.create-btn {
+  width: auto;
+  min-width: 280px;
+  min-height: 54px;
+  margin-top: 0;
+  border-radius: 18px;
+  box-shadow: 0 16px 28px rgba(255, 121, 37, 0.2);
+}
+
+.battle-info {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 194, 107, 0.14);
+}
+
+.player-info,
+.mannequin-info {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 194, 107, 0.12);
+  color: #fff3db;
+}
+
+.player-info h3,
+.mannequin-info h3,
+.battle-log h3,
+.train-result h3 {
+  color: #fff0d5;
+}
+
+.player-info p,
+.mannequin-info p,
+.ai-report p,
+.result-text {
+  color: rgba(247, 237, 220, 0.78);
+}
+
+.log-content {
+  border-color: rgba(255, 194, 107, 0.1);
+  background: rgba(7, 11, 18, 0.76);
+}
+
+.log-item {
+  border-left-color: #ffab5c;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(247, 237, 220, 0.78);
+}
+
+.result-buttons {
+  margin-top: 26px;
+}
+
+@media (max-width: 960px) {
+  .train-container {
+    padding: 0 14px 24px;
+  }
+
+  .train-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .create-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-top: 14px;
+  }
+
+  .create-mannequin,
+  .train-battle,
+  .train-result,
+  .train-hero__preview {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

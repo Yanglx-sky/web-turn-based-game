@@ -1,22 +1,6 @@
 <template>
   <div class="home-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button class="nav-btn" @click="navigateTo('/')">首页</button>
-        <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-        <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-        <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-        <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-        <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-        <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-        <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
-        <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-        <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-        <button class="nav-btn" @click="logout">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
     
     <!-- 主内容区 -->
     <div class="main-content">
@@ -169,6 +153,7 @@ import { userElfApi } from '../api/userElf'
 import { elfApi } from '../api/elf'
 import { levelApi } from '../api/level'
 import { userApi } from '../api/user'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 const user = ref(null)
