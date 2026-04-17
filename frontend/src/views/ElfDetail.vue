@@ -1,23 +1,30 @@
 <template>
   <div class="home-container">
     <GameTopNav active-path="/elves" />
-    
+
     <!-- 主内容区 -->
     <div class="main-content">
+      <p class="section-eyebrow">ELF PROFILE</p>
       <h1>精灵详情</h1>
-      
+
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else-if="elfDetail" class="elf-info">
         <div class="elf-header">
-          <img :src="getElfImage(elfDetail.elf.elfId)" :alt="elfDetail.elf.elfId" class="elf-image">
+          <div class="elf-media">
+            <div class="elf-halo"></div>
+            <img :src="getElfImage(elfDetail.elf.elfId)" :alt="elfDetail.elf.elfId" class="elf-image">
+          </div>
           <div class="elf-basic-info">
             <h2>精灵 {{ elfDetail.elf.elfId }}</h2>
-            <p v-if="elfDetail.elf.fightOrder > 0" class="active-tag">出战：{{ elfDetail.elf.fightOrder }}号位</p>
-            <p>系别: {{ getElementType(elfDetail.elf.elfId) }}</p>
+            <div class="elf-meta">
+              <span class="element-badge" :class="getElementColorClass(elfDetail.elf.elfId)">{{ getElementType(elfDetail.elf.elfId) }}</span>
+              <p v-if="elfDetail.elf.fightOrder > 0" class="active-tag">出战：{{ elfDetail.elf.fightOrder }}号位</p>
+              <p v-else class="standby-tag">未出战</p>
+            </div>
           </div>
         </div>
-        
+
         <div class="elf-stats">
           <div class="stat-row">
             <div class="stat-item">
@@ -31,20 +38,20 @@
           </div>
           <div v-if="elfDetail.elf.level >= 10" class="stat-item level-status">
             <span class="stat-label">状态</span>
-            <span class="stat-value">已满级</span>
+            <span class="stat-value stat-max">已满级</span>
           </div>
-          
+
           <div class="stat-row">
             <div class="stat-item">
               <span class="stat-label">HP</span>
-              <span class="stat-value">{{ elfDetail.elf.maxHp }}</span>
+              <span class="stat-value stat-hp">{{ elfDetail.elf.maxHp }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">MP</span>
-              <span class="stat-value">{{ elfDetail.elf.maxMp }}</span>
+              <span class="stat-value stat-mp">{{ elfDetail.elf.maxMp }}</span>
             </div>
           </div>
-          
+
           <div class="stat-row">
             <div class="stat-item">
               <span class="stat-label">攻击</span>
@@ -55,7 +62,7 @@
               <span class="stat-value">{{ elfDetail.elf.defense }}</span>
             </div>
           </div>
-          
+
           <div class="stat-row">
             <div class="stat-item">
               <span class="stat-label">普攻伤害</span>
@@ -70,10 +77,11 @@
       </div>
 
       <!-- 装备管理 -->
-      <div v-if="elfDetail" class="section">
-        <h3>装备管理</h3>
+      <div v-if="elfDetail" class="stage-panel section">
+        <div class="panel-heading">
+          <h3>装备管理</h3>
+        </div>
         <div class="equipment-grid">
-          <!-- 武器 -->
           <div class="equipment-slot">
             <h4>武器</h4>
             <div class="equipment-card" v-if="equippedWeapon">
@@ -83,7 +91,7 @@
               <div class="equipment-details">
                 <p>{{ equippedWeapon.name }}</p>
                 <p v-if="equippedWeapon.atk > 0">攻击: +{{ equippedWeapon.atk }}</p>
-              <p v-if="equippedWeapon.speed > 0">速度: +{{ equippedWeapon.speed }}</p>
+                <p v-if="equippedWeapon.speed > 0">速度: +{{ equippedWeapon.speed }}</p>
                 <button class="unequip-btn" @click="unequipWeapon">卸下</button>
               </div>
             </div>
@@ -92,8 +100,7 @@
               <button class="equip-btn" @click="openWeaponModal">装备武器</button>
             </div>
           </div>
-          
-          <!-- 防具 -->
+
           <div class="equipment-slot">
             <h4>防具</h4>
             <div class="equipment-card" v-if="equippedArmor">
@@ -103,7 +110,7 @@
               <div class="equipment-details">
                 <p>{{ equippedArmor.name }}</p>
                 <p v-if="equippedArmor.def > 0">防御: +{{ equippedArmor.def }}</p>
-              <p v-if="equippedArmor.speed > 0">速度: +{{ equippedArmor.speed }}</p>
+                <p v-if="equippedArmor.speed > 0">速度: +{{ equippedArmor.speed }}</p>
                 <button class="unequip-btn" @click="unequipArmor">卸下</button>
               </div>
             </div>
@@ -115,8 +122,10 @@
         </div>
       </div>
 
-      <div v-if="elfDetail" class="section">
-        <h3>已解锁技能</h3>
+      <div v-if="elfDetail" class="stage-panel section">
+        <div class="panel-heading">
+          <h3>已解锁技能</h3>
+        </div>
         <div class="skill-list">
           <div v-for="skill in elfDetail.unlockedSkills" :key="skill.id" class="skill-item" :class="getElementColorClass(skill.elementType)">
             <div class="skill-header">
@@ -141,8 +150,10 @@
         </div>
       </div>
 
-      <div v-if="elfDetail" class="section">
-        <h3>可解锁技能</h3>
+      <div v-if="elfDetail" class="stage-panel section">
+        <div class="panel-heading">
+          <h3>可解锁技能</h3>
+        </div>
         <div class="skill-list">
           <div v-for="skill in elfDetail.unlockableSkills" :key="skill.id" class="skill-item" :class="getElementColorClass(skill.elementType)">
             <div class="skill-header">
@@ -174,14 +185,14 @@
 
       <button class="back-btn" @click="goBack">返回我的精灵</button>
     </div>
-    
+
     <!-- 装备选择弹窗 -->
     <div class="modal" v-if="showEquipModal">
       <div class="modal-content">
         <h3>{{ modalTitle }}</h3>
         <div class="equip-list">
-          <div v-for="equip in availableEquips" :key="equip.id" 
-            class="equip-item" 
+          <div v-for="equip in availableEquips" :key="equip.id"
+            class="equip-item"
             :class="{ 'bound': equip.isWorn && equip.elfId && equip.elfId !== elfDetail.elf.id, 'worn': equip.isWorn && equip.elfId && equip.elfId === elfDetail.elf.id }"
             @click="!equip.isWorn || (equip.isWorn && equip.elfId === elfDetail.elf.id) ? selectEquip(equip.itemId) : null"
           >
@@ -394,7 +405,7 @@ const openArmorModal = async () => {
     try {
       const userStr = localStorage.getItem('user')
       if (!userStr) return
-      
+
       const user = JSON.parse(userStr)
       const response = await equipApi.getUserEquipsByType(type)
       if (response.code === 200) {
@@ -413,9 +424,9 @@ const selectEquip = async (equipId) => {
     alert('请先登录')
     return
   }
-  
+
   const user = JSON.parse(userStr)
-  
+
   try {
     let response
     if (currentEquipType.value === 1) {
@@ -423,7 +434,7 @@ const selectEquip = async (equipId) => {
     } else {
       response = await equipApi.equipArmor(elfDetail.value.elf.id, equipId)
     }
-    
+
     if (response.code === 200) {
       alert('装备成功！')
       showEquipModal.value = false
@@ -445,7 +456,7 @@ const selectEquip = async (equipId) => {
       alert('请先登录')
       return
     }
-    
+
     try {
       const response = await equipApi.unequipWeapon(elfDetail.value.elf.id)
       if (response.code === 200) {
@@ -467,7 +478,7 @@ const selectEquip = async (equipId) => {
       alert('网络错误，卸下失败')
     }
   }
-  
+
   // 卸下防具
   const unequipArmor = async () => {
     const userStr = localStorage.getItem('user')
@@ -475,7 +486,7 @@ const selectEquip = async (equipId) => {
       alert('请先登录')
       return
     }
-    
+
     try {
       const response = await equipApi.unequipArmor(elfDetail.value.elf.id)
       if (response.code === 200) {
@@ -501,7 +512,7 @@ const selectEquip = async (equipId) => {
 // 加载已装备的物品
 const loadEquippedItems = async () => {
   if (!elfDetail.value) return
-  
+
   try {
     // 这里应该根据精灵的weaponId和armorId获取装备详情
     // 暂时使用模拟数据
@@ -513,7 +524,7 @@ const loadEquippedItems = async () => {
     } else {
       equippedWeapon.value = null
     }
-    
+
     if (elfDetail.value.elf.armorId) {
       const armorResponse = await equipApi.getEquipById(elfDetail.value.elf.armorId)
       if (armorResponse.code === 200) {
@@ -536,665 +547,674 @@ loadElfDetail = async (elfId) => {
 </script>
 
 <style scoped>
-/* 全局样式 */
 .home-container {
   min-height: 100vh;
-  background-image: url('https://a0ai.marscode.cn/api/ide/v1/text_to_image?prompt=colorful%20fantasy%20game%20background%20with%20magical%20elements%20and%20floating%20islands&image_size=landscape_16_9');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  font-family: 'Arial', sans-serif;
+  background: linear-gradient(180deg, #05070d 0%, #09111f 32%, #101a29 100%);
+  padding: 0 20px 32px;
 }
 
-/* 主内容区 */
 .main-content {
-  max-width: 1000px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  backdrop-filter: blur(10px);
+  padding: 0 40px;
+  padding-top: 12px;
+}
+
+.section-eyebrow {
+  margin: 0 0 4px;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
 h1 {
-  text-align: center;
-  margin-bottom: 2rem;
-  color: #ff6b00;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-  font-size: 2rem;
+  margin: 0 0 14px;
+  color: #fff4df;
+  font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.04em;
 }
 
-.loading, .error {
+.loading,
+.error {
   text-align: center;
-  padding: 3rem;
-  font-size: 1.2rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin: 2rem auto;
-  max-width: 500px;
+  padding: 36px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 191, 112, 0.14);
+  background: rgba(11, 15, 24, 0.86);
+  box-shadow: 0 12px 20px rgba(4, 8, 15, 0.24);
+  font-size: 0.95rem;
 }
 
 .error {
-  color: #f44336;
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.2);
 }
 
 .loading {
-  color: #666;
-  border: 1px solid rgba(102, 102, 102, 0.3);
+  color: rgba(247, 237, 220, 0.72);
 }
 
-/* 精灵信息 */
+/* 精灵信息面板 */
 .elf-info {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 15px;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(76, 175, 80, 0.3);
+  position: relative;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 191, 112, 0.14);
+  background: rgba(11, 15, 24, 0.86);
+  box-shadow: 0 12px 24px rgba(4, 8, 15, 0.24);
+  overflow: hidden;
+}
+
+.elf-info::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 218, 157, 0.3), transparent);
+  pointer-events: none;
 }
 
 .elf-header {
   display: flex;
   align-items: center;
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.elf-media {
   position: relative;
+  display: grid;
+  place-items: center;
+  width: 110px;
+  height: 110px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 173, 91, 0.22), transparent 58%),
+    linear-gradient(180deg, rgba(23, 28, 44, 0.98), rgba(11, 15, 24, 0.96));
+  flex-shrink: 0;
+}
+
+.elf-halo {
+  position: absolute;
+  inset: auto 12% 12%;
+  height: 24px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 196, 112, 0.28), transparent);
+  filter: blur(8px);
 }
 
 .elf-image {
-  width: 180px;
-  height: 180px;
+  position: relative;
+  width: 88px;
+  height: 88px;
   object-fit: cover;
-  border-radius: 50%;
-  border: 4px solid #4CAF50;
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
-  transition: all 0.3s ease;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 169, 79, 0.6);
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.24),
+    0 0 0 5px rgba(255, 169, 79, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .elf-image:hover {
-  transform: scale(1.05);
-  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.6);
+  transform: translateY(-3px);
+  box-shadow:
+    0 16px 26px rgba(0, 0, 0, 0.28),
+    0 0 0 5px rgba(255, 169, 79, 0.1);
 }
 
 .elf-basic-info {
   flex: 1;
+  min-width: 0;
 }
 
 .elf-basic-info h2 {
-  color: #333;
-  margin-bottom: 1rem;
-  font-size: 1.8rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  margin: 0 0 6px;
+  color: #fff4df;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.elf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.element-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.element-badge.element-fire {
+  background: oklch(0.55 0.22 30 / 0.18);
+  color: oklch(0.65 0.22 30);
+}
+
+.element-badge.element-water {
+  background: oklch(0.55 0.18 240 / 0.18);
+  color: oklch(0.65 0.18 240);
+}
+
+.element-badge.element-grass {
+  background: oklch(0.55 0.18 150 / 0.18);
+  color: oklch(0.65 0.18 150);
+}
+
+.active-tag,
+.standby-tag {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .active-tag {
-  display: inline-block;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
-  padding: 0.5rem 1.2rem;
-  border-radius: 20px;
-  font-size: 1rem;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
-  margin-top: 0.5rem;
+  background: rgba(99, 202, 122, 0.14);
+  border: 1px solid rgba(99, 202, 122, 0.24);
+  color: #97ef9c;
 }
 
-/* 精灵属性 */
+.standby-tag {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  color: rgba(247, 237, 220, 0.74);
+}
+
+/* 属性统计 */
 .elf-stats {
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 10px;
-  padding: 1.5rem;
-  border: 1px solid rgba(102, 102, 102, 0.2);
+  display: grid;
+  gap: 4px;
 }
 
 .stat-row {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
 }
 
 .stat-item {
-  flex: 1;
-  min-width: 200px;
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: all 0.3s ease;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 196, 112, 0.12);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .stat-label {
-  font-weight: 600;
-  color: #666;
+  color: rgba(255, 222, 184, 0.68);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .stat-value {
-  font-weight: bold;
-  color: #333;
-  font-size: 1.1rem;
+  color: #fff2d4;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
-/* 已满级状态框 */
+.stat-hp { color: #8fe69a; }
+.stat-mp { color: #8fc5ff; }
+.stat-max {
+  color: rgba(255, 220, 162, 0.6);
+  font-size: 0.8rem;
+}
+
 .level-status {
-  min-width: 200px;
-  margin: 0 auto;
-  margin-bottom: 1rem;
-  height: auto;
-  padding: 1rem;
+  margin: 0;
+  padding: 6px 10px;
 }
 
-/* 技能部分 */
+/* 分区面板 */
+.stage-panel {
+  position: relative;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 191, 112, 0.14);
+  background: rgba(11, 15, 24, 0.86);
+  box-shadow: 0 16px 28px rgba(4, 8, 15, 0.24);
+  overflow: hidden;
+}
+
+.stage-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 218, 157, 0.3), transparent);
+  pointer-events: none;
+}
+
 .section {
-  margin-bottom: 3rem;
+  margin-top: 12px;
 }
 
-.section h3 {
-  color: var(--color-grass);
-  margin-bottom: 1.5rem;
+.panel-heading h3 {
+  margin: 0;
+  color: #ffd07b;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+/* 装备管理 */
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.equipment-slot {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 196, 112, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.equipment-slot h4 {
+  margin: 0 0 10px;
+  color: rgba(255, 222, 184, 0.72);
+  font-size: 0.9rem;
+  font-weight: 700;
   text-align: center;
-  font-size: 1.5rem;
-  border-bottom: 2px solid oklch(0.55 0.18 150 / 0.3);
-  padding-bottom: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
+.equipment-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.equipment-card.empty {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  padding: 18px;
+  color: rgba(247, 237, 220, 0.6);
+}
+
+.equipment-card p {
+  margin: 3px 0;
+  color: rgba(247, 237, 220, 0.8);
+  font-size: 0.88rem;
+}
+
+.equipment-image {
+  flex: 0 0 50px;
+}
+
+.equipment-image img {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.equipment-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.equip-btn, .unequip-btn {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.equip-btn {
+  background: linear-gradient(135deg, rgba(99, 202, 122, 0.3), rgba(28, 86, 47, 0.9));
+  color: #effee9;
+}
+
+.equip-btn:hover {
+  transform: translateY(-1px);
+}
+
+.unequip-btn {
+  background: linear-gradient(135deg, rgba(255, 118, 82, 0.3), rgba(180, 40, 20, 0.9));
+  color: #ffe0d6;
+}
+
+.unequip-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* 技能列表 */
 .skill-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .skill-item {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow-md);
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.92), rgba(10, 13, 21, 0.96));
+  transition: transform 160ms ease, border-color 160ms ease;
 }
 
 .skill-item:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-3px);
+  border-color: rgba(255, 194, 107, 0.24);
 }
 
-/* 技能元素类型颜色 */
 .skill-item.element-fire {
-  border-color: var(--color-fire);
-}
-
-.skill-item.element-fire:hover {
-  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.22 30 / 0.3);
+  border-color: oklch(0.55 0.22 30 / 0.3);
 }
 
 .skill-item.element-water {
-  border-color: var(--color-water);
-}
-
-.skill-item.element-water:hover {
-  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.18 240 / 0.3);
+  border-color: oklch(0.55 0.18 240 / 0.3);
 }
 
 .skill-item.element-grass {
-  border-color: var(--color-grass);
-}
-
-.skill-item.element-grass:hover {
-  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.18 150 / 0.3);
+  border-color: oklch(0.55 0.18 150 / 0.3);
 }
 
 .skill-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 8px;
 }
 
 .skill-header h4 {
-  color: var(--color-neutral-700);
   margin: 0;
-  font-size: 1.2rem;
+  color: #fff4df;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .skill-type {
-  background: var(--color-grass);
-  color: white;
-  padding: 0.3rem 0.8rem;
-  border-radius: 15px;
-  font-size: 0.8rem;
-  font-weight: bold;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: oklch(0.55 0.18 150 / 0.2);
+  color: oklch(0.7 0.18 150);
 }
 
-/* 技能类型徽章元素颜色 */
 .skill-type.element-fire {
-  background: var(--color-fire);
+  background: oklch(0.55 0.22 30 / 0.2);
+  color: oklch(0.7 0.22 30);
 }
 
 .skill-type.element-water {
-  background: var(--color-water);
-}
-
-.skill-type.element-grass {
-  background: var(--color-grass);
+  background: oklch(0.55 0.18 240 / 0.2);
+  color: oklch(0.7 0.18 240);
 }
 
 .skill-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .skill-stat {
-  background: rgba(245, 245, 245, 0.8);
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
 }
 
 .skill-stat-label {
+  color: rgba(255, 222, 184, 0.68);
   font-weight: 600;
-  color: #666;
-  margin-right: 0.5rem;
+  margin-right: 4px;
 }
 
 .skill-stat-value {
-  font-weight: bold;
-  color: #333;
+  color: #fff2d4;
+  font-weight: 700;
 }
 
 .skill-description {
-  color: #666;
+  color: rgba(247, 237, 220, 0.6);
   line-height: 1.5;
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
-  background: rgba(245, 245, 245, 0.6);
-  padding: 1rem;
-  border-radius: 8px;
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .unlock-btn {
   width: 100%;
-  padding: 0.8rem 1.5rem;
-  background: var(--color-grass);
-  color: white;
+  padding: 8px 14px;
   border: none;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.3);
+  transition: transform 160ms ease;
+  background: oklch(0.55 0.18 150 / 0.3);
+  color: oklch(0.75 0.18 150);
 }
 
 .unlock-btn:hover {
-  background: var(--color-grass-light);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px oklch(0.55 0.18 150 / 0.4);
+  transform: translateY(-1px);
 }
 
-/* 解锁按钮元素颜色 */
 .unlock-btn.element-fire {
-  background: var(--color-fire);
-  box-shadow: 0 4px 12px oklch(0.55 0.22 30 / 0.3);
-}
-
-.unlock-btn.element-fire:hover {
-  background: var(--color-fire-light);
-  box-shadow: 0 6px 16px oklch(0.55 0.22 30 / 0.4);
+  background: oklch(0.55 0.22 30 / 0.3);
+  color: oklch(0.75 0.22 30);
 }
 
 .unlock-btn.element-water {
-  background: var(--color-water);
-  box-shadow: 0 4px 12px oklch(0.55 0.18 240 / 0.3);
-}
-
-.unlock-btn.element-water:hover {
-  background: var(--color-water-light);
-  box-shadow: 0 6px 16px oklch(0.55 0.18 240 / 0.4);
-}
-
-.unlock-btn.element-grass {
-  background: var(--color-grass);
-  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.3);
-}
-
-.unlock-btn.element-grass:hover {
-  background: var(--color-grass-light);
-  box-shadow: 0 6px 16px oklch(0.55 0.18 150 / 0.4);
+  background: oklch(0.55 0.18 240 / 0.3);
+  color: oklch(0.75 0.18 240);
 }
 
 .no-skills {
   text-align: center;
-  padding: 2rem;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 10px;
-  color: #666;
-  font-size: 1.1rem;
+  padding: 20px;
+  color: rgba(247, 237, 220, 0.5);
+  font-size: 0.92rem;
   grid-column: 1 / -1;
 }
 
 /* 返回按钮 */
 .back-btn {
   display: block;
-  margin: 3rem auto 0;
-  padding: 1rem 2.5rem;
-  background: linear-gradient(135deg, #666 0%, #888 100%);
-  color: white;
+  margin: 24px auto 0;
+  padding: 10px 30px;
   border: none;
-  border-radius: 30px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(26, 31, 48, 0.94), rgba(11, 14, 22, 0.96));
+  border: 1px solid rgba(255, 191, 110, 0.18);
+  color: rgba(255, 244, 220, 0.92);
+  font-size: 0.94rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  max-width: 200px;
+  transition: transform 160ms ease;
+  box-shadow: 0 8px 16px rgba(4, 8, 15, 0.2);
 }
 
 .back-btn:hover {
-  background: linear-gradient(135deg, #555 0%, #777 100%);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-}
-
-/* 装备管理 */
-.equipment-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-top: 1.5rem;
-}
-
-.equipment-slot {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(76, 175, 80, 0.2);
-  transition: all 0.3s ease;
-}
-
-.equipment-slot:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.25);
-}
-
-.equipment-slot h4 {
-  color: #333;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-size: 1.2rem;
-  border-bottom: 2px solid rgba(76, 175, 80, 0.3);
-  padding-bottom: 0.5rem;
-}
-
-.equipment-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 8px;
-  padding: 1rem;
-  transition: all 0.3s ease;
-}
-
-.equipment-card:hover {
-  background: rgba(245, 245, 245, 1);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 20px rgba(4, 8, 15, 0.28);
 }
 
-.equipment-card.empty {
-  justify-content: center;
-  flex-direction: column;
-  text-align: center;
-  padding: 2rem;
-  color: #666;
-}
-
-.equipment-image {
-  flex: 0 0 60px;
-}
-
-.equipment-image img {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.equipment-details {
-  flex: 1;
-}
-
-.equipment-details p {
-  margin: 0.5rem 0;
-  color: #333;
-}
-
-.equip-btn, .unequip-btn {
-  margin-top: 1rem;
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 20px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.equip-btn {
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-}
-
-.equip-btn:hover {
-  background: linear-gradient(135deg, #388E3C 0%, #66BB6A 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
-}
-
-.unequip-btn {
-  background: linear-gradient(135deg, #f44336 0%, #e57373 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
-}
-
-.unequip-btn:hover {
-  background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
-}
-
-/* 装备选择弹窗 */
+/* 装备弹窗 */
 .modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  padding: 20px;
+  background: rgba(4, 7, 13, 0.62);
+  backdrop-filter: blur(10px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 1200;
 }
 
 .modal-content {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  width: 90%;
-  max-width: 600px;
+  width: min(100%, 560px);
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 191, 112, 0.16);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.98), rgba(9, 12, 19, 0.98));
+  color: #fff4df;
+  box-shadow: 0 20px 40px rgba(4, 8, 15, 0.38);
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  animation: modalFadeIn 0.3s ease;
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .modal-content h3 {
-  color: #ff6b00;
-  margin-bottom: 1.5rem;
+  margin: 0 0 14px;
+  color: #ffd07b;
+  font-size: 1.3rem;
+  font-weight: 800;
   text-align: center;
-  font-size: 1.5rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-  border-bottom: 2px solid rgba(255, 107, 0, 0.3);
-  padding-bottom: 0.5rem;
 }
 
 .equip-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 8px;
 }
 
 .equip-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 8px;
-  padding: 1rem;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .equip-item:hover {
-  background: rgba(245, 245, 245, 1);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #ff6b00;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 194, 107, 0.2);
+}
+
+.equip-item.bound {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.equip-item.bound:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: transparent;
+}
+
+.equip-item.worn {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.equip-item.worn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: transparent;
 }
 
 .equip-item-image {
-  flex: 0 0 60px;
+  flex: 0 0 48px;
+  position: relative;
 }
 
 .equip-item-image img {
-  width: 60px;
-  height: 60px;
+  width: 48px;
+  height: 48px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .equip-item-info {
   flex: 1;
+  min-width: 0;
 }
 
 .equip-item-info h4 {
-  color: #333;
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
+  margin: 0 0 4px;
+  color: #fff4df;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .equip-item-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 4px;
 }
 
 .equip-item-stats .stat {
-  padding: 0.3rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
 .equip-item-stats .stat.atk {
-  background: rgba(255, 99, 132, 0.2);
-  color: #dc3545;
+  background: rgba(255, 99, 132, 0.15);
+  color: #ff6b7a;
 }
 
 .equip-item-stats .stat.def {
-  background: rgba(54, 162, 235, 0.2);
-  color: #007bff;
+  background: rgba(54, 162, 235, 0.15);
+  color: #6bb9f0;
 }
 
 .equip-item-stats .stat.hp {
-  background: rgba(75, 192, 192, 0.2);
-  color: #28a745;
+  background: rgba(75, 192, 192, 0.15);
+  color: #5ed8c8;
 }
 
 .equip-item-stats .stat.mp {
-  background: rgba(153, 102, 255, 0.2);
-  color: #6f42c1;
+  background: rgba(153, 102, 255, 0.15);
+  color: #b088f5;
 }
 
 .equip-item-stats .stat.speed {
-  background: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffd05a;
 }
 
 .equip-item-stats .stat.bound {
-  background: rgba(200, 200, 200, 0.2);
-  color: #666;
-}
-
-.equip-item {
-  position: relative;
-}
-
-.equip-item.bound {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.equip-item.bound:hover {
-  transform: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.equip-item.worn {
-  opacity: 0.8;
-  cursor: not-allowed;
-}
-
-.equip-item.worn:hover {
-  transform: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: rgba(200, 200, 200, 0.1);
+  color: rgba(200, 200, 200, 0.7);
 }
 
 .bound-tag {
   position: absolute;
-  top: -5px;
-  right: -5px;
+  top: -4px;
+  right: -4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
   color: white;
-  font-size: 12px;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .bound-tag.current {
-  background: #4CAF50;
+  background: #4caf50;
 }
 
 .bound-tag:not(.current) {
@@ -1204,65 +1224,88 @@ h1 {
 .modal-buttons {
   display: flex;
   justify-content: center;
-  margin-top: 2rem;
-  gap: 1rem;
+  margin-top: 16px;
 }
 
 .cancel-btn {
-  padding: 0.8rem 2rem;
-  background: linear-gradient(135deg, #666 0%, #888 100%);
-  color: white;
+  padding: 8px 24px;
   border: none;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(26, 31, 48, 0.94), rgba(11, 14, 22, 0.96));
+  border: 1px solid rgba(255, 191, 110, 0.18);
+  color: rgba(255, 244, 220, 0.92);
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 160ms ease;
 }
 
 .cancel-btn:hover {
-  background: linear-gradient(135deg, #555 0%, #777 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
 }
 
-/* 响应式设计 */
+/* 响应式 */
 @media (max-width: 768px) {
   .main-content {
-    padding: 1rem;
+    padding: 0 15px;
   }
-  
+
+  .home-container {
+    padding: 0 14px 24px;
+  }
+
   .elf-header {
     flex-direction: column;
     text-align: center;
   }
-  
-  .stat-row {
-    flex-direction: column;
-    gap: 1rem;
+
+  .elf-media {
+    width: 110px;
+    height: 110px;
   }
-  
+
+  .elf-image {
+    width: 86px;
+    height: 86px;
+  }
+
+  .stat-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
   .skill-list {
     grid-template-columns: 1fr;
   }
-  
+
   .equipment-grid {
     grid-template-columns: 1fr;
   }
-  
-  .nav-menu {
-    gap: 0.5rem;
-  }
-  
-  .nav-btn {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
-  }
-  
+
   .modal-content {
-    width: 95%;
-    padding: 1.5rem;
+    padding: 18px;
+  }
+}
+
+@media (max-width: 560px) {
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .elf-info,
+  .stage-panel {
+    border-radius: 24px;
+  }
+
+  .elf-media {
+    width: 100px;
+    height: 100px;
+  }
+
+  .elf-image {
+    width: 76px;
+    height: 76px;
+    border-radius: 16px;
   }
 }
 </style>

@@ -1,32 +1,39 @@
 <template>
-  <div class="home-container">
+  <div class="pve-container">
     <GameTopNav />
     
     <!-- 主内容区 -->
     <div class="main-content">
-      <h1>关卡挑战</h1>
+      <div class="page-header">
+        <p class="section-eyebrow">ADVENTURE MODE</p>
+        <h1>关卡挑战</h1>
+      </div>
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else class="levels-list">
         <!-- 从数据库读取的关卡 -->
         <div v-for="level in levels" :key="level.id" :class="['level-card', { 'locked': level.id > userCurrentLevel }]">
-          <h3>关卡 {{ level.id }}</h3>
-          <p>{{ level.levelName }}</p>
-          <p>经验奖励: {{ level.rewardExp }}</p>
-          <p>金币奖励: {{ level.rewardGold || 10 }}</p>
-          <!-- 显示星级和评分 -->
-          <div v-if="userLevelStars[level.id]" class="level-stars">
-            <div class="stars">
-              <span v-for="i in 3" :key="i" :class="['star', { 'active': i <= userLevelStars[level.id].star }]">
-                ★
-              </span>
+          <div class="level-info">
+            <h3>关卡 {{ level.id }}</h3>
+            <p class="level-name">{{ level.levelName }}</p>
+            <div class="rewards">
+              <p class="level-reward">经验奖励: <span>{{ level.rewardExp }}</span></p>
+              <p class="level-reward">金币奖励: <span>{{ level.rewardGold || 10 }}</span></p>
             </div>
-            <p class="score">评分: {{ userLevelStars[level.id].score }}</p>
+            <!-- 显示星级和评分 -->
+            <div v-if="userLevelStars[level.id]" class="level-stars">
+              <div class="stars">
+                <span v-for="i in 3" :key="i" :class="['star', { 'active': i <= userLevelStars[level.id].star }]">
+                  ★
+                </span>
+              </div>
+              <p class="score">评分: {{ userLevelStars[level.id].score }}</p>
+            </div>
           </div>
           <div v-if="level.id > userCurrentLevel" class="locked-overlay">
             <p>未解锁</p>
           </div>
-          <button v-else @click="openBattleModal(level.id)">进入关卡</button>
+          <button v-else class="action-btn primary-btn" @click="openBattleModal(level.id)">进入关卡</button>
         </div>
       </div>
     </div>
@@ -40,20 +47,23 @@
         <div v-else class="battle-elves-list">
           <div v-for="elf in sortedBattleElves" :key="elf.id" class="elf-card">
             <div class="elf-image">
+              <div class="elf-card__halo"></div>
               <img src="../assets/photo/sasuke/佐助.jpg" alt="精灵 1" v-if="elf.elfId === 1" />
               <img src="../assets/photo/zhaomeiming/照美冥.webp" alt="精灵 2" v-else-if="elf.elfId === 2" />
               <img src="../assets/photo/qianshouzhujian/千手柱间.jpg" alt="精灵 3" v-else-if="elf.elfId === 3" />
               <img src="../assets/hero.png" alt="精灵" v-else />
             </div>
-            <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
-            <p>等级: {{ elf.level }}</p>
-            <p>HP: {{ elf.maxHp }}</p>
-            <p>MP: {{ elf.maxMp }}</p>
-            <p>出战顺序: {{ elf.fightOrder }}</p>
+            <div class="elf-info">
+              <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
+              <p>等级: <span>{{ elf.level }}</span></p>
+              <p>HP: <span>{{ elf.maxHp }}</span></p>
+              <p>MP: <span>{{ elf.maxMp }}</span></p>
+              <div class="deployment-tag">出战顺序: {{ elf.fightOrder }}</div>
+            </div>
           </div>
           <div v-if="battleElves.length === 0" class="no-elves">
-            <p>您还没有设置出战精灵</p>
-            <button @click="navigateTo('/elves')">去设置</button>
+             <p>您还没有设置出战精灵</p>
+            <button class="action-btn primary-btn" @click="navigateTo('/elves')">去设置</button>
           </div>
         </div>
         
@@ -70,8 +80,8 @@
           </div>
         </div>
         <div class="modal-buttons">
-          <button @click="cancelBattle" class="cancel-btn">取消</button>
-          <button @click="confirmBattle" class="confirm-btn">确定出战</button>
+          <button @click="cancelBattle" class="action-btn secondary-btn">取消</button>
+          <button @click="confirmBattle" class="action-btn confirm-btn">确定出战</button>
         </div>
       </div>
     </div>
@@ -247,87 +257,180 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.home-container {
+.pve-container {
   min-height: 100vh;
-  background: white;
-  padding: 20px;
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
 .main-content {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 40px;
   max-width: 1200px;
-  margin: 0 auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-h1 {
+.page-header {
   text-align: center;
-  margin-bottom: 2rem;
-  color: #ff8c00;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  margin-bottom: 0.5rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
 }
 
 .loading, .error {
   text-align: center;
   padding: 2rem;
   font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .error {
-  color: #f44336;
+  color: #ff5252;
 }
 
 .levels-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 50px;
+  padding: 1.5rem 1rem 4rem 1rem;
+  overflow-x: auto;
+  align-items: center;
+}
+
+.level-card:first-child {
+  margin-left: auto;
+}
+
+.level-card:last-child {
+  margin-right: auto;
+}
+
+.levels-list::-webkit-scrollbar {
+  height: 10px;
+}
+
+.levels-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 156, 58, 0.4);
+  border-radius: 5px;
+}
+
+.levels-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
 }
 
 .level-card {
-  background: var(--color-neutral-100);
-  border: 2px solid transparent;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  text-align: center;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
   position: relative;
-  overflow: hidden;
-  min-height: 250px;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.96), rgba(16, 9, 3, 0.96));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.7);
+  border-radius: 20px;
+  padding: 1.3rem;
+  text-align: center;
+  box-shadow: 0 16px 28px rgba(255, 140, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  width: 210px;
+  min-height: 230px;
+  flex-shrink: 0;
+  z-index: 1;
 }
 
-.level-card:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+.level-card::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 50px;
+  height: 4px;
+  background: linear-gradient(90deg, #ff9c3a, rgba(255, 156, 58, 0.2));
+  z-index: -1;
+  transform: translateY(-50%);
 }
 
-/* 难度颜色 - 根据关卡ID递增 */
-.level-card:nth-child(3n+1) {
-  border-color: var(--color-success);
+.level-card:last-child::after {
+  display: none;
 }
 
-.level-card:nth-child(3n+2) {
-  border-color: var(--color-warning);
+.level-card:hover:not(.locked) {
+  transform: translateY(-8px);
+  box-shadow: 0 24px 40px rgba(255, 140, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 195, 112, 0.5);
 }
 
-.level-card:nth-child(3n+3) {
-  border-color: var(--color-error);
+.level-card h3 {
+  margin-top: 0;
+  color: #ff9c3a;
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 4px rgba(255, 140, 0, 0.2);
+}
+
+.level-name {
+  margin: 0.5rem 0 1rem;
+  color: #fff4df;
+  font-size: 1.05rem;
+  font-weight: bold;
+}
+
+.rewards {
+  background: rgba(255, 169, 79, 0.05);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(255, 195, 112, 0.1);
+}
+
+.level-reward {
+  margin: 0.3rem 0;
+  color: rgba(247, 239, 224, 0.72);
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.level-reward span {
+  color: #ffc107;
+  font-weight: 700;
+  text-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
 }
 
 .level-card.locked {
-  opacity: 0.5;
-  background: var(--color-neutral-300);
-  border-color: var(--color-neutral-400);
+  opacity: 0.7;
+  background: rgba(15, 10, 5, 0.9);
+  border-color: rgba(255, 152, 0, 0.1);
+  border-top-color: rgba(255, 152, 0, 0.2);
 }
 
-.level-card.locked:hover {
-  transform: none;
-  box-shadow: var(--shadow-sm);
+.level-card.locked::after {
+  background: rgba(255, 152, 0, 0.2);
 }
 
 .locked-overlay {
@@ -336,40 +439,29 @@ h1 {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(10, 5, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
-  border-radius: 8px;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
+  z-index: 10;
+  border-radius: 20px;
 }
 
 .locked-overlay p {
-  color: white;
-  font-size: 1.5rem;
+  color: rgba(255, 230, 200, 0.9);
+  font-size: 1.1rem;
   font-weight: bold;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
-  background: rgba(100, 100, 100, 0.8);
+  letter-spacing: 0.2em;
+  background: rgba(40, 20, 5, 0.8);
   padding: 10px 20px;
-  border-radius: 20px;
-  border: 2px solid white;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-.level-card h3 {
-  margin-top: 0;
-  color: #333;
-  font-size: 1.2rem;
-}
-
-.level-card p {
-  margin: 0.5rem 0;
-  color: #666;
-  font-size: 0.9rem;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
 }
 
 .level-stars {
-  margin: 10px 0;
+  margin: 10px 0 15px;
 }
 
 .stars {
@@ -379,42 +471,77 @@ h1 {
 }
 
 .star {
-  font-size: 1.2rem;
-  color: #ddd;
-  margin: 0 2px;
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
 .star.active {
   color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 .score {
-  font-size: 0.8rem;
-  color: #666;
+  font-size: 0.85rem;
+  color: rgba(247, 239, 224, 0.8);
   margin: 0;
-}
-
-button {
-  margin-top: 1rem;
-  padding: 0.75rem 1.5rem;
-  background-color: #ff8c00;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
   font-weight: 600;
+}
+
+.action-btn {
+  border: none;
   cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.1s ease;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
-button:hover {
-  background-color: #ff7000;
+.action-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.3);
 }
 
-button:active {
-  transform: translateY(0);
+.action-btn:active {
+  transform: translateY(1px);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  box-shadow: 0 12px 24px rgba(255, 132, 29, 0.2);
+}
+
+.primary-btn:hover {
+  box-shadow: 0 16px 28px rgba(255, 132, 29, 0.35);
+}
+
+.secondary-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #a2ffc4, #3aff75 55%, #1aff53);
+  color: #0a2d12;
+  box-shadow: 0 12px 24px rgba(29, 255, 83, 0.2);
+}
+
+.confirm-btn:hover {
+  box-shadow: 0 16px 28px rgba(29, 255, 83, 0.35);
 }
 
 /* 弹窗样式 */
@@ -424,7 +551,8 @@ button:active {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(4, 8, 15, 0.85);
+  backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -432,127 +560,215 @@ button:active {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 15px;
-  padding: 30px;
-  max-width: 1000px;
+  background: linear-gradient(180deg, rgba(15, 19, 31, 0.96), rgba(9, 12, 19, 0.96));
+  border: 1px solid rgba(255, 195, 112, 0.14);
+  border-radius: 28px;
+  padding: 35px;
+  max-width: 900px;
   width: 95%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 50px rgba(4, 8, 15, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   text-align: center;
 }
 
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 195, 112, 0.3);
+  border-radius: 4px;
+}
+
 .modal-content h2 {
-  color: #ff8c00;
-  margin-bottom: 20px;
+  color: #fff4df;
+  margin-top: 0;
+  margin-bottom: 25px;
+  font-size: 2rem;
+  text-shadow: 0 2px 8px rgba(255, 140, 0, 0.3);
 }
 
 .battle-elves-list {
   margin: 20px 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 20px;
   justify-content: center;
 }
 
-.elf-image {
-  margin-bottom: 10px;
-  text-align: center;
-}
-
-.elf-image img {
-  width: 120px;
-  height: 120px;
-  object-fit: contain;
-  border: 2px solid #ff8c00;
-  background: white;
-  padding: 5px;
-}
-
 .elf-card {
-  background: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 15px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  border-radius: 20px;
+  padding: 20px;
   text-align: center;
   min-width: 250px;
   flex: 1;
-  max-width: 300px;
+  max-width: 280px;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
-.elf-card h4 {
+.elf-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+  border-color: rgba(255, 194, 107, 0.3);
+}
+
+.elf-image {
+  margin-bottom: 15px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.elf-card__halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 169, 79, 0.2), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.elf-image img {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 169, 79, 0.8);
+  box-shadow: 0 8px 16px rgba(255, 129, 35, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+.elf-info h4 {
   margin-top: 0;
-  color: #333;
+  margin-bottom: 12px;
+  color: #fff4df;
+  font-size: 1.2rem;
 }
 
-.elf-card p {
-  margin: 5px 0;
-  font-size: 0.9rem;
-  color: #666;
+.elf-info p {
+  margin: 6px 0;
+  font-size: 0.95rem;
+  color: rgba(247, 239, 224, 0.7);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10%;
+}
+
+.elf-info p span {
+  color: #fff;
+  font-weight: bold;
+}
+
+.deployment-tag {
+  margin-top: 15px;
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: rgba(255, 169, 79, 0.15);
+  color: #ffc107;
+  font-size: 0.85rem;
+  font-weight: bold;
+  border: 1px solid rgba(255, 169, 79, 0.3);
 }
 
 .no-elves {
-  padding: 30px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  margin: 20px 0;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 194, 107, 0.3);
+  border-radius: 20px;
+  width: 100%;
+}
+
+.no-elves p {
+  color: rgba(247, 239, 224, 0.8);
+  margin-bottom: 20px;
+  font-size: 1.1rem;
+}
+
+.no-elves .action-btn {
+  margin: 0 auto;
+  max-width: 200px;
 }
 
 .modal-buttons {
   display: flex;
   justify-content: center;
   gap: 20px;
-  margin-top: 30px;
+  margin-top: 35px;
 }
 
-.cancel-btn {
-  background-color: #9e9e9e;
-}
-
-.cancel-btn:hover {
-  background-color: #757575;
-}
-
-.confirm-btn {
-  background-color: #4caf50;
-}
-
-.confirm-btn:hover {
-  background-color: #43a047;
+.modal-buttons .action-btn {
+  width: auto;
+  margin: 0;
+  min-width: 140px;
 }
 
 /* 战斗策略推荐样式 */
 .strategy-section {
-  margin-top: 30px;
-  padding: 20px;
-  background: #f0f8ff;
-  border-radius: 8px;
-  border: 1px solid #add8e6;
+  margin-top: 35px;
+  padding: 25px;
+  background: rgba(16, 26, 45, 0.6);
+  border-radius: 20px;
+  border: 1px solid rgba(79, 145, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.strategy-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #4f91ff, transparent);
 }
 
 .strategy-section h3 {
-  color: #1e90ff;
-  margin-bottom: 15px;
+  color: #8ab4f8;
+  margin-top: 0;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.strategy-section h3::before {
+  content: '✨';
 }
 
 .strategy-content {
-  background: white;
-  padding: 15px;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-  min-height: 100px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .strategy-content p {
   margin: 0;
-  line-height: 1.5;
-  color: #333;
+  line-height: 1.6;
+  color: #e8eaed;
+  font-size: 1.05rem;
+  text-align: left;
 }
 
 .no-strategy {
   padding: 20px;
-  background: #f5f5f5;
-  border-radius: 4px;
-  text-align: center;
-  color: #666;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
 }
 </style>

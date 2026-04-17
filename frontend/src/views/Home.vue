@@ -1,19 +1,51 @@
 <template>
   <div class="home-container">
     <GameTopNav />
-    
-    <!-- 主内容区 -->
+
     <div class="main-content">
-      <!-- 用户信息卡片 -->
-      <div class="user-info-card">
-        <div class="user-avatar" @click="showAvatarUpload = true">
-          <img :src="user?.avatar || avatarImage" alt="用户头像">
-          <div class="avatar-edit-icon">📷</div>
+      <section class="home-hero">
+        <div class="home-hero__glow home-hero__glow--warm"></div>
+        <div class="home-hero__glow home-hero__glow--cool"></div>
+
+        <div class="home-hero__intro">
+          <div class="user-avatar-shell">
+            <div class="user-avatar" @click="showAvatarUpload = true">
+              <img :src="user?.avatar || avatarImage" alt="用户头像">
+              <div class="avatar-edit-icon">📷 更换头像</div>
+            </div>
+          </div>
+
+          <div class="hero-copy">
+            <p class="section-eyebrow">HOME LOBBY</p>
+            <h1>欢迎，{{ user?.nickname }}</h1>
+
+            <div class="identity-list">
+              <div class="identity-item">
+                <span class="identity-label">手机号</span>
+                <strong class="identity-value">{{ user?.phone || '未填写' }}</strong>
+              </div>
+              <div class="identity-item">
+                <span class="identity-label">邮箱</span>
+                <strong class="identity-value">{{ user?.email || '未填写' }}</strong>
+              </div>
+            </div>
+
+            <div class="hero-actions">
+              <button class="hero-btn hero-btn--primary" @click="showEditModal = true">修改个人信息</button>
+              <button class="hero-btn hero-btn--secondary" @click="showChangePasswordModal = true">修改密码</button>
+            </div>
+          </div>
         </div>
-        <div class="user-details">
-          <h2>欢迎，{{ user?.nickname }}</h2>
-          <p>手机号: {{ user?.phone }}</p>
-          <p>邮箱: {{ user?.email }}</p>
+
+        <div class="home-hero__status stage-panel">
+          <div class="panel-heading panel-heading--compact">
+            <div>
+              <p class="section-eyebrow">MISSION STATUS</p>
+              <h2>大厅概览</h2>
+            </div>
+            <span class="status-pill">{{ elves.length > 0 ? '编队在线' : '等待组队' }}</span>
+          </div>
+
           <div class="user-stats">
             <div class="stat-item stat-days">
               <span class="stat-label">游戏天数</span>
@@ -28,14 +60,20 @@
               <span class="stat-value">{{ currentLevelName }}</span>
             </div>
           </div>
-          <div class="action-buttons-group">
-            <button class="edit-info-btn" @click="showEditModal = true">修改个人信息</button>
-            <button class="edit-password-btn" @click="showChangePasswordModal = true">修改密码</button>
+
+          <div class="hero-summary">
+            <div class="hero-summary__item">
+              <span class="hero-summary__label">当前状态</span>
+              <strong class="hero-summary__value">{{ elves.length > 0 ? '可立即出战' : '请选择你的首只精灵' }}</strong>
+            </div>
+            <div class="hero-summary__item">
+              <span class="hero-summary__label">关卡推进</span>
+              <strong class="hero-summary__value">{{ currentLevelName || '等待解锁' }}</strong>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
       
-      <!-- 头像上传弹窗 -->
       <div class="modal" v-if="showAvatarUpload">
         <div class="modal-content">
           <h3>上传头像</h3>
@@ -46,7 +84,6 @@
         </div>
       </div>
       
-      <!-- 修改个人信息弹窗 -->
       <div class="modal" v-if="showEditModal">
         <div class="modal-content">
           <h3>修改个人信息</h3>
@@ -71,7 +108,6 @@
         </div>
       </div>
       
-      <!-- 修改密码弹窗 -->
       <div class="modal" v-if="showChangePasswordModal">
         <div class="modal-content">
           <h3>修改密码</h3>
@@ -96,52 +132,99 @@
         </div>
       </div>
       
-      <!-- 精灵展示区 -->
-      <div v-if="elves.length > 0" class="elves-showcase">
-        <h3>我的精灵</h3>
+      <section v-if="elves.length > 0" class="stage-panel elves-showcase">
+        <div class="panel-heading">
+          <div>
+            <p class="section-eyebrow">ACTIVE ROSTER</p>
+            <h3>我的精灵</h3>
+          </div>
+        </div>
+
         <div class="elves-grid">
           <div v-for="elf in elves" :key="elf.id" class="elf-card">
-            <img :src="getElfImage(elf.elfId)" :alt="elf.elfId" class="elf-image">
+            <div class="elf-card__media">
+              <div class="elf-card__halo"></div>
+              <img :src="getElfImage(elf.elfId)" :alt="elf.elfId" class="elf-image">
+            </div>
             <div class="elf-info">
+              <span class="elf-card__eyebrow">精灵档案</span>
               <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
-              <p>等级: {{ elf.level }}</p>
+              <div class="elf-meta">
+                <span class="elf-meta__item">等级 {{ elf.level }}</span>
+                <span class="elf-meta__item">{{ elf.fightOrder > 0 ? `出战 ${elf.fightOrder} 号位` : '待命中' }}</span>
+              </div>
               <p v-if="elf.fightOrder > 0" class="active-tag">出战：{{ elf.fightOrder }}号位</p>
+              <p v-else class="standby-tag">当前未上阵</p>
             </div>
           </div>
         </div>
-      </div>
+      </section>
       
-      <!-- 御三家选择 -->
-      <div v-if="elves.length === 0" class="starter-selection">
-        <h3>选择你的初始精灵</h3>
-        <p>请从以下三只精灵中选择一只作为你的初始伙伴</p>
+      <section v-if="elves.length === 0" class="stage-panel starter-selection">
+        <div class="panel-heading">
+          <div>
+            <p class="section-eyebrow">FIRST PARTNER</p>
+            <h3>选择你的初始精灵</h3>
+          </div>
+        </div>
+
         <div v-if="loadingStarterElves" class="loading">加载中...</div>
         <div v-else class="starter-elves">
           <div v-for="elf in starterElves" :key="elf.id" class="starter-elf">
-            <img :src="getElfImage(elf.id)" :alt="elf.elfName" class="elf-image">
-            <h4>{{ elf.elfName }}</h4>
-            <p>类型: {{ elf.elementType === 1 ? '火系' : elf.elementType === 2 ? '水系' : '草系' }}</p>
-            <p>等级: 1</p>
-            <button @click="selectStarter(elf.id)">选择</button>
+            <div class="starter-elf__media">
+              <div class="starter-elf__halo"></div>
+              <img :src="getElfImage(elf.id)" :alt="elf.elfName" class="elf-image">
+            </div>
+            <div class="starter-elf__body">
+              <span class="starter-elf__eyebrow">初始伙伴</span>
+              <h4>{{ elf.elfName }}</h4>
+              <p>类型: {{ elf.elementType === 1 ? '火系' : elf.elementType === 2 ? '水系' : '草系' }}</p>
+              <p>等级: 1</p>
+              <button @click="selectStarter(elf.id)">选择</button>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
       
-      <!-- 功能按钮区 -->
-      <div class="action-buttons">
-        <button class="action-btn primary" @click="navigateTo('/elves')">
-          <i class="btn-icon">✨</i> 精灵中心
-        </button>
-        <button class="action-btn secondary" @click="navigateTo('/pve')">
-          <i class="btn-icon">⚔️</i> 开始冒险
-        </button>
-        <button class="action-btn tertiary" @click="navigateTo('/shop')">
-          <i class="btn-icon">🛒</i> 道具商店
-        </button>
-        <button class="action-btn quaternary" @click="navigateTo('/train')">
-          <i class="btn-icon">🏋️</i> 单人训练
-        </button>
-      </div>
+      <section class="stage-panel action-section">
+        <div class="panel-heading">
+          <div>
+            <p class="section-eyebrow">QUICK ACCESS</p>
+            <h3>快捷入口</h3>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="action-btn primary" @click="navigateTo('/elves')">
+            <span class="btn-icon">✨</span>
+            <span class="action-btn__content">
+              <strong>精灵中心</strong>
+              <small>查看养成与编队</small>
+            </span>
+          </button>
+          <button class="action-btn secondary" @click="navigateTo('/pve')">
+            <span class="btn-icon">⚔️</span>
+            <span class="action-btn__content">
+              <strong>开始冒险</strong>
+              <small>进入主线战斗</small>
+            </span>
+          </button>
+          <button class="action-btn tertiary" @click="navigateTo('/shop')">
+            <span class="btn-icon">🛒</span>
+            <span class="action-btn__content">
+              <strong>道具商店</strong>
+              <small>补给与资源采购</small>
+            </span>
+          </button>
+          <button class="action-btn quaternary" @click="navigateTo('/train')">
+            <span class="btn-icon">🏋️</span>
+            <span class="action-btn__content">
+              <strong>单人训练</strong>
+              <small>验证技能与节奏</small>
+            </span>
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -465,52 +548,110 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 全局样式 */
 .home-container {
   min-height: 100vh;
-  background-image: url('https://a0ai.marscode.cn/api/ide/v1/text_to_image?prompt=colorful%20fantasy%20game%20background%20with%20magical%20elements%20and%20floating%20islands&image_size=landscape_16_9');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  font-family: 'Arial', sans-serif;
+  padding: 0 20px 32px;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top, rgba(255, 153, 51, 0.16), transparent 28%),
+    radial-gradient(circle at 18% 24%, rgba(99, 202, 122, 0.12), transparent 24%),
+    linear-gradient(180deg, #05070d 0%, #09111f 32%, #101a29 100%);
+  color: #f8f2e9;
 }
 
-/* 主内容区 */
 .main-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 10px auto 0;
 }
 
-/* 用户信息卡片 */
-.user-info-card {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  display: flex;
+.home-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 20px;
+  padding: 30px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 194, 107, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 196, 127, 0.05), transparent 24%),
+    linear-gradient(180deg, rgba(8, 12, 22, 0.96) 0%, rgba(12, 19, 34, 0.94) 100%);
+  box-shadow:
+    0 24px 50px rgba(4, 8, 15, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.home-hero__glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.home-hero__glow--warm {
+  top: -90px;
+  right: -10px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 144, 66, 0.28), rgba(255, 144, 66, 0));
+}
+
+.home-hero__glow--cool {
+  bottom: -120px;
+  left: -40px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(79, 145, 255, 0.18), rgba(79, 145, 255, 0));
+}
+
+.home-hero__intro,
+.home-hero__status {
+  position: relative;
+  z-index: 1;
+}
+
+.home-hero__intro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 26px;
   align-items: center;
-  gap: 2rem;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 107, 0, 0.3);
+}
+
+.user-avatar-shell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 186px;
+  height: 186px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 200, 128, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .user-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
+  width: 144px;
+  height: 144px;
+  border-radius: 28px;
   overflow: hidden;
-  border: 3px solid #ff6b00;
-  box-shadow: 0 0 20px rgba(255, 107, 0, 0.5);
+  border: 2px solid rgba(255, 169, 79, 0.86);
+  box-shadow:
+    0 18px 30px rgba(255, 129, 35, 0.22),
+    0 0 0 10px rgba(255, 169, 79, 0.08);
   position: relative;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .user-avatar:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 25px rgba(255, 107, 0, 0.7);
+  transform: translateY(-4px);
+  box-shadow:
+    0 24px 38px rgba(255, 129, 35, 0.28),
+    0 0 0 10px rgba(255, 169, 79, 0.12);
 }
 
 .user-avatar img {
@@ -524,555 +665,768 @@ onMounted(async () => {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(8, 12, 22, 0), rgba(8, 12, 22, 0.88));
+  color: rgba(255, 244, 220, 0.92);
   text-align: center;
-  padding: 5px;
-  font-size: 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 180ms ease;
 }
 
 .user-avatar:hover .avatar-edit-icon {
   opacity: 1;
 }
 
-.user-details h2 {
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-size: 1.8rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.user-details p {
-  color: #666;
-  margin-bottom: 0.5rem;
-  font-size: 1rem;
-}
-
-.action-buttons-group {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.edit-info-btn, .edit-password-btn {
-  padding: 0.8rem 1.5rem;
-  border: none;
-  border-radius: 25px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.edit-info-btn {
-  background: linear-gradient(135deg, #ff6b00 0%, #ff9e4f 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.3);
-}
-
-.edit-info-btn:hover {
-  background: linear-gradient(135deg, #e55a00 0%, #e08a3d 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 107, 0, 0.4);
-}
-
-.edit-password-btn {
-  background: linear-gradient(135deg, #2196F3 0%, #64B5F6 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
-}
-
-.edit-password-btn:hover {
-  background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
-}
-
-.user-stats {
-  display: flex;
-  gap: 2rem;
-  margin-top: 1rem;
-}
-
-.stat-item {
-  background: rgba(255, 107, 0, 0.1);
-  padding: 0.8rem 1.2rem;
-  border-radius: 10px;
-  text-align: center;
-  min-width: 120px;
-  border: 1px solid rgba(255, 107, 0, 0.2);
-}
-
-.stat-label {
-  display: block;
-  font-size: 0.8rem;
-  color: #666;
-  margin-bottom: 0.3rem;
-}
-
-.stat-value {
-  display: block;
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: var(--color-brand);
-}
-
-/* 统计项颜色区分 */
-.stat-item.stat-days {
-  border-color: oklch(0.70 0.18 85 / 0.3);
-}
-
-.stat-item.stat-days .stat-value {
-  color: var(--color-gold);
-}
-
-.stat-item.stat-elves {
-  border-color: oklch(0.55 0.18 150 / 0.3);
-}
-
-.stat-item.stat-elves .stat-value {
-  color: var(--color-grass);
-}
-
-.stat-item.stat-level {
-  border-color: oklch(0.55 0.18 240 / 0.3);
-}
-
-.stat-item.stat-level .stat-value {
-  color: var(--color-water);
-}
-
-/* 精灵展示区 */
-.elves-showcase {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(76, 175, 80, 0.3);
-}
-
-.elves-showcase h3 {
-  color: #4CAF50;
-  margin-bottom: 1.5rem;
-  text-align: center;
-  font-size: 1.5rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-  border-bottom: 2px solid rgba(76, 175, 80, 0.3);
-  padding-bottom: 0.5rem;
-}
-
-.elves-grid {
+.hero-copy {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
+  gap: 18px;
 }
 
-.elf-card {
-  background: white;
-  border-radius: 10px;
-  padding: 1.5rem;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  border: 1px solid rgba(76, 175, 80, 0.2);
-}
-
-.elf-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(76, 175, 80, 0.3);
-}
-
-.elf-card .elf-image {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 1rem;
-  border: 2px solid #4CAF50;
-  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
-}
-
-.elf-card h4 {
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
-}
-
-.elf-card p {
-  color: #666;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.elf-card .active-tag {
-  background: #4CAF50;
-  color: white;
-  padding: 0.3rem 0.8rem;
-  border-radius: 15px;
-  font-size: 0.8rem;
-  font-weight: bold;
-  display: inline-block;
-  margin-top: 0.5rem;
-}
-
-/* 御三家选择 */
-.starter-selection {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 2.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 107, 0, 0.3);
-  text-align: center;
-}
-
-.starter-selection h3 {
-  color: #ff6b00;
-  margin-bottom: 1rem;
-  font-size: 1.8rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-  border-bottom: 2px solid rgba(255, 107, 0, 0.3);
-  padding-bottom: 0.5rem;
-}
-
-.starter-selection p {
-  color: #666;
-  margin-bottom: 2rem;
-  font-size: 1.1rem;
-}
-
-.loading {
-  text-align: center;
-  padding: 3rem;
-  color: #666;
-  font-size: 1.2rem;
-}
-
-.starter-elves {
-  display: flex;
-  justify-content: space-around;
-  flex-wrap: wrap;
-  gap: 2rem;
-  margin-top: 2rem;
-}
-
-.starter-elf {
-  background: white;
-  padding: 2rem;
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  text-align: center;
-  min-width: 220px;
-  transition: all 0.3s ease;
-  border: 2px solid rgba(255, 107, 0, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.starter-elf::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255, 107, 0, 0.1), transparent);
-  transform: rotate(45deg);
-  animation: shimmer 3s infinite;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.starter-elf:hover::before {
-  opacity: 1;
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%) rotate(45deg);
-  }
-  100% {
-    transform: translateX(100%) rotate(45deg);
-  }
-}
-
-.starter-elf:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 10px 25px rgba(255, 107, 0, 0.3);
-  border-color: #ff6b00;
-}
-
-.starter-elf .elf-image {
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 1.5rem;
-  border: 3px solid #ff6b00;
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.4);
-  transition: all 0.3s ease;
-}
-
-.starter-elf:hover .elf-image {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(255, 107, 0, 0.6);
-}
-
-.starter-elf h4 {
-  color: #333;
-  margin-bottom: 1rem;
-  font-size: 1.3rem;
-  position: relative;
-  z-index: 1;
-}
-
-.starter-elf p {
-  color: #666;
-  margin: 0.5rem 0;
-  font-size: 1rem;
-  position: relative;
-  z-index: 1;
-}
-
-.starter-elf button {
-  margin-top: 1.5rem;
-  padding: 1rem 2rem;
-  background: linear-gradient(135deg, #ff6b00 0%, #ff9e4f 100%);
-  color: white;
-  border: none;
-  border-radius: 30px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.4);
-  position: relative;
-  z-index: 1;
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
-.starter-elf button:hover {
-  background: linear-gradient(135deg, #e55a00 0%, #e88e3a 100%);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(255, 107, 0, 0.6);
+.hero-copy h1,
+.panel-heading h2,
+.panel-heading h3 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
 }
 
-.starter-elf button:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.4);
+.hero-copy h1 {
+  font-size: clamp(2rem, 3.4vw, 3.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
 }
 
-/* 功能按钮区 */
-.action-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  flex-wrap: wrap;
-  margin-top: 2rem;
-}
-
-.action-btn {
-  padding: 1.2rem 2.5rem;
-  border: none;
-  border-radius: 30px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  min-width: 200px;
-  justify-content: center;
-}
-
-.action-btn .btn-icon {
-  font-size: 1.5rem;
-}
-
-.action-btn.primary {
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
-}
-
-.action-btn.primary:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4);
-}
-
-.action-btn.secondary {
-  background: linear-gradient(135deg, #2196F3 0%, #64B5F6 100%);
-  color: white;
-}
-
-.action-btn.secondary:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(33, 150, 243, 0.4);
-}
-
-.action-btn.tertiary {
-  background: linear-gradient(135deg, #FF9800 0%, #FFB74D 100%);
-  color: white;
-}
-
-.action-btn.quaternary {
-  background: linear-gradient(135deg, var(--color-brand-dark) 0%, var(--color-brand) 100%);
-  color: white;
-}
-
-.action-btn.quaternary:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px oklch(0.55 0.20 50 / 0.4);
-}
-
-.action-btn.tertiary:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(255, 152, 0, 0.4);
-}
-
-/* 弹窗样式 */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.modal-content h3 {
-  color: #333;
-  margin-bottom: 1.5rem;
-  text-align: center;
-  font-size: 1.5rem;
-}
-
-.modal-content .form-group {
-  margin-bottom: 1.5rem;
-}
-
-.modal-content label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #666;
-  font-weight: 500;
-}
-
-.modal-content input {
-  width: 100%;
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+.hero-description,
+.panel-description {
+  margin: 0;
+  color: rgba(247, 239, 224, 0.72);
   font-size: 1rem;
-  transition: all 0.3s ease;
+  line-height: 1.7;
 }
 
-.modal-content input:focus {
-  outline: none;
-  border-color: #ff6b00;
-  box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.1);
+.identity-list {
+  display: grid;
+  gap: 10px;
 }
 
-.modal-buttons {
+.identity-item {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.identity-label {
+  color: rgba(255, 222, 184, 0.68);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.identity-value {
+  color: #fff2d4;
+  font-size: 1rem;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.hero-actions {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
+.hero-btn,
+.action-btn,
+.starter-elf button,
 .modal-buttons button {
-  padding: 0.8rem 1.5rem;
   border: none;
-  border-radius: 8px;
   cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.3s ease;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border-color 180ms ease;
 }
 
+.hero-btn {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hero-btn:hover,
+.action-btn:hover,
+.starter-elf button:hover,
 .modal-buttons button:hover {
   transform: translateY(-2px);
 }
 
-.modal-buttons .primary-btn {
-  background: linear-gradient(135deg, #ff6b00 0%, #ff9e4f 100%);
-  color: white;
+.hero-btn--primary {
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  box-shadow: 0 16px 28px rgba(255, 132, 29, 0.24);
+}
+
+.hero-btn--secondary {
+  border: 1px solid rgba(255, 191, 110, 0.18);
+  background: linear-gradient(180deg, rgba(26, 31, 48, 0.94), rgba(11, 14, 22, 0.96));
+  color: rgba(255, 244, 220, 0.92);
+  box-shadow: 0 10px 20px rgba(4, 8, 15, 0.22);
+}
+
+.stage-panel {
+  position: relative;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 191, 112, 0.14);
+  background: rgba(11, 15, 24, 0.86);
+  box-shadow: 0 16px 28px rgba(4, 8, 15, 0.24);
+  overflow: hidden;
+}
+
+.stage-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 218, 157, 0.3), transparent);
+  pointer-events: none;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.panel-heading--compact {
+  align-items: center;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 112, 0.16);
+  background: rgba(8, 12, 22, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: rgba(255, 238, 214, 0.84);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.user-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.stat-item {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 18px 18px 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 196, 112, 0.16);
+  background: linear-gradient(180deg, rgba(16, 22, 36, 0.95), rgba(10, 13, 21, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.stat-label {
+  color: rgba(255, 222, 184, 0.72);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  color: #ffd07b;
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  word-break: break-word;
+}
+
+.stat-item.stat-days {
+  border-color: rgba(255, 207, 123, 0.2);
+}
+
+.stat-item.stat-days .stat-value {
+  color: #ffd07b;
+}
+
+.stat-item.stat-elves {
+  border-color: rgba(99, 202, 122, 0.22);
+}
+
+.stat-item.stat-elves .stat-value {
+  color: #8fe69a;
+}
+
+.stat-item.stat-level {
+  border-color: rgba(79, 145, 255, 0.22);
+}
+
+.stat-item.stat-level .stat-value {
+  color: #8fc5ff;
+}
+
+.hero-summary {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.hero-summary__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hero-summary__label {
+  color: rgba(255, 222, 184, 0.68);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.hero-summary__value {
+  color: #fff2d4;
+  font-size: 0.96rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.elves-showcase {
+  background:
+    radial-gradient(circle at top right, rgba(96, 212, 128, 0.08), transparent 26%),
+    rgba(11, 15, 24, 0.88);
+}
+
+.elves-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.elf-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.92), rgba(10, 13, 21, 0.96));
+  box-shadow: 0 12px 24px rgba(5, 7, 13, 0.22);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.elf-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 194, 107, 0.28);
+  box-shadow: 0 18px 28px rgba(5, 7, 13, 0.3);
+}
+
+.elf-card__media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 148px;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 173, 91, 0.22), rgba(255, 173, 91, 0) 58%),
+    linear-gradient(180deg, rgba(23, 28, 44, 0.98), rgba(11, 15, 24, 0.96));
+}
+
+.elf-card__halo {
+  position: absolute;
+  inset: auto 16% 14%;
+  height: 38px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 196, 112, 0.28), rgba(255, 196, 112, 0));
+  filter: blur(12px);
+}
+
+.elf-card .elf-image {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  border-radius: 22px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 213, 151, 0.18);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.26);
+}
+
+.elf-info {
+  display: grid;
+  gap: 8px;
+}
+
+.elf-card__eyebrow,
+.starter-elf__eyebrow {
+  color: rgba(255, 220, 162, 0.66);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.elf-card h4,
+.starter-elf h4 {
+  margin: 0;
+  color: #fff4df;
+  font-size: 1.1rem;
+}
+
+.elf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.elf-meta__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(247, 237, 220, 0.8);
+  font-size: 0.76rem;
   font-weight: 600;
 }
 
-.modal-buttons .primary-btn:hover {
-  background: linear-gradient(135deg, #e55a00 0%, #e08a3d 100%);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.3);
+.active-tag,
+.standby-tag {
+  width: fit-content;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  display: inline-block;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .main-content {
-    padding: 1rem;
+.active-tag {
+  background: rgba(99, 202, 122, 0.14);
+  border: 1px solid rgba(99, 202, 122, 0.24);
+  color: #97ef9c;
+}
+
+.standby-tag {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 194, 107, 0.12);
+  color: rgba(247, 237, 220, 0.74);
+}
+
+.starter-selection {
+  background:
+    radial-gradient(circle at top left, rgba(255, 153, 51, 0.09), transparent 28%),
+    rgba(11, 15, 24, 0.88);
+}
+
+.loading {
+  text-align: center;
+  padding: 48px 24px;
+  color: rgba(247, 237, 220, 0.72);
+  font-size: 1.05rem;
+}
+
+.starter-elves {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.starter-elf {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.94), rgba(10, 13, 21, 0.98));
+  box-shadow: 0 14px 24px rgba(5, 7, 13, 0.24);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.starter-elf:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 32px rgba(5, 7, 13, 0.3);
+  border-color: rgba(255, 194, 107, 0.28);
+}
+
+.starter-elf__media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 173, 91, 0.22), rgba(255, 173, 91, 0) 56%),
+    linear-gradient(180deg, rgba(23, 28, 44, 0.98), rgba(11, 15, 24, 0.96));
+}
+
+.starter-elf__halo {
+  position: absolute;
+  inset: auto 12% 12%;
+  height: 56px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 196, 112, 0.3), rgba(255, 196, 112, 0));
+  filter: blur(14px);
+}
+
+.starter-elf__body {
+  display: grid;
+  gap: 10px;
+}
+
+.starter-elf .elf-image {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 32px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 213, 151, 0.18);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.28);
+}
+
+.starter-elf p {
+  margin: 0;
+  color: rgba(247, 237, 220, 0.74);
+  font-size: 0.96rem;
+}
+
+.starter-elf button {
+  margin-top: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  font-size: 0.94rem;
+  font-weight: 800;
+  box-shadow: 0 16px 28px rgba(255, 132, 29, 0.22);
+}
+
+.action-section {
+  background:
+    radial-gradient(circle at top center, rgba(79, 145, 255, 0.08), transparent 28%),
+    rgba(11, 15, 24, 0.88);
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.action-btn {
+  min-width: 0;
+  min-height: 110px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  box-shadow: 0 14px 24px rgba(5, 7, 13, 0.22);
+}
+
+.action-btn .btn-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 1.4rem;
+}
+
+.action-btn__content {
+  display: grid;
+  gap: 6px;
+}
+
+.action-btn__content strong {
+  color: inherit;
+  font-size: 1rem;
+}
+
+.action-btn__content small {
+  color: inherit;
+  opacity: 0.76;
+  font-size: 0.8rem;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, rgba(102, 195, 117, 0.3), rgba(28, 86, 47, 0.9));
+  color: #effee9;
+}
+
+.action-btn.secondary {
+  background: linear-gradient(135deg, rgba(56, 169, 255, 0.28), rgba(20, 63, 138, 0.9));
+  color: #eef7ff;
+}
+
+.action-btn.tertiary {
+  background: linear-gradient(135deg, rgba(255, 170, 79, 0.3), rgba(143, 78, 16, 0.92));
+  color: #fff3e4;
+}
+
+.action-btn.quaternary {
+  background: linear-gradient(135deg, rgba(255, 225, 162, 0.26), rgba(182, 93, 18, 0.92));
+  color: #fff1dd;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  padding: 24px;
+  background: rgba(4, 7, 13, 0.62);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1200;
+}
+
+.modal-content {
+  width: min(100%, 520px);
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 191, 112, 0.16);
+  background:
+    linear-gradient(180deg, rgba(18, 22, 34, 0.98), rgba(9, 12, 19, 0.98));
+  color: #fff4df;
+  box-shadow: 0 24px 50px rgba(4, 8, 15, 0.38);
+}
+
+.modal-content form {
+  display: grid;
+  gap: 16px;
+}
+
+.modal-content h3 {
+  margin: 0 0 8px;
+  color: #ffd07b;
+  text-align: left;
+  font-size: 1.5rem;
+}
+
+.modal-content .form-group {
+  margin-bottom: 0;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 222, 184, 0.72);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.modal-content input {
+  width: 90%;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff4df;
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.modal-content input:focus {
+  outline: none;
+  border-color: rgba(255, 191, 110, 0.44);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 4px rgba(255, 153, 51, 0.12);
+}
+
+.modal-content input[type="file"] {
+  width: 100%;
+  padding: 16px;
+}
+
+.modal-content input::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.modal-buttons button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 244, 220, 0.92);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.modal-buttons .primary-btn {
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  box-shadow: 0 16px 28px rgba(255, 132, 29, 0.22);
+}
+
+@media (max-width: 1180px) {
+  .home-hero {
+    grid-template-columns: 1fr;
   }
-  
-  .user-info-card {
-    flex-direction: column;
+
+  .action-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .home-container {
+    padding: 0 14px 24px;
+  }
+
+  .main-content {
+    gap: 16px;
+  }
+
+  .home-hero {
+    padding: 22px;
+  }
+
+  .home-hero__intro {
+    grid-template-columns: 1fr;
+    justify-items: center;
     text-align: center;
   }
-  
+
+  .hero-copy {
+    width: 100%;
+  }
+
+  .identity-item,
+  .hero-summary__item {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
   .user-stats {
-    flex-direction: column;
-    gap: 1rem;
+    grid-template-columns: 1fr;
   }
-  
+
+  .panel-heading,
+  .panel-heading--compact {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .action-buttons {
-    flex-direction: column;
-    align-items: center;
+    grid-template-columns: 1fr;
   }
-  
+
   .action-btn {
     width: 100%;
-    max-width: 300px;
+    min-height: 94px;
   }
-  
-  .nav-menu {
-    gap: 0.5rem;
+
+  .starter-elves,
+  .elves-grid {
+    grid-template-columns: 1fr;
   }
-  
-  .nav-btn {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
-  }
-  
+
   .modal-content {
-    padding: 1.5rem;
-    width: 95%;
+    padding: 22px;
   }
-  
+
   .modal-buttons {
     flex-direction: column;
   }
-  
+
   .modal-buttons button {
     width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-hero,
+  .stage-panel {
+    border-radius: 24px;
+  }
+
+  .user-avatar-shell {
+    width: 160px;
+    height: 160px;
+  }
+
+  .user-avatar {
+    width: 124px;
+    height: 124px;
+    border-radius: 24px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .hero-btn {
+    width: 100%;
+  }
+
+  .starter-elf .elf-image {
+    width: 144px;
+    height: 144px;
+  }
+
+  .elf-card .elf-image {
+    width: 120px;
+    height: 120px;
   }
 }
 </style>

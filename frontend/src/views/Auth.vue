@@ -498,6 +498,10 @@ input:focus {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .main-content {
+    padding: 0 15px;
+  }
+
   .auth-box {
     padding: 30px;
     margin: 0 20px;

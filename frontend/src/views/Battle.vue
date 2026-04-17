@@ -1,14 +1,6 @@
 <template>
   <div class="home-container">
-    <GameTopNav :active-path="battleNavPath">
-      <template #right>
-        <div class="countdown" v-if="!showResult">
-          <span class="countdown-text">决策时间:</span>
-          <span class="countdown-number">{{ countdown }}</span>
-          <span class="countdown-unit">秒</span>
-        </div>
-      </template>
-    </GameTopNav>
+    <GameTopNav :active-path="battleNavPath" />
 
     <!-- 网络异常遮罩 -->
     <div v-if="!battleStore.isOnline" class="network-error-overlay">
@@ -39,18 +31,28 @@
     />
 
     <div class="battle-container" :class="`battle-mode-${battleMode}`">
-      <div class="battle-header">
-        <div class="battle-header__copy">
-          <p class="battle-kicker">{{ battleModeLabel }}</p>
-          <h1>{{ battleSceneLabel }}</h1>
-          <p class="battle-subtitle">{{ battleSceneSubtitle }}</p>
-        </div>
-        <div class="battle-status-panel">
-          <div class="round-display">
-            <span class="round-text">ROUND</span>
-            <span class="round-number">{{ battleRoundDisplay }}</span>
+      <div class="battle-status-strip" v-if="!showResult">
+        <div class="battle-status-side battle-status-side--left">
+          <div class="battle-status-chip battle-status-chip--stage">{{ battleStageLabel }}</div>
+          <div class="battle-status-chip battle-status-chip--round">
+            <span class="battle-status-chip__label">ROUND</span>
+            <span class="battle-status-chip__value">{{ battleRoundDisplay }}</span>
           </div>
-          <p class="battle-status-tip">保持技能节奏，观察对方血蓝变化再出手。</p>
+        </div>
+        <div class="battle-status-chip battle-status-chip--countdown">
+          <span class="battle-status-chip__label">决策时间</span>
+          <span class="battle-status-chip__value">{{ countdown }}</span>
+          <span class="battle-status-chip__unit">秒</span>
+        </div>
+        <div class="battle-status-side battle-status-side--right">
+          <button
+            type="button"
+            class="battle-log-toggle"
+            :class="{ 'is-open': isBattleLogOpen }"
+            @click="toggleBattleLog"
+          >
+            {{ isBattleLogOpen ? '收起记录' : '战斗记录' }}
+          </button>
         </div>
       </div>
 
@@ -172,63 +174,133 @@
           </div>
         </div>
 
-        <div v-if="showSkills" class="skills-section">
-          <div class="skills-section__header">
-            <h4>技能指令栏</h4>
-            <p>选择合适的属性技能，压制对方节奏。</p>
-          </div>
-          <div class="skills-grid">
-            <button
-              v-for="skill in skills"
-              :key="skill.id"
-              @click="useSelectedSkill(skill)"
-              class="skill-btn"
-              :class="getElementColorClass(playerElf?.elementType)"
-            >
-              <span class="skill-btn__name">{{ skill.skillName }}</span>
-              <span class="skill-btn__cost">{{ skill.costMp }} MP</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="battle-actions">
-          <div class="battle-actions__header">
-            <h3>指令面板</h3>
-            <p>底部操作区只调整视觉，不改变原有战斗动作和触发时机。</p>
-          </div>
-          <div class="action-buttons">
-            <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
-            <button
-              @click="useSkill"
-              class="action-btn skill-action-btn"
-              :class="getElementColorClass(playerElf?.elementType)"
-              :disabled="isButtonsDisabled"
-            >技能</button>
-            <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
-            <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
-            <button @click="showPotions = true" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
-          </div>
-        </div>
-
-        <div class="battle-log">
-          <div class="battle-log__header">
-            <h3>战斗记录</h3>
-            <p>保留原始日志，方便回看每回合伤害与技能释放。</p>
-          </div>
-          <div class="log-content">
-            <div v-for="roundData in battleLogs" :key="roundData.round" class="round-section">
-              <div class="round-header">
-                回合{{ roundData.round }}：
+        <div class="battle-command-deck">
+          <transition name="skill-panel">
+            <div v-if="showSkills" class="skills-section">
+              <div class="skills-section__header">
+                <h4>技能</h4>
+                <button type="button" class="skills-close-btn" @click="showSkills = false">收起</button>
               </div>
-              <div class="round-logs">
-                <div v-for="(log, index) in roundData.logs" :key="index" class="log-entry">
-                  {{ log }}
+              <div class="skills-grid">
+                <button
+                  v-for="skill in skills"
+                  :key="skill.id"
+                  @click="useSelectedSkill(skill)"
+                  class="skill-btn"
+                  :class="getElementColorClass(playerElf?.elementType)"
+                >
+                  <span class="skill-btn__name">{{ skill.skillName }}</span>
+                  <span class="skill-btn__cost">{{ skill.costMp }} MP</span>
+                </button>
+              </div>
+            </div>
+          </transition>
+
+          <transition name="skill-panel">
+            <div v-if="showSwitchElf" class="command-panel command-panel--switch">
+              <div class="skills-section__header">
+                <h4>更换精灵</h4>
+                <button type="button" class="skills-close-btn" @click="closeSwitchElf">收起</button>
+              </div>
+              <div v-if="loadingBattleElves" class="command-panel__empty">加载中...</div>
+              <div v-else class="battle-elves-list inline-battle-elves-list">
+                <div v-for="elf in battleElves" :key="elf.id" class="elf-card horizontal" :class="{ 'current': elf && elf.id === playerElf.id }">
+                  <template v-if="elf && elf.elfState !== 2">
+                    <div class="elf-image">
+                      <img :src="getElfImage(elf.elfId)" :alt="elf.elfName || `精灵 ${elf.elfId}`" />
+                    </div>
+                    <div class="elf-info">
+                      <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
+                      <div class="elf-stats">
+                        <p>等级: {{ elf.level }}</p>
+                        <p>系别: {{ getElementType(elf.elementType) }}</p>
+                        <div class="hp-bar">
+                          <div class="hp-fill" :style="{ width: (Math.max(0, elf.hp) / elf.maxHp) * 100 + '%' }"></div>
+                        </div>
+                        <p>HP: {{ Math.max(0, elf.hp) }}/{{ elf.maxHp }}</p>
+                        <p>MP: {{ elf.mp }}/{{ elf.maxMp }}</p>
+                      </div>
+                      <div v-if="elf && elf.id !== playerElf.id" class="card-actions">
+                        <button 
+                          @click="selectElfToSwitch(elf)" 
+                          class="select-btn" 
+                          :disabled="!elf || elf.elfState === 2 || elf.elfState === 0"
+                          :class="{ 'disabled': !elf || elf.elfState === 2 || elf.elfState === 0 }"
+                        >
+                          {{ !elf ? '未知' : (elf.elfState === 2 ? '已死亡' : elf.elfState === 0 ? '战斗中' : '选择') }}
+                        </button>
+                      </div>
+                      <div v-else class="current-tag">当前出战</div>
+                    </div>
+                  </template>
                 </div>
               </div>
+            </div>
+          </transition>
+
+          <transition name="skill-panel">
+            <div v-if="showPotions" class="command-panel command-panel--potions">
+              <div class="skills-section__header">
+                <h4>药品</h4>
+                <button type="button" class="skills-close-btn" @click="showPotions = false">收起</button>
+              </div>
+              <div v-if="potions.length === 0" class="command-panel__empty">
+                <p>没有可用的药品</p>
+              </div>
+              <div v-else class="potion-list inline-potion-list">
+                <div v-for="potion in potions" :key="potion.id" class="potion-item" @click="usePotion(potion)">
+                  <div class="potion-image">
+                    <img :src="getPotionImage(potion.name)" :alt="potion.name">
+                  </div>
+                  <div class="potion-info">
+                    <h4>{{ potion.name }}</h4>
+                    <p>{{ potion.description }}</p>
+                    <p class="potion-count">数量: {{ potion.count }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+
+          <div class="battle-actions">
+            <div class="action-buttons">
+              <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
+              <button
+                @click="useSkill"
+                class="action-btn skill-action-btn"
+                :class="getElementColorClass(playerElf?.elementType)"
+                :disabled="isButtonsDisabled"
+              >技能</button>
+              <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
+              <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
+              <button @click="openPotionsPanel" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
             </div>
           </div>
         </div>
       </div>
+
+      <transition name="log-drawer">
+        <div v-if="isBattleLogOpen" class="battle-log-layer" @click.self="closeBattleLog">
+          <aside class="battle-log-drawer" role="dialog" aria-modal="true" aria-label="战斗记录">
+            <div class="battle-log__header">
+              <h3>战斗记录</h3>
+              <button type="button" class="drawer-close-btn" @click="closeBattleLog">关闭</button>
+            </div>
+            <div class="log-content">
+              <div v-for="roundData in battleLogs" :key="roundData.round" class="round-section">
+                <div class="round-header">
+                  回合{{ roundData.round }}：
+                </div>
+                <div class="round-logs">
+                  <div v-for="(log, index) in roundData.logs" :key="index" class="log-entry">
+                    {{ log }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </transition>
       
       <!-- 战斗结果 -->
       <div v-if="showResult" class="battle-result">
@@ -266,75 +338,6 @@
           </div>
           <div class="modal-buttons">
             <button @click="closeStarterSelection" class="cancel-btn">关闭</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 精灵切换弹窗 -->
-      <div v-if="showSwitchElf" class="modal-overlay">
-        <div class="modal-content switch-elf-modal">
-          <h2>选择精灵</h2>
-          <p>选择一只精灵出战</p>
-          <div v-if="loadingBattleElves" class="loading">加载中...</div>
-          <div v-else class="battle-elves-list">
-            <div v-for="elf in battleElves" :key="elf.id" class="elf-card horizontal" :class="{ 'current': elf && elf.id === playerElf.id }">
-              <template v-if="elf && elf.elfState !== 2">
-                <div class="elf-image">
-                  <img :src="getElfImage(elf.elfId)" :alt="elf.elfName || `精灵 ${elf.elfId}`" />
-                </div>
-                <div class="elf-info">
-                  <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
-                  <div class="elf-stats">
-                    <p>等级: {{ elf.level }}</p>
-                    <p>系别: {{ getElementType(elf.elementType) }}</p>
-                    <div class="hp-bar">
-                      <div class="hp-fill" :style="{ width: (Math.max(0, elf.hp) / elf.maxHp) * 100 + '%' }"></div>
-                    </div>
-                    <p>HP: {{ Math.max(0, elf.hp) }}/{{ elf.maxHp }}</p>
-                    <p>MP: {{ elf.mp }}/{{ elf.maxMp }}</p>
-                  </div>
-                  <div v-if="elf && elf.id !== playerElf.id" class="card-actions">
-                    <button 
-                      @click="selectElfToSwitch(elf)" 
-                      class="select-btn" 
-                      :disabled="!elf || elf.elfState === 2 || elf.elfState === 0"
-                      :class="{ 'disabled': !elf || elf.elfState === 2 || elf.elfState === 0 }"
-                    >
-                      {{ !elf ? '未知' : (elf.elfState === 2 ? '已死亡' : elf.elfState === 0 ? '战斗中' : '选择') }}
-                    </button>
-                  </div>
-                  <div v-else class="current-tag">当前出战</div>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button @click="closeSwitchElf" class="cancel-btn">取消</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 药品使用弹窗 -->
-      <div v-if="showPotions" class="modal-overlay">
-        <div class="modal-content">
-          <h2>使用药品</h2>
-          <div v-if="potions.length === 0" class="no-items">
-            <p>没有可用的药品</p>
-          </div>
-          <div v-else class="potion-list">
-            <div v-for="potion in potions" :key="potion.id" class="potion-item" @click="usePotion(potion)">
-              <div class="potion-image">
-                <img :src="getPotionImage(potion.name)" :alt="potion.name">
-              </div>
-              <div class="potion-info">
-                <h4>{{ potion.name }}</h4>
-                <p>{{ potion.description }}</p>
-                <p class="potion-count">数量: {{ potion.count }}</p>
-              </div>
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button @click="showPotions = false" class="cancel-btn">取消</button>
           </div>
         </div>
       </div>
@@ -451,6 +454,7 @@ const elfDeathCallback = ref(null)
 const battleBgm = ref(null)
 // 按钮禁用状态
 const isButtonsDisabled = ref(false)
+const isBattleLogOpen = ref(false)
 
 // 技能列表
 const skills = ref([])
@@ -462,13 +466,6 @@ const projectileParticles = [1, 2, 3, 4, 5, 6]
 
 const battleMode = computed(() => route.query.type === 'train' ? 'train' : 'pve')
 const battleNavPath = computed(() => battleMode.value === 'train' ? '/train' : '/pve')
-const battleModeLabel = computed(() => battleMode.value === 'train' ? '训练试炼' : '关卡挑战')
-const battleSceneLabel = computed(() => battleMode.value === 'train'
-  ? '打造你的陪练舞台'
-  : `迎战 ${enemyName.value || '野外对手'}`)
-const battleSceneSubtitle = computed(() => battleMode.value === 'train'
-  ? '训练人偶参数由你定义，战斗节奏由你掌控。'
-  : '观察属性克制、资源消耗与技能顺序，稳定拿下关卡。')
 const battleStageLabel = computed(() => battleMode.value === 'train' ? '训练擂台' : '冒险战场')
 const battleRoundDisplay = computed(() => String(currentRound.value || 1).padStart(2, '0'))
 const battleArenaClass = computed(() => `arena-${resolveElementTheme(enemyElementType.value, enemyName.value || '')}`)
@@ -484,6 +481,30 @@ const projectileElementClass = computed(() => `projectile-${currentAttackElement
 const currentStrikeClass = computed(() => currentSkill.value === '普通攻击' ? 'is-basic-strike' : 'is-skill-strike')
 const isMannequinEnemy = computed(() => (enemyName.value || '').includes('训练人偶'))
 const battleResultActionLabel = computed(() => battleMode.value === 'train' ? '返回训练' : '返回关卡')
+
+const closeCommandPanels = () => {
+  showSkills.value = false
+  showSwitchElf.value = false
+  showPotions.value = false
+}
+
+const toggleBattleLog = () => {
+  isBattleLogOpen.value = !isBattleLogOpen.value
+}
+
+const closeBattleLog = () => {
+  isBattleLogOpen.value = false
+}
+
+const handleBattlePageKeydown = (event) => {
+  if (event.key !== 'Escape') return
+
+  closeCommandPanels()
+
+  if (isBattleLogOpen.value) {
+    isBattleLogOpen.value = false
+  }
+}
 
 const enemySpriteSrc = computed(() => {
   if (enemyName.value === '迪莫') {
@@ -1747,6 +1768,7 @@ const attack = async () => {
 }
 
 const useSkill = () => {
+  closeCommandPanels()
   showSkills.value = true
 }
 
@@ -2430,6 +2452,7 @@ const loadBattleElves = async () => {
 
 // 打开精灵切换弹窗
 const switchElf = async () => {
+  closeCommandPanels()
   await loadBattleElves()
   showSwitchElf.value = true
 }
@@ -2437,6 +2460,12 @@ const switchElf = async () => {
 // 关闭精灵切换弹窗
 const closeSwitchElf = () => {
   showSwitchElf.value = false
+}
+
+const openPotionsPanel = async () => {
+  closeCommandPanels()
+  await loadPotions()
+  showPotions.value = true
 }
 
 // 显示精灵死亡切换弹窗
@@ -2790,6 +2819,8 @@ const abandonBattle = async () => {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleBattlePageKeydown)
+
   // 创建网络管理器实例并初始化
   networkManager = new NetworkManager()
   networkManager.init()
@@ -2804,6 +2835,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleBattlePageKeydown)
+
   // 清除倒计时
   if (countdownTimer.value) {
     clearInterval(countdownTimer.value)
@@ -3988,7 +4021,8 @@ h1 {
 /* Game-style battle scene overrides */
 .home-container {
   min-height: 100vh;
-  padding: 0 20px 32px;
+  padding: 0 20px 20px;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top, rgba(255, 153, 51, 0.14), transparent 28%),
     linear-gradient(180deg, #05070d 0%, #09111f 32%, #101a29 100%);
@@ -3997,61 +4031,80 @@ h1 {
 
 .battle-container {
   max-width: 1400px;
-  margin: 18px auto 0;
+  margin: 10px auto 0;
+  min-height: calc(100vh - 108px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
 }
 
-.battle-header {
+.battle-status-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  width: 100%;
+}
+
+.battle-status-side {
   display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  align-items: flex-end;
-  margin-bottom: 18px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.battle-header__copy {
-  max-width: 720px;
+.battle-status-side--left {
+  justify-content: flex-start;
 }
 
-.battle-kicker {
-  margin-bottom: 10px;
-  color: rgba(255, 220, 162, 0.78);
-  font-size: 0.78rem;
+.battle-status-side--right {
+  justify-content: flex-end;
+}
+
+.battle-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 112, 0.16);
+  background: rgba(8, 12, 22, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: rgba(255, 238, 214, 0.84);
+}
+
+.battle-status-chip--stage {
+  color: rgba(255, 220, 162, 0.9);
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
-.battle-header h1 {
-  margin: 0;
-  font-size: clamp(2.2rem, 4vw, 3.4rem);
-  line-height: 1;
-  text-align: left;
-  color: #fff3db;
-  text-shadow: 0 10px 30px rgba(255, 143, 36, 0.22);
+.battle-status-chip--countdown {
+  gap: 8px;
 }
 
-.battle-subtitle {
-  margin-top: 12px;
-  max-width: 620px;
-  font-size: 1rem;
-  line-height: 1.7;
-  color: rgba(244, 230, 211, 0.75);
+.battle-status-chip__label {
+  color: rgba(255, 222, 184, 0.72);
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
-.battle-status-panel {
-  min-width: 240px;
-  padding: 18px 20px;
-  border: 1px solid rgba(255, 196, 112, 0.16);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+.battle-status-chip__value {
+  color: #ffd07b;
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-shadow: 0 0 18px rgba(255, 191, 80, 0.3);
 }
 
-.battle-status-tip {
-  margin-top: 12px;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: rgba(244, 230, 211, 0.68);
+.battle-status-chip__unit {
+  color: rgba(255, 231, 196, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .round-display {
@@ -4077,17 +4130,20 @@ h1 {
 }
 
 .enemy-dialog {
-  max-width: 1000px;
-  margin: 0 auto 18px;
-  padding: 14px 20px;
+  max-width: min(760px, 100%);
+  margin: 0;
+  padding: 10px 14px;
   border: 1px solid rgba(255, 181, 77, 0.22);
-  border-radius: 18px;
+  border-radius: 14px;
   background: linear-gradient(135deg, rgba(12, 15, 27, 0.88), rgba(38, 14, 18, 0.78));
   box-shadow: 0 12px 24px rgba(5, 7, 13, 0.26);
   animation: dialogReveal 260ms ease-out;
 }
 
 .dialog-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -4101,13 +4157,18 @@ h1 {
 
 .battle-shell {
   display: grid;
-  gap: 18px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
 }
 
 .battle-field {
-  min-height: 720px;
+  position: relative;
+  height: clamp(380px, calc(100vh - 300px), 560px);
+  min-height: 380px;
   border: 1px solid rgba(255, 194, 107, 0.16);
   border-radius: 32px;
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 196, 127, 0.06), transparent 28%),
     linear-gradient(180deg, rgba(8, 12, 22, 0.98) 0%, rgba(13, 21, 36, 0.96) 100%);
@@ -4176,76 +4237,82 @@ h1 {
 }
 
 .hud {
-  top: 18px;
-  width: min(360px, calc(50% - 36px));
-  padding: 16px 18px;
-  border-radius: 22px;
+  top: 10px;
+  width: min(270px, calc(50% - 20px));
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 210, 145, 0.16);
   background: linear-gradient(180deg, rgba(18, 22, 34, 0.9), rgba(12, 15, 24, 0.84));
-  box-shadow: 0 12px 22px rgba(4, 8, 14, 0.28);
+  box-shadow: 0 10px 18px rgba(4, 8, 14, 0.24);
 }
 
 .player-hud {
-  left: 18px;
-  border-left: 4px solid rgba(99, 202, 122, 0.92);
+  left: 10px;
+  border-left: 3px solid rgba(99, 202, 122, 0.92);
 }
 
 .enemy-hud {
-  right: 18px;
-  border-right: 4px solid rgba(255, 118, 82, 0.92);
+  right: 10px;
+  border-right: 3px solid rgba(255, 118, 82, 0.92);
 }
 
 .hud-caption {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   color: rgba(255, 225, 179, 0.68);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .elf-info-box .info-header {
   align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 10px;
+  gap: 10px;
+  padding-bottom: 8px;
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .elf-info-box h4 {
-  font-size: 1.3rem;
+  font-size: 0.96rem;
+}
+
+.elf-info-box .level {
+  font-size: 0.78rem;
 }
 
 .type-badge {
-  margin-top: 10px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
   background: rgba(255, 255, 255, 0.08);
   color: #ffeccc;
 }
 
 .bars {
   display: grid;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .bars .bar-container {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   margin-bottom: 0;
 }
 
 .bar-label {
   color: rgba(255, 237, 207, 0.72);
-  font-size: 0.76rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
 }
 
 .bar-bg {
   margin-right: 0;
-  height: 14px;
+  height: 9px;
   border-radius: 999px;
   border-color: rgba(255, 255, 255, 0.08);
 }
@@ -4263,23 +4330,28 @@ h1 {
 }
 
 .bar-text {
-  min-width: 90px;
+  min-width: 64px;
   color: rgba(255, 244, 224, 0.88);
+  font-size: 0.7rem;
 }
 
 .battle-stage {
   margin-top: 0;
+  position: relative;
+  height: 100%;
   align-items: flex-end;
-  justify-content: space-between;
-  padding: 200px 7% 100px;
+  justify-content: center;
+  gap: clamp(56px, 15vw, 180px);
+  min-height: 0;
+  padding: 124px 6% 96px;
 }
 
 .battle-stage__ground {
   position: absolute;
   left: 50%;
-  bottom: 58px;
+  bottom: 28px;
   width: min(72%, 860px);
-  height: 150px;
+  height: 110px;
   transform: translateX(-50%);
   border-radius: 50%;
   background:
@@ -4290,14 +4362,14 @@ h1 {
 .battle-stage__label {
   position: absolute;
   left: 50%;
-  bottom: 42px;
+  bottom: 22px;
   transform: translateX(-50%);
-  padding: 8px 18px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: rgba(12, 15, 24, 0.7);
   border: 1px solid rgba(255, 205, 125, 0.18);
   color: rgba(255, 237, 207, 0.8);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -4309,7 +4381,7 @@ h1 {
 
 .player-sprite,
 .enemy-sprite {
-  min-width: 280px;
+  min-width: 220px;
 }
 
 .player-sprite {
@@ -4342,9 +4414,9 @@ h1 {
 
 .sprite-img {
   position: relative;
-  max-width: clamp(220px, 26vw, 340px);
-  max-height: clamp(280px, 42vw, 420px);
-  filter: drop-shadow(0 28px 30px rgba(0, 0, 0, 0.42));
+  max-width: clamp(180px, 20vw, 260px);
+  max-height: clamp(230px, 32vh, 320px);
+  filter: drop-shadow(0 22px 24px rgba(0, 0, 0, 0.42));
 }
 
 .enemy-sprite .sprite-img {
@@ -4352,8 +4424,8 @@ h1 {
 }
 
 .enemy-sprite.is-mannequin .sprite-img {
-  max-width: clamp(180px, 18vw, 250px);
-  max-height: clamp(220px, 24vw, 300px);
+  max-width: clamp(145px, 13vw, 190px);
+  max-height: clamp(180px, 24vh, 230px);
 }
 
 .skill-name-float {
@@ -4366,7 +4438,7 @@ h1 {
 .particle-track {
   left: 16%;
   right: 16%;
-  bottom: 180px;
+  bottom: 154px;
   height: 84px;
   z-index: 5;
 }
@@ -4459,9 +4531,14 @@ h1 {
   animation: enemyKnockback 0.46s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
+.battle-command-deck {
+  position: relative;
+}
+
 .skills-section,
+.command-panel,
 .battle-actions,
-.battle-log {
+.battle-log-drawer {
   border-radius: 26px;
   border: 1px solid rgba(255, 191, 112, 0.14);
   background: rgba(11, 15, 24, 0.86);
@@ -4469,47 +4546,57 @@ h1 {
 }
 
 .skills-section,
-.battle-log {
-  padding: 20px 22px;
+.command-panel,
+.battle-log-drawer {
+  padding: 18px 20px;
 }
 
 .skills-section__header,
-.battle-actions__header,
 .battle-log__header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: baseline;
-  margin-bottom: 14px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .skills-section__header h4,
-.battle-actions__header h3,
 .battle-log__header h3 {
   margin: 0;
   color: #fff2d6;
 }
 
-.skills-section__header p,
-.battle-actions__header p,
-.battle-log__header p {
-  margin: 0;
-  color: rgba(244, 230, 211, 0.6);
-  font-size: 0.9rem;
+.skills-close-btn,
+.drawer-close-btn {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 197, 112, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 242, 214, 0.84);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.skills-close-btn:hover,
+.drawer-close-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .skills-grid {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .skill-btn {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-start;
-  padding: 16px 18px;
-  border-radius: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
   font-weight: 700;
 }
 
@@ -4523,12 +4610,103 @@ h1 {
   font-size: 0.82rem;
 }
 
+.skills-section {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  max-height: min(260px, 36vh);
+  overflow-y: auto;
+}
+
+.command-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  max-height: min(320px, 46vh);
+  overflow-y: auto;
+}
+
+.command-panel__empty {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  color: rgba(247, 237, 220, 0.72);
+  text-align: center;
+}
+
+.inline-potion-list {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.inline-potion-list .potion-item {
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 14px;
+}
+
+.inline-potion-list .potion-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 18px rgba(4, 8, 15, 0.18);
+}
+
+.inline-potion-list .potion-info h4 {
+  color: #fff0d5;
+}
+
+.inline-potion-list .potion-info p {
+  color: rgba(247, 237, 220, 0.72);
+}
+
+.inline-potion-list .potion-count {
+  color: #9ee184;
+}
+
+.inline-battle-elves-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.inline-battle-elves-list .elf-card.horizontal {
+  height: 100%;
+  min-height: 108px;
+  border-color: rgba(255, 194, 107, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.inline-battle-elves-list .elf-card.horizontal:hover {
+  box-shadow: 0 10px 20px rgba(4, 8, 15, 0.16);
+}
+
+.inline-battle-elves-list .elf-card.horizontal.current {
+  border-color: rgba(99, 202, 122, 0.44);
+  background: rgba(99, 202, 122, 0.08);
+}
+
+.inline-battle-elves-list .elf-card.horizontal .elf-info h4,
+.inline-battle-elves-list .elf-card.horizontal .elf-stats p {
+  color: rgba(247, 237, 220, 0.82);
+}
+
+.inline-battle-elves-list .elf-card.horizontal .elf-stats {
+  gap: 0.7rem;
+}
+
 .battle-actions {
-  position: sticky;
-  bottom: 12px;
-  padding: 18px 22px 22px;
+  position: relative;
+  bottom: auto;
+  padding: 14px 16px 16px;
   border-top: none;
-  border-radius: 26px;
+  border-radius: 24px;
   background:
     linear-gradient(180deg, rgba(24, 30, 45, 0.96), rgba(10, 13, 21, 0.98)),
     rgba(11, 15, 24, 0.92);
@@ -4536,15 +4714,18 @@ h1 {
 }
 
 .action-buttons {
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .action-btn {
   min-width: 0;
-  min-height: 60px;
-  border-radius: 18px;
+  min-height: 52px;
+  border-radius: 16px;
   text-transform: none;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  font-size: 0.94rem;
 }
 
 .skill-action-btn {
@@ -4553,14 +4734,63 @@ h1 {
   box-shadow: 0 10px 24px rgba(56, 169, 255, 0.24);
 }
 
-.battle-log {
-  margin-bottom: 0;
+.battle-log-toggle {
+  flex-shrink: 0;
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 196, 112, 0.2);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(26, 31, 48, 0.94), rgba(11, 14, 22, 0.96));
+  color: #fff0d2;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 10px 20px rgba(4, 8, 15, 0.28);
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.battle-log-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(4, 8, 15, 0.38);
+}
+
+.battle-log-toggle.is-open {
+  background: linear-gradient(180deg, rgba(255, 145, 61, 0.94), rgba(201, 77, 28, 0.94));
+}
+
+.battle-log-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: flex-end;
+  padding: 88px 20px 20px;
+  background: rgba(4, 7, 13, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.battle-log-drawer {
+  width: min(380px, calc(100vw - 28px));
+  height: min(calc(100vh - 108px), 780px);
+  display: flex;
+  flex-direction: column;
 }
 
 .log-content {
-  max-height: 260px;
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
   border: 1px solid rgba(255, 196, 112, 0.1);
   background: rgba(6, 9, 15, 0.76);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.round-logs {
+  display: grid;
+  gap: 6px;
 }
 
 .round-section {
@@ -4572,7 +4802,7 @@ h1 {
 }
 
 .log-entry {
-  margin-left: 14px;
+  margin-left: 12px;
   color: rgba(248, 240, 226, 0.78);
 }
 
@@ -4692,22 +4922,41 @@ h1 {
   100% { opacity: 0; transform: scale(1.3); }
 }
 
+.skill-panel-enter-active,
+.skill-panel-leave-active,
+.log-drawer-enter-active,
+.log-drawer-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.skill-panel-enter-from,
+.skill-panel-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.log-drawer-enter-from,
+.log-drawer-leave-to {
+  opacity: 0;
+}
+
+.log-drawer-enter-from .battle-log-drawer,
+.log-drawer-leave-to .battle-log-drawer {
+  transform: translateX(24px);
+}
+
 @media (max-width: 980px) {
   .home-container {
     padding: 0 14px 24px;
   }
 
-  .battle-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .battle-status-panel {
-    width: 100%;
+  .battle-container {
+    min-height: auto;
   }
 
   .battle-field {
-    min-height: 840px;
+    height: auto;
+    min-height: 700px;
   }
 
   .hud {
@@ -4721,24 +4970,41 @@ h1 {
   }
 
   .enemy-hud {
-    top: 152px;
+    top: 136px;
     border-right-width: 1px;
     border-left: 4px solid rgba(255, 118, 82, 0.92);
   }
 
   .battle-stage {
-    padding: 320px 6% 100px;
+    min-height: 560px;
+    padding: 292px 6% 132px;
   }
 
   .player-sprite,
   .enemy-sprite {
     min-width: 0;
   }
+
+  .action-buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .skills-section {
+    max-height: min(300px, 42vh);
+  }
+
+  .command-panel {
+    max-height: min(340px, 48vh);
+  }
+
+  .inline-battle-elves-list {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
   .battle-container {
-    margin-top: 14px;
+    margin-top: 12px;
   }
 
   .battle-field {
@@ -4747,16 +5013,35 @@ h1 {
   }
 
   .battle-stage {
-    padding: 292px 8% 82px;
+    min-height: 520px;
+    padding: 292px 8% 126px;
   }
 
   .sprite-img {
-    max-width: 180px;
-    max-height: 240px;
+    max-width: 170px;
+    max-height: 220px;
+  }
+
+  .battle-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-status-chip {
+    min-height: 38px;
+  }
+
+  .battle-status-side,
+  .battle-status-side--left,
+  .battle-status-side--right {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .battle-command-deck {
+    padding-bottom: 0;
   }
 
   .battle-actions {
-    bottom: 8px;
     padding: 16px;
   }
 
@@ -4772,11 +5057,54 @@ h1 {
     font-size: 0.92rem;
   }
 
+  .skills-section,
+  .command-panel,
+  .battle-log-layer {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
   .skills-section__header,
-  .battle-actions__header,
   .battle-log__header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .skills-section {
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+  }
+
+  .command-panel {
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+  }
+
+  .inline-battle-elves-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 82vw);
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .battle-log-toggle {
+    min-width: 104px;
+    min-height: 42px;
+    padding: 0 14px;
+    font-size: 0.82rem;
+  }
+
+  .battle-log-layer {
+    align-items: flex-end;
+    padding: 72px 10px 10px;
+  }
+
+  .battle-log-drawer {
+    width: 100%;
+    height: min(calc(100vh - 82px), 78vh);
   }
 }
 </style>

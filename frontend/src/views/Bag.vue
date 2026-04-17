@@ -2,62 +2,94 @@
   <div class="bag-container">
     <GameTopNav />
 
-    <h1>我的背包</h1>
-    
-    <!-- 物品分类 -->
-    <div class="item-tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.value"
-        :class="['tab-btn', { active: activeTab === tab.value }]"
-        @click="activeTab = tab.value"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
-
-    <!-- 物品列表 -->
-    <div class="item-list">
-      <div
-        v-for="item in items"
-        :key="item.id || item.itemId"
-        class="item-card"
-        :class="getPriceTierClass(item.price)"
-      >
-        <div class="item-image">
-            <img
-              :src="getItemImage(item)"
-              :alt="item.name"
-            />
-            <div v-if="item.isWorn" class="bound-tag">已绑定</div>
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <div class="bag-top-bar">
+        <div class="page-header">
+          <p class="section-eyebrow">INVENTORY STATION</p>
+          <h1>我的背包</h1>
+        </div>
+        
+        <!-- 背包概览信息 -->
+        <div class="bag-overview">
+          <div class="overview-item">
+            <span class="overview-label">当前分类</span>
+            <span class="overview-value">{{ activeTabMeta.label }}</span>
           </div>
-        <div class="item-info">
-          <h3>{{ item.name }}</h3>
-          <div class="item-stats">
-            <template v-if="item.itemType === 2">
-              <!-- 药品显示描述和数量 -->
-              <span class="stat hp">{{ item.description || '使用后恢复生命值和魔法值' }}</span>
-              <span class="stat count">数量: {{ item.count || 0 }}</span>
-            </template>
-            <template v-else>
-              <!-- 装备显示属性加成和数量 -->
-              <span v-if="item.atk > 0" class="stat atk">攻击: +{{ item.atk }}</span>
-              <span v-if="item.def > 0" class="stat def">防御: +{{ item.def }}</span>
-              <span v-if="item.hp > 0" class="stat hp">生命: +{{ item.hp }}</span>
-              <span v-if="item.mp > 0" class="stat mp">蓝量: +{{ item.mp }}</span>
-              <span v-if="item.speed > 0" class="stat speed">速度: +{{ item.speed }}</span>
-              <span v-if="item.count > 1" class="stat count">数量: ×{{ item.count }}</span>
-            </template>
+          <div class="overview-divider"></div>
+          <div class="overview-item">
+            <span class="overview-label">物品总数</span>
+            <span class="overview-value">{{ items.length }}</span>
           </div>
-          <div class="item-actions">
-            <button
-              class="action-btn"
-              :class="getPriceTierClass(item.price)"
-              @click="viewItemDetail(item)"
-              v-if="item.itemType !== 2"
+        </div>
+      </div>
+      
+      <div class="bag-content-wrapper">
+        <!-- 侧边栏/顶部信息：分类 -->
+        <div class="bag-controls">
+          <div class="equip-tabs">
+            <button 
+              v-for="tab in tabs" 
+              :key="tab.value"
+              :class="['tab-btn', { active: activeTab === tab.value }]"
+              @click="activeTab = tab.value"
             >
-              查看
+              {{ tab.label }}
             </button>
+          </div>
+        </div>
+
+        <!-- 物品列表 -->
+        <div class="equip-list-container">
+          <div v-if="!items || items.length === 0" class="empty-state">
+            暂无该分类物品
+          </div>
+          <div v-else class="equip-list">
+            <div
+              v-for="item in items"
+              :key="item.id || item.itemId"
+              class="equip-card"
+              :class="getPriceTierClass(item.price)"
+            >
+              <div class="equip-image">
+                <img
+                  :src="getItemImage(item)"
+                  :alt="item.name"
+                />
+                <div v-if="item.isWorn" class="bound-tag">已绑定</div>
+              </div>
+              <div class="equip-info">
+                <div class="equip-headline">
+                  <h3>{{ item.name }}</h3>
+                  <span class="tier-pill" :class="getPriceTierClass(item.price)">{{ getPriceTierLabel(item.price) }}</span>
+                </div>
+                <div class="equip-stats">
+                  <template v-if="item.itemType === 2">
+                    <span class="stat hp desc">{{ item.description || '使用后恢复生命值和魔法值' }}</span>
+                    <span class="stat count">数量: {{ item.count || 0 }}</span>
+                  </template>
+                  <template v-else>
+                    <span v-if="item.atk > 0" class="stat atk">攻击 +{{ item.atk }}</span>
+                    <span v-if="item.def > 0" class="stat def">防御 +{{ item.def }}</span>
+                    <span v-if="item.hp > 0" class="stat hp">生命 +{{ item.hp }}</span>
+                    <span v-if="item.mp > 0" class="stat mp">蓝量 +{{ item.mp }}</span>
+                    <span v-if="item.speed > 0" class="stat speed">速度 +{{ item.speed }}</span>
+                    <span v-if="item.count > 1" class="stat count">数量: ×{{ item.count }}</span>
+                  </template>
+                </div>
+                <div class="equip-action">
+                  <div class="equip-price"></div>
+                  <button
+                    class="action-btn"
+                    :class="getPriceTierClass(item.price)"
+                    @click="viewItemDetail(item)"
+                    v-if="item.itemType !== 2"
+                  >
+                    查看
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -66,7 +98,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { shopApi } from '../api/shop'
 import { potionApi } from '../api/potion'
@@ -81,6 +113,8 @@ const tabs = [
   { label: '防具', value: 4 },
   { label: '药品', value: 2 }
 ]
+
+const activeTabMeta = computed(() => tabs.find(tab => tab.value === activeTab.value) || tabs[0])
 
 // 导航到其他页面
 const navigateTo = (path) => {
@@ -100,6 +134,14 @@ const getPriceTierClass = (price) => {
   if (price >= 5000) return 'tier-epic'
   if (price >= 2000) return 'tier-rare'
   return 'tier-common'
+}
+
+const getPriceTierLabel = (price) => {
+  const tier = getPriceTierClass(price)
+  if (tier === 'tier-legendary') return '传说'
+  if (tier === 'tier-epic') return '史诗'
+  if (tier === 'tier-rare') return '稀有'
+  return '普通'
 }
 
 // 获取物品图片
@@ -147,9 +189,9 @@ const useItem = async (item) => {
     alert('请先登录')
     return
   }
-  
+
   const user = JSON.parse(userStr)
-  
+
   // 这里需要选择要使用药品的精灵
   // 简化处理，使用第一个精灵
   try {
@@ -183,9 +225,9 @@ const loadItems = async () => {
     alert('请先登录')
     return
   }
-  
+
   const user = JSON.parse(userStr)
-  
+
   try {
     console.log('开始加载物品列表，类型:', activeTab.value)
     let response
@@ -211,7 +253,7 @@ const loadItems = async () => {
         items.value = response.data
       }
     }
-    
+
     console.log('加载物品成功，数量:', items.value.length)
     console.log('物品详情:', items.value)
   } catch (error) {
@@ -230,223 +272,377 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 全局样式 */
 .bag-container {
   min-height: 100vh;
-  background: white;
-  padding: 20px;
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 2rem;
-  color: #ff8c00;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+/* 主内容区 */
+.main-content {
+  max-width: 1200px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.item-tabs {
+.bag-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.page-header {
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+/* 概览信息 */
+.bag-overview {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.98));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 12px 30px;
+}
+
+.overview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.overview-divider {
+  width: 1px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.overview-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.overview-value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #ff9c3a;
+  text-shadow: 0 0 10px rgba(255, 156, 58, 0.3);
+}
+
+/* 布局 */
+.bag-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.bag-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* 装备分类 */
+.equip-tabs {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 .tab-btn {
-  padding: 10px 20px;
-  border: 2px solid #ff8c00;
-  background: white;
-  color: #ff8c00;
-  border-radius: 25px;
+  padding: 10px 30px;
+  background: rgba(16, 9, 3, 0.8);
+  border: 1px solid rgba(255, 169, 79, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 30px;
   font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
 .tab-btn:hover {
-  background: #ff8c00;
-  color: white;
+  background: rgba(255, 140, 0, 0.1);
+  border-color: rgba(255, 140, 0, 0.5);
+  color: #fff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
 }
 
 .tab-btn.active {
-  background: #ff8c00;
-  color: white;
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 122, 26, 0.4);
 }
 
-.item-list {
+/* 物品列表 */
+.equip-list-container {
+  width: 100%;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.2rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 20px;
+  border: 1px dashed rgba(255, 169, 79, 0.2);
+}
+
+.equip-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 20px;
+  padding-bottom: 40px;
 }
 
-.item-card {
+.equip-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.96), rgba(16, 9, 3, 0.96));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.4);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   display: flex;
-  background: var(--color-neutral-100);
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
+  gap: 1.2rem;
+  align-items: flex-start;
 }
 
-.item-card:hover {
+.equip-card:hover {
   transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 24px 40px rgba(255, 140, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* 稀有度颜色 - 价格分层 */
-.item-card.tier-common {
-  border-color: var(--color-common);
+/* 稀有度效果 */
+.equip-card.tier-common { border-top-color: #a0aec0; }
+.equip-card.tier-common:hover { border-color: rgba(160, 174, 192, 0.4); box-shadow: 0 24px 40px rgba(160, 174, 192, 0.15); }
+
+.equip-card.tier-rare { border-top-color: #4299e1; }
+.equip-card.tier-rare:hover { border-color: rgba(66, 153, 225, 0.4); box-shadow: 0 24px 40px rgba(66, 153, 225, 0.15); }
+
+.equip-card.tier-epic { border-top-color: #9f7aea; }
+.equip-card.tier-epic:hover { border-color: rgba(159, 122, 234, 0.4); box-shadow: 0 24px 40px rgba(159, 122, 234, 0.15); }
+
+.equip-card.tier-legendary {
+  border-top-color: #ffd700;
+  background: linear-gradient(180deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.96));
+}
+.equip-card.tier-legendary:hover { border-color: rgba(255, 215, 0, 0.4); box-shadow: 0 24px 40px rgba(255, 215, 0, 0.25); }
+
+.equip-image {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
 }
 
-.item-card.tier-rare {
-  border-color: var(--color-rare);
-  background: var(--color-rare-bg);
-}
+.equip-card.tier-common .equip-image { border-color: rgba(160, 174, 192, 0.5); }
+.equip-card.tier-rare .equip-image { border-color: rgba(66, 153, 225, 0.5); box-shadow: 0 0 10px rgba(66, 153, 225, 0.3); }
+.equip-card.tier-epic .equip-image { border-color: rgba(159, 122, 234, 0.5); box-shadow: 0 0 10px rgba(159, 122, 234, 0.3); }
+.equip-card.tier-legendary .equip-image { border-color: #ffd700; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
 
-.item-card.tier-epic {
-  border-color: var(--color-epic);
-  background: var(--color-epic-bg);
-}
-
-.item-card.tier-legendary {
-  border-color: var(--color-legendary);
-  background: var(--color-legendary-bg);
-  box-shadow: var(--shadow-md), 0 0 20px oklch(0.72 0.16 85 / 0.3);
+.equip-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .bound-tag {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  background: var(--color-neutral-600);
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
+  top: 0;
+  right: 0;
   padding: 2px 6px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-sm);
+  border-bottom-left-radius: 8px;
+  background: rgba(255, 156, 58, 0.9);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  backdrop-filter: blur(2px);
 }
 
-.item-image {
-  flex: 0 0 80px;
-  margin-right: 20px;
-  position: relative;
-}
-
-.item-image img {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.worn-tag {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: #ff5722;
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.item-info {
+.equip-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.item-info h3 {
-  margin: 0 0 10px 0;
-  color: #333;
+.equip-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
-.item-stats {
+.equip-info h3 {
+  margin: 0;
+  color: #fff4df;
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.equip-card.tier-rare h3 { color: #63b3ed; }
+.equip-card.tier-epic h3 { color: #b794f4; }
+.equip-card.tier-legendary h3 { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
+
+.tier-pill {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+.equip-card.tier-rare .tier-pill { border-color: rgba(66, 153, 225, 0.4); color: #63b3ed; background: rgba(66, 153, 225, 0.1); }
+.equip-card.tier-epic .tier-pill { border-color: rgba(159, 122, 234, 0.4); color: #b794f4; background: rgba(159, 122, 234, 0.1); }
+.equip-card.tier-legendary .tier-pill { border-color: rgba(255, 215, 0, 0.4); color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+
+.equip-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 15px;
 }
 
 .stat {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.stat.atk {
-  background: rgba(255, 99, 132, 0.2);
-  color: #dc3545;
-}
+.stat.atk { color: #fc8181; border-color: rgba(252, 129, 129, 0.3); background: rgba(252, 129, 129, 0.1); }
+.stat.def { color: #63b3ed; border-color: rgba(99, 179, 237, 0.3); background: rgba(99, 179, 237, 0.1); }
+.stat.hp { color: #68d391; border-color: rgba(104, 211, 145, 0.3); background: rgba(104, 211, 145, 0.1); }
+.stat.mp { color: #b794f4; border-color: rgba(183, 148, 244, 0.3); background: rgba(183, 148, 244, 0.1); }
+.stat.speed { color: #f6e05e; border-color: rgba(246, 224, 94, 0.3); background: rgba(246, 224, 94, 0.1); }
+.stat.count { color: #fff; border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); }
+.stat.desc { color: #cbd5e0; font-weight: normal; font-size: 0.85rem; width: 100%; }
 
-.stat.def {
-  background: rgba(54, 162, 235, 0.2);
-  color: #007bff;
-}
-
-.stat.hp {
-  background: rgba(75, 192, 192, 0.2);
-  color: #28a745;
-}
-
-.stat.mp {
-  background: rgba(153, 102, 255, 0.2);
-  color: #6f42c1;
-}
-
-.stat.speed {
-  background: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
-}
-
-.stat.count {
-  background: rgba(54, 162, 235, 0.2);
-  color: #007bff;
-  margin-top: 5px;
-  display: inline-block;
-}
-
-.item-actions {
+.equip-action {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
+/* 使用 action-btn 设计，类似于按钮 */
 .action-btn {
-  padding: 8px 16px;
-  background: var(--color-brand);
+  padding: 6px 16px;
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
   color: white;
   border: none;
-  border-radius: 20px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(255, 122, 26, 0.3);
+  margin-left: auto;
 }
 
-.action-btn:hover {
-  background: var(--color-brand-dark);
+.action-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px oklch(0.55 0.20 50 / 0.4);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 15px rgba(255, 122, 26, 0.5);
 }
 
-/* 稀有度按钮颜色 */
-.action-btn.tier-common {
-  background: var(--color-common);
+.action-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
-.action-btn.tier-rare {
-  background: var(--color-rare);
-}
+/* 按钮根据稀有度变色，与 Shop 一致 */
+.action-btn.tier-common { background: linear-gradient(90deg, #718096, #4a5568); box-shadow: 0 4px 10px rgba(113, 128, 150, 0.3); }
+.action-btn.tier-rare { background: linear-gradient(90deg, #4299e1, #2b6cb0); box-shadow: 0 4px 10px rgba(66, 153, 225, 0.3); }
+.action-btn.tier-epic { background: linear-gradient(90deg, #9f7aea, #6b46c1); box-shadow: 0 4px 10px rgba(159, 122, 234, 0.3); }
+.action-btn.tier-legendary { background: linear-gradient(90deg, #fada5e, #d4af37); color: #422006; box-shadow: 0 4px 10px rgba(255, 215, 0, 0.4); }
 
-.action-btn.tier-epic {
-  background: var(--color-epic);
-}
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 0 15px;
+  }
 
-.action-btn.tier-legendary {
-  background: var(--color-legendary);
-  box-shadow: 0 0 15px oklch(0.72 0.16 85 / 0.5);
+  .main-content {
+    padding: 0 15px;
+  }
+
+  .bag-top-bar {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .page-header {
+    text-align: center;
+  }
+  
+  .bag-controls {
+    align-items: center;
+  }
+  
+  .page-header h1 {
+    font-size: 2.2rem;
+  }
+
+  .bag-overview {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .equip-list {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

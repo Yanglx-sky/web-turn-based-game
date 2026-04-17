@@ -1,8 +1,15 @@
 .game-top-nav {
+  --game-top-nav-gutter: 20px;
+  --game-top-nav-max-width: 1400px;
+  --game-top-nav-hover-safe-top: 10px;
+  --game-top-nav-hover-safe-bottom: 12px;
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  padding: 14px 20px 0;
+  width: min(var(--game-top-nav-max-width), calc(100vw - (var(--game-top-nav-gutter) * 2)));
+  margin: 0 auto;
+  padding: 14px 0;
+  box-sizing: border-box;
 }
 
 .game-top-nav__inner {
@@ -57,7 +64,10 @@
   gap: 10px;
   min-width: 0;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-top: var(--game-top-nav-hover-safe-top);
+  padding-bottom: var(--game-top-nav-hover-safe-bottom);
+  margin-top: calc(var(--game-top-nav-hover-safe-top) * -1);
+  margin-bottom: calc(var(--game-top-nav-hover-safe-bottom) * -1);
   scrollbar-width: none;
 }
 
@@ -176,7 +186,10 @@
 
 @media (max-width: 640px) {
   .game-top-nav {
-    padding: 12px 12px 0;
+    --game-top-nav-gutter: 12px;
+    --game-top-nav-hover-safe-top: 8px;
+    --game-top-nav-hover-safe-bottom: 10px;
+    padding: 12px 0;
   }
 
   .game-top-nav__inner {

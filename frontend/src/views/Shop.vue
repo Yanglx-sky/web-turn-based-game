@@ -2,67 +2,91 @@
   <div class="shop-container">
     <GameTopNav />
 
-    <h1>装备商店</h1>
-    
-    <!-- 金币显示 -->
-    <div class="gold-display">
-      <span class="gold-icon">💰</span>
-      <span class="gold-amount">{{ gold }}</span>
-    </div>
-
-    <!-- 装备分类 -->
-    <div class="equip-tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.value"
-        :class="['tab-btn', { active: activeTab === tab.value }]"
-        @click="activeTab = tab.value"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
-
-    <!-- 装备列表 -->
-    <div class="equip-list">
-      <div
-        v-for="equip in equips"
-        :key="equip.id"
-        class="equip-card"
-        :class="getPriceTierClass(equip.price)"
-      >
-        <div class="equip-image">
-          <img
-            :src="getEquipImage(equip)"
-            :alt="equip.name"
-          />
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <div class="shop-top-bar">
+        <div class="page-header">
+          <p class="section-eyebrow">EQUIPMENT SHOP</p>
+          <h1>装备商店</h1>
         </div>
-        <div class="equip-info">
-          <h3>{{ equip.name }}</h3>
-          <div class="equip-stats">
-            <template v-if="equip.itemType === 2">
-              <!-- 药品显示描述 -->
-              <span class="stat hp">{{ equip.name }}</span>
-              <span class="stat mp">{{ equip.description || '使用后恢复生命值和魔法值' }}</span>
-            </template>
-            <template v-else>
-              <!-- 装备显示属性加成 -->
-              <span v-if="equip.atk > 0" class="stat atk">攻击: +{{ equip.atk }}</span>
-              <span v-if="equip.def > 0" class="stat def">防御: +{{ equip.def }}</span>
-              <span v-if="equip.hp > 0" class="stat hp">生命: +{{ equip.hp }}</span>
-              <span v-if="equip.mp > 0" class="stat mp">蓝量: +{{ equip.mp }}</span>
-              <span v-if="equip.speed > 0" class="stat speed">速度: +{{ equip.speed }}</span>
-            </template>
+        
+        <!-- 金币显示 -->
+        <div class="gold-display">
+          <div class="gold-icon"></div>
+          <div class="gold-text">
+            <span class="gold-label">我的金币</span>
+            <span class="gold-amount">{{ gold }}</span>
           </div>
-          <div class="equip-price">
-            <span class="price">{{ equip.price }} 金币</span>
-            <button
-              class="buy-btn"
-              :class="getPriceTierClass(equip.price)"
-              @click="buyEquip(equip.id)"
-              :disabled="false"
+        </div>
+      </div>
+      
+      <div class="shop-content-wrapper">
+        <!-- 侧边栏/顶部信息：分类 -->
+        <div class="shop-controls">
+          <!-- 装备分类 -->
+          <div class="equip-tabs">
+            <button 
+              v-for="tab in tabs" 
+              :key="tab.value"
+              :class="['tab-btn', { active: activeTab === tab.value }]"
+              @click="activeTab = tab.value"
             >
-              购买
+              {{ tab.label }}
             </button>
+          </div>
+        </div>
+
+        <!-- 装备列表 -->
+        <div class="equip-list-container">
+          <div v-if="!equips || equips.length === 0" class="empty-state">
+            暂无商品可购买
+          </div>
+          <div v-else class="equip-list">
+            <div
+              v-for="equip in equips"
+              :key="equip.id"
+              class="equip-card"
+              :class="getPriceTierClass(equip.price)"
+            >
+              <div class="equip-image">
+                <img
+                  :src="getEquipImage(equip)"
+                  :alt="equip.name"
+                />
+              </div>
+              <div class="equip-info">
+                <h3>{{ equip.name }}</h3>
+                <div class="equip-stats">
+                  <template v-if="equip.itemType === 2">
+                    <!-- 药品显示描述 -->
+                    <span class="stat hp desc">{{ equip.name }}</span>
+                    <span class="stat mp desc">{{ equip.description || '使用后恢复生命值和魔法值' }}</span>
+                  </template>
+                  <template v-else>
+                    <!-- 装备显示属性加成 -->
+                    <span v-if="equip.atk > 0" class="stat atk">攻击 +{{ equip.atk }}</span>
+                    <span v-if="equip.def > 0" class="stat def">防御 +{{ equip.def }}</span>
+                    <span v-if="equip.hp > 0" class="stat hp">生命 +{{ equip.hp }}</span>
+                    <span v-if="equip.mp > 0" class="stat mp">蓝量 +{{ equip.mp }}</span>
+                    <span v-if="equip.speed > 0" class="stat speed">速度 +{{ equip.speed }}</span>
+                  </template>
+                </div>
+                <div class="equip-action">
+                  <div class="equip-price">
+                    <span class="price-icon"></span>
+                    <span class="price">{{ equip.price }}</span>
+                  </div>
+                  <button
+                    class="buy-btn"
+                    :class="getPriceTierClass(equip.price)"
+                    @click="buyEquip(equip.id)"
+                    :disabled="false"
+                  >
+                    购买
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -258,231 +282,385 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 全局样式 */
 .shop-container {
   min-height: 100vh;
-  background: white;
-  padding: 20px;
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 2rem;
-  color: #ff8c00;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+/* 主内容区 */
+.main-content {
+  max-width: 1200px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
+.shop-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.page-header {
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+/* 商店布局 */
+.shop-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.shop-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* 金币显示 */
 .gold-display {
   display: flex;
   align-items: center;
+  gap: 15px;
+  background: linear-gradient(135deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.98));
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 12px 25px;
+  min-width: 250px;
   justify-content: center;
-  margin-bottom: 30px;
-  padding: 15px;
-  background: #f9f9f9;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  max-width: 300px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .gold-icon {
-  font-size: 24px;
-  margin-right: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe259, #ffa751);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.gold-icon::after {
+  content: "💰";
+  font-size: 20px;
+}
+
+.gold-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.gold-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .gold-amount {
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 1.5rem;
+  font-weight: 800;
   color: #ffd700;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
 }
 
+/* 装备分类 */
 .equip-tabs {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 .tab-btn {
-  padding: 10px 20px;
-  border: 2px solid #ff8c00;
-  background: white;
-  color: #ff8c00;
-  border-radius: 25px;
+  padding: 10px 24px;
+  background: rgba(16, 9, 3, 0.8);
+  border: 1px solid rgba(255, 169, 79, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 30px;
   font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
 .tab-btn:hover {
-  background: #ff8c00;
-  color: white;
+  background: rgba(255, 140, 0, 0.1);
+  border-color: rgba(255, 140, 0, 0.5);
+  color: #fff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
 }
 
 .tab-btn.active {
-  background: #ff8c00;
-  color: white;
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 122, 26, 0.4);
+}
+
+/* 装备列表 */
+.equip-list-container {
+  width: 100%;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.2rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 20px;
+  border: 1px dashed rgba(255, 169, 79, 0.2);
 }
 
 .equip-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
+  padding-bottom: 40px;
 }
 
 .equip-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.96), rgba(16, 9, 3, 0.96));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.4);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   display: flex;
-  background: var(--color-neutral-100);
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
+  gap: 1.2rem;
+  align-items: flex-start;
 }
 
 .equip-card:hover {
   transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 24px 40px rgba(255, 140, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* 稀有度颜色 - 价格分层 */
+/* 稀有度效果 */
 .equip-card.tier-common {
-  border-color: var(--color-common);
+  border-top-color: #a0aec0;
+}
+.equip-card.tier-common:hover {
+  border-color: rgba(160, 174, 192, 0.4);
+  box-shadow: 0 24px 40px rgba(160, 174, 192, 0.15);
 }
 
 .equip-card.tier-rare {
-  border-color: var(--color-rare);
-  background: var(--color-rare-bg);
+  border-top-color: #4299e1;
+}
+.equip-card.tier-rare:hover {
+  border-color: rgba(66, 153, 225, 0.4);
+  box-shadow: 0 24px 40px rgba(66, 153, 225, 0.15);
 }
 
 .equip-card.tier-epic {
-  border-color: var(--color-epic);
-  background: var(--color-epic-bg);
+  border-top-color: #9f7aea;
+}
+.equip-card.tier-epic:hover {
+  border-color: rgba(159, 122, 234, 0.4);
+  box-shadow: 0 24px 40px rgba(159, 122, 234, 0.15);
 }
 
 .equip-card.tier-legendary {
-  border-color: var(--color-legendary);
-  background: var(--color-legendary-bg);
-  box-shadow: var(--shadow-md), 0 0 20px oklch(0.72 0.16 85 / 0.3);
+  border-top-color: #ffd700;
+  background: linear-gradient(180deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.96));
+}
+.equip-card.tier-legendary:hover {
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 24px 40px rgba(255, 215, 0, 0.25);
 }
 
 .equip-image {
-  flex: 0 0 80px;
-  margin-right: 20px;
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
 }
 
+.equip-card.tier-common .equip-image { border-color: rgba(160, 174, 192, 0.5); }
+.equip-card.tier-rare .equip-image { border-color: rgba(66, 153, 225, 0.5); box-shadow: 0 0 10px rgba(66, 153, 225, 0.3); }
+.equip-card.tier-epic .equip-image { border-color: rgba(159, 122, 234, 0.5); box-shadow: 0 0 10px rgba(159, 122, 234, 0.3); }
+.equip-card.tier-legendary .equip-image { border-color: #ffd700; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+
 .equip-image img {
-  width: 80px;
-  height: 80px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 8px;
 }
 
 .equip-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .equip-info h3 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: #fff4df;
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
+
+.equip-card.tier-rare h3 { color: #63b3ed; }
+.equip-card.tier-epic h3 { color: #b794f4; }
+.equip-card.tier-legendary h3 { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
 
 .equip-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 15px;
 }
 
 .stat {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.stat.atk {
-  background: rgba(255, 99, 132, 0.2);
-  color: #dc3545;
-}
+.stat.atk { color: #fc8181; border-color: rgba(252, 129, 129, 0.3); background: rgba(252, 129, 129, 0.1); }
+.stat.def { color: #63b3ed; border-color: rgba(99, 179, 237, 0.3); background: rgba(99, 179, 237, 0.1); }
+.stat.hp { color: #68d391; border-color: rgba(104, 211, 145, 0.3); background: rgba(104, 211, 145, 0.1); }
+.stat.mp { color: #b794f4; border-color: rgba(183, 148, 244, 0.3); background: rgba(183, 148, 244, 0.1); }
+.stat.speed { color: #f6e05e; border-color: rgba(246, 224, 94, 0.3); background: rgba(246, 224, 94, 0.1); }
+.stat.desc { color: #cbd5e0; font-weight: normal; font-size: 0.85rem; width: 100%; }
 
-.stat.def {
-  background: rgba(54, 162, 235, 0.2);
-  color: #007bff;
-}
-
-.stat.hp {
-  background: rgba(75, 192, 192, 0.2);
-  color: #28a745;
-}
-
-.stat.mp {
-  background: rgba(153, 102, 255, 0.2);
-  color: #6f42c1;
-}
-
-.stat.speed {
-  background: oklch(0.80 0.12 85 / 0.2);
-  color: var(--color-gold);
+.equip-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
 .equip-price {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
+}
+
+.price-icon {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle, #ffe259, #ffa751);
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(255, 215, 0, 0.4);
 }
 
 .price {
-  font-size: 18px;
-  font-weight: bold;
-  color: var(--color-gold);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #ffd700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .buy-btn {
-  padding: 8px 16px;
-  background: var(--color-brand);
+  padding: 6px 16px;
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
   color: white;
   border: none;
-  border-radius: 20px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(255, 122, 26, 0.3);
 }
 
 .buy-btn:hover:not(:disabled) {
-  background: var(--color-brand-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px oklch(0.55 0.20 50 / 0.4);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 15px rgba(255, 122, 26, 0.5);
+}
+
+.buy-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .buy-btn:disabled {
-  background: var(--color-neutral-400);
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
-/* 稀有度按钮颜色 */
-.buy-btn.tier-common {
-  background: var(--color-common);
-}
+/* 稀有度按钮颜色重写 */
+.buy-btn.tier-common { background: linear-gradient(90deg, #718096, #4a5568); box-shadow: 0 4px 10px rgba(113, 128, 150, 0.3); }
+.buy-btn.tier-rare { background: linear-gradient(90deg, #4299e1, #2b6cb0); box-shadow: 0 4px 10px rgba(66, 153, 225, 0.3); }
+.buy-btn.tier-epic { background: linear-gradient(90deg, #9f7aea, #6b46c1); box-shadow: 0 4px 10px rgba(159, 122, 234, 0.3); }
+.buy-btn.tier-legendary { background: linear-gradient(90deg, #fada5e, #d4af37); color: #422006; box-shadow: 0 4px 10px rgba(255, 215, 0, 0.4); }
 
-.buy-btn.tier-rare {
-  background: var(--color-rare);
-}
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 0 15px;
+  }
 
-.buy-btn.tier-epic {
-  background: var(--color-epic);
-}
-
-.buy-btn.tier-legendary {
-  background: var(--color-legendary);
-  box-shadow: 0 0 15px oklch(0.72 0.16 85 / 0.5);
-}
-
-.buy-btn.tier-legendary:hover:not(:disabled) {
-  box-shadow: 0 0 25px oklch(0.72 0.16 85 / 0.7);
+  .shop-top-bar {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .page-header {
+    text-align: center;
+  }
+  
+  .shop-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .page-header h1 {
+    font-size: 2.2rem;
+  }
 }
 </style>
