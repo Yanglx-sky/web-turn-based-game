@@ -1,32 +1,26 @@
 <template>
   <div class="train-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button class="nav-btn" @click="navigateTo('/')">首页</button>
-        <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-        <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-        <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-        <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-        <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-        <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-        <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
-        <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-        <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-        <button class="nav-btn" @click="logout">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
     
     <div class="main-content">
-      <h2>单人训练</h2>
-      
+      <!-- 头部标题 -->
+      <div v-if="!inTrain && !showResult" class="page-header">
+        <p class="section-eyebrow">TRAINING PREPARATION</p>
+        <h1>训练参数</h1>
+      </div>
+      <div v-else-if="inTrain && !showResult" class="page-header">
+        <p class="section-eyebrow">BATTLE SIMULATION</p>
+        <h1>模拟战斗</h1>
+      </div>
+      <div v-if="showResult" class="page-header">
+        <p class="section-eyebrow">TRAINING REPORT</p>
+        <h1>训练报告</h1>
+      </div>
+
       <!-- 训练人偶创建表单 -->
       <div v-if="!inTrain && !showResult" class="create-mannequin">
-        <div class="header">
-          <h3>创建训练人偶</h3>
-        </div>
-        <form @submit.prevent="createMannequin">
+        <form @submit.prevent="createMannequin" class="mannequin-form">
+          <div class="form-grid">
           <div class="form-group">
             <label>伤害</label>
             <input type="number" v-model.number="mannequinForm.attack" min="1" required>
@@ -62,7 +56,10 @@
               <option value="1">是</option>
             </select>
           </div>
-          <button type="submit" class="btn create-btn">创建并开始训练</button>
+          </div>
+          <div class="form-footer">
+            <button type="submit" class="btn create-btn">创建并开始训练</button>
+          </div>
         </form>
       </div>
       
@@ -74,9 +71,9 @@
             <p>{{ playerElf.elfName }}</p>
             <p>HP: {{ playerElfHp }}</p>
           </div>
-          <div class="mannequin-info">
+          <div class="mannequin-info" :class="getElementColorClass(mannequin.type)">
             <h3>训练人偶</h3>
-            <p>{{ getMannequinTypeName(mannequin.type) }}</p>
+            <span class="element-badge" :class="getElementColorClass(mannequin.type)">{{ getMannequinTypeName(mannequin.type) }}</span>
             <p>HP: {{ mannequinHp }}</p>
           </div>
         </div>
@@ -127,9 +124,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { trainApi } from '../api/train'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 
@@ -285,6 +283,20 @@ const getMannequinTypeName = (type) => {
   }
 }
 
+// 根据元素类型获取CSS颜色类名
+const getElementColorClass = (type) => {
+  switch (type) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
+  }
+}
+
 onMounted(() => {
   // 初始化
 })
@@ -299,49 +311,6 @@ onMounted(() => {
   background-position: center;
   background-attachment: fixed;
   font-family: 'Arial', sans-serif;
-}
-
-/* 导航栏 */
-.nav-bar {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ff6b00;
-  text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: transparent;
-  color: white;
-  border: 1px solid #ff6b00;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-  background: #ff6b00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
 }
 
 .main-content {
@@ -498,12 +467,29 @@ h2 {
   padding: 15px;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+}
+
+/* 人偶元素类型颜色 */
+.mannequin-info.element-fire {
+  border-color: var(--color-fire);
+  background: var(--color-fire-bg);
+}
+
+.mannequin-info.element-water {
+  border-color: var(--color-water);
+  background: var(--color-water-bg);
+}
+
+.mannequin-info.element-grass {
+  border-color: var(--color-grass);
+  background: var(--color-grass-bg);
 }
 
 .player-info h3,
 .mannequin-info h3 {
-  color: #333;
+  color: var(--color-neutral-700);
   margin-bottom: 15px;
   font-size: 18px;
   font-weight: bold;
@@ -512,8 +498,33 @@ h2 {
 .player-info p,
 .mannequin-info p {
   margin: 8px 0;
-  color: #666;
+  color: var(--color-neutral-500);
   font-size: 16px;
+}
+
+/* 元素徽章 */
+.element-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.element-badge.element-fire {
+  background: var(--color-fire);
+  color: white;
+}
+
+.element-badge.element-water {
+  background: var(--color-water);
+  color: white;
+}
+
+.element-badge.element-grass {
+  background: var(--color-grass);
+  color: white;
 }
 
 .battle-log {
@@ -658,12 +669,24 @@ h2 {
 }
 
 @media (max-width: 768px) {
+  .main-content {
+    padding: 0 15px;
+  }
+
   .train-container {
     padding: 10px;
   }
   
   .main-content {
     padding: 20px;
+  }
+  
+  .page-header h1 {
+    font-size: 2.2rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
   
   .battle-info {
@@ -683,6 +706,216 @@ h2 {
   .result-buttons .btn {
     width: 100%;
     max-width: 200px;
+  }
+}
+
+/* Game-style training prep overrides */
+.train-container {
+  min-height: 100vh;
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  background: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.create-mannequin,
+.train-battle,
+.train-result {
+  border: 1px solid rgba(255, 195, 112, 0.14);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(15, 19, 31, 0.96), rgba(9, 12, 19, 0.96));
+  box-shadow:
+    0 22px 42px rgba(5, 9, 15, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.create-mannequin,
+.train-battle,
+.train-result {
+  padding: 26px;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.mannequin-form {
+  display: grid;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  margin-bottom: 10px;
+  color: rgba(247, 237, 220, 0.8);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff3db;
+  font-size: 1rem;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: rgba(255, 182, 81, 0.62);
+  box-shadow: 0 0 0 3px rgba(255, 167, 81, 0.12);
+}
+
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 52px;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255, 232, 198, 0.82) 50%),
+    linear-gradient(135deg, rgba(255, 232, 198, 0.82) 50%, transparent 50%);
+  background-position:
+    calc(100% - 24px) calc(50% - 4px),
+    calc(100% - 18px) calc(50% - 4px);
+  background-size: 7px 7px, 7px 7px;
+  background-repeat: no-repeat;
+}
+
+.form-group select option {
+  background: #141a27;
+  color: #fff3db;
+}
+
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.create-btn {
+  width: auto;
+  min-width: 320px;
+  min-height: 54px;
+  margin-top: 0;
+  border-radius: 18px;
+  box-shadow: 0 16px 28px rgba(255, 121, 37, 0.2);
+}
+
+.battle-info {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 194, 107, 0.14);
+}
+
+.player-info,
+.mannequin-info {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 194, 107, 0.12);
+  color: #fff3db;
+}
+
+.player-info h3,
+.mannequin-info h3,
+.battle-log h3,
+.train-result h3 {
+  color: #fff0d5;
+}
+
+.player-info p,
+.mannequin-info p,
+.ai-report p,
+.result-text {
+  color: rgba(247, 237, 220, 0.78);
+}
+
+.log-content {
+  border-color: rgba(255, 194, 107, 0.1);
+  background: rgba(7, 11, 18, 0.76);
+}
+
+.log-item {
+  border-left-color: #ffab5c;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(247, 237, 220, 0.78);
+}
+
+.result-buttons {
+  margin-top: 26px;
+}
+
+@media (max-width: 960px) {
+  .train-container {
+    padding: 0 14px 24px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-footer {
+    justify-content: stretch;
+  }
+
+  .create-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-top: 14px;
+  }
+
+  .create-mannequin,
+  .train-battle,
+  .train-result {
+    padding: 20px;
+    border-radius: 22px;
   }
 }
 </style>

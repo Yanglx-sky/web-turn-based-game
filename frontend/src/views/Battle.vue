@@ -1,13 +1,6 @@
 <template>
   <div class="home-container">
-    <div class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="countdown" v-if="!showResult">
-        <span class="countdown-text">决策时间:</span>
-        <span class="countdown-number">{{ countdown }}</span>
-        <span class="countdown-unit">秒</span>
-      </div>
-    </div>
+    <GameTopNav :active-path="battleNavPath" />
 
     <!-- 网络异常遮罩 -->
     <div v-if="!battleStore.isOnline" class="network-error-overlay">
@@ -37,127 +30,277 @@
       @abandon="abandonBattle"
     />
 
-    <div class="battle-container">
-      <h1>战斗</h1>
-      
-      <!-- 回合显示 -->
-      <div class="round-display">
-        <span class="round-text">当前回合：</span>
-        <span class="round-number">{{ currentRound }}</span>
+    <div class="battle-container" :class="`battle-mode-${battleMode}`">
+      <div class="battle-status-strip" v-if="!showResult">
+        <div class="battle-status-side battle-status-side--left">
+          <div class="battle-status-chip battle-status-chip--stage">{{ battleStageLabel }}</div>
+          <div class="battle-status-chip battle-status-chip--round">
+            <span class="battle-status-chip__label">ROUND</span>
+            <span class="battle-status-chip__value">{{ battleRoundDisplay }}</span>
+          </div>
+        </div>
+        <div class="battle-status-chip battle-status-chip--countdown">
+          <span class="battle-status-chip__label">决策时间</span>
+          <span class="battle-status-chip__value">{{ countdown }}</span>
+          <span class="battle-status-chip__unit">秒</span>
+        </div>
+        <div class="battle-status-side battle-status-side--right">
+          <button
+            type="button"
+            class="battle-log-toggle"
+            :class="{ 'is-open': isBattleLogOpen }"
+            @click="toggleBattleLog"
+          >
+            {{ isBattleLogOpen ? '收起记录' : '战斗记录' }}
+          </button>
+        </div>
       </div>
-      
-      <!-- 敌人对话区域 -->
+
       <div class="enemy-dialog" v-if="enemyDialog">
         <div class="dialog-content">
           <span class="enemy-name">{{ enemyName }}:</span>
           <span class="dialog-text">{{ enemyDialog }}</span>
         </div>
       </div>
-      
-      <!-- 战斗场景 -->
-      <div class="battle-field">
-        <!-- 玩家精灵 -->
-        <div class="player-section">
-          <h3>我的精灵</h3>
-          <div class="elf-card player-elf" :class="{ 'attacking': attackingSide === 'player' && attackAnimation, 'hurt': isPlayerHurt }" v-if="playerElf && playerElf.elfId">
-            <div class="elf-image">
-              <img :src="getElfImage(playerElf.elfId)" :alt="playerElf.elfName || `精灵 ${playerElf.elfId}`" />
-            </div>
-            <div class="elf-info">
-              <h4>{{ playerElf.elfName || `精灵 ${playerElf.elfId}` }}</h4>
-              <p>等级: {{ playerElf.level }}</p>
-              <p>系别: {{ getElementType(playerElf.elementType) }}</p>
-              <div class="hp-bar">
-                <div class="hp-fill" :style="{ width: playerHpPercentage + '%' }"></div>
+
+      <div class="battle-shell">
+        <div class="battle-field" :class="[battleArenaClass, { 'is-projectile-active': showProjectile }]">
+          <div class="battle-field__sky"></div>
+          <div class="battle-field__mist"></div>
+          <div class="battle-field__spotlight battle-field__spotlight--left"></div>
+          <div class="battle-field__spotlight battle-field__spotlight--right"></div>
+
+          <div class="hud player-hud" v-if="playerElf && playerElf.elfId">
+            <div class="elf-info-box">
+              <div class="info-header">
+                <div>
+                  <span class="hud-caption">玩家精灵</span>
+                  <h4>{{ playerElf.elfName || `精灵 ${playerElf.elfId}` }}</h4>
+                </div>
+                <span class="level">Lv.{{ playerElf.level }}</span>
               </div>
-              <p>HP: {{ Math.max(0, playerElf.hp) }}/{{ playerElf.maxHp }}</p>
-              <p>MP: {{ playerElf.mp }}/{{ playerElf.maxMp }}</p>
-              <div class="skill-name" v-if="attackingSide === 'player' && attackAnimation">
-                {{ currentSkill }}
+              <div class="type-badge">{{ getElementType(playerElf.elementType) }}</div>
+              <div class="bars">
+                <div class="bar-container hp-container">
+                  <span class="bar-label">HP</span>
+                  <div class="bar-bg">
+                    <div class="bar-fill hp-fill" :style="{ width: playerHpPercentage + '%' }"></div>
+                  </div>
+                  <span class="bar-text">{{ Math.max(0, playerElf.hp) }}/{{ playerElf.maxHp }}</span>
+                </div>
+                <div class="bar-container mp-container">
+                  <span class="bar-label">MP</span>
+                  <div class="bar-bg">
+                    <div class="bar-fill mp-fill" :style="{ width: playerElf.maxMp ? (playerElf.mp / playerElf.maxMp * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <span class="bar-text">{{ playerElf.mp }}/{{ playerElf.maxMp }}</span>
+                </div>
               </div>
             </div>
           </div>
-          <div v-else class="elf-card player-elf">
-            <div class="elf-info">
+          <div class="hud player-hud empty-hud" v-else>
+            <div class="elf-info-box">
               <h4>未选择精灵</h4>
               <p>请进入战斗选择精灵</p>
             </div>
           </div>
-        </div>
-        
-        <!-- 敌人精灵 -->
-        <div class="enemy-section">
-          <h3>敌人</h3>
-          <div class="elf-card enemy-elf" :class="{ 'attacking': attackingSide === 'enemy' && attackAnimation, 'hurt': isEnemyHurt }">
-            <div class="elf-image">
-              <img src="/src/assets/photo/t01ad4c8a8c1b78d5e9.jpg" alt="迪莫" v-if="enemyName === '迪莫'" />
-              <img src="/src/assets/photo/78714861ed8311a9d5af0982af3bf12196230622.jpg" alt="焰阳火灵" v-else-if="enemyName === '焰阳火灵'" />
-              <img src="/src/assets/photo/7acb0a46f21fbe096b63310c0e2a1b338744ebf807da.png" alt="惊涛水灵" v-else-if="enemyName === '惊涛水灵'" />
-              <img src="/src/assets/photo/ac6eddc451da81cb39db2c96742dc7160924ab189b1f.png" alt="魔草巫灵" v-else-if="enemyName === '魔草巫灵'" />
-              <img src="/src/assets/photo/火-训练人偶.png" alt="火系训练人偶" v-else-if="enemyName.includes('训练人偶') && enemyElementType === 1" />
-              <img src="/src/assets/photo/水-训练人偶.png" alt="水系训练人偶" v-else-if="enemyName.includes('训练人偶') && enemyElementType === 2" />
-              <img src="/src/assets/photo/草-训练人偶.png" alt="草系训练人偶" v-else-if="enemyName.includes('训练人偶') && enemyElementType === 3" />
-              <img src="/src/assets/hero.png" alt="敌人" v-else />
-            </div>
-            <div class="elf-info">
-              <h4>{{ enemyName }}</h4>
-              <p>等级: 1</p>
-              <p>系别: {{ getElementType(enemyElementType) }}</p>
-              <div class="hp-bar">
-                <div class="hp-fill" :style="{ width: enemyHpPercentage + '%' }"></div>
+
+          <div class="hud enemy-hud">
+            <div class="elf-info-box">
+              <div class="info-header">
+                <div>
+                  <span class="hud-caption">敌方单位</span>
+                  <h4>{{ enemyName }}</h4>
+                </div>
+                <span class="level">Lv.1</span>
               </div>
-              <p>HP: {{ Math.max(0, enemyHp) }}/{{ enemyMaxHp }}</p>
-              <p>MP: {{ enemyMp }}/{{ enemyMaxMp }}</p>
-              <div class="skill-name" v-if="attackingSide === 'enemy' && attackAnimation">
+              <div class="type-badge">{{ getElementType(enemyElementType) }}</div>
+              <div class="bars">
+                <div class="bar-container hp-container">
+                  <span class="bar-label">HP</span>
+                  <div class="bar-bg">
+                    <div class="bar-fill hp-fill" :style="{ width: enemyHpPercentage + '%' }"></div>
+                  </div>
+                  <span class="bar-text">{{ Math.max(0, enemyHp) }}/{{ enemyMaxHp }}</span>
+                </div>
+                <div class="bar-container mp-container">
+                  <span class="bar-label">MP</span>
+                  <div class="bar-bg">
+                    <div class="bar-fill mp-fill" :style="{ width: enemyMaxMp ? (enemyMp / enemyMaxMp * 100) + '%' : '0%' }"></div>
+                  </div>
+                  <span class="bar-text">{{ enemyMp }}/{{ enemyMaxMp }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="battle-stage">
+            <div class="battle-stage__ground">
+              <span class="battle-stage__label">{{ battleStageLabel }}</span>
+            </div>
+
+            <div
+              v-if="playerElf && playerElf.elfId"
+              class="sprite-wrapper player-sprite"
+              :class="[currentStrikeClass, { attacking: attackingSide === 'player' && attackAnimation, hurt: isPlayerHurt }]"
+            >
+              <div class="sprite-aura sprite-aura--player"></div>
+              <div class="skill-name-float" v-if="attackingSide === 'player' && attackAnimation">
                 {{ currentSkill }}
               </div>
+              <div class="impact-flash" v-if="isPlayerHurt"></div>
+              <img :src="getElfImage(playerElf.elfId)" :alt="playerElf.elfName || `精灵 ${playerElf.elfId}`" class="sprite-img" />
+            </div>
+
+            <div v-if="showProjectile" class="particle-track" :class="[projectileMotionClass, projectileElementClass]">
+              <div v-for="particleIndex in projectileParticles" :key="particleIndex" class="particle" :class="`particle-${particleIndex}`"></div>
+              <div class="particle-core"></div>
+            </div>
+
+            <div
+              class="sprite-wrapper enemy-sprite"
+              :class="[
+                currentStrikeClass,
+                { attacking: attackingSide === 'enemy' && attackAnimation, hurt: isEnemyHurt, 'is-mannequin': isMannequinEnemy }
+              ]"
+            >
+              <div class="sprite-aura sprite-aura--enemy"></div>
+              <div class="skill-name-float" v-if="attackingSide === 'enemy' && attackAnimation">
+                {{ currentSkill }}
+              </div>
+              <div class="impact-flash" v-if="isEnemyHurt"></div>
+              <img :src="enemySpriteSrc" :alt="enemySpriteAlt" class="sprite-img" />
             </div>
           </div>
         </div>
-      </div>
-      
-      <!-- 技能选择 -->
-      <div v-if="showSkills" class="skills-section">
-        <h4>选择技能</h4>
-        <div class="skills-grid">
-          <button v-for="skill in skills" :key="skill.id" @click="useSelectedSkill(skill)" class="skill-btn">
-            {{ skill.skillName }} (MP: {{ skill.costMp }})
-          </button>
-        </div>
-      </div>
-      
-      <!-- 战斗操作 -->
-      <div class="battle-actions">
-        <h3>战斗操作</h3>
-        <div class="action-buttons">
-          <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
-          <button @click="useSkill" class="action-btn skill-btn" :disabled="isButtonsDisabled">技能</button>
-          <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
-          <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
-          <button @click="showPotions = true" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
-        </div>
-      </div>
-      
-      <!-- 战斗日志 -->
-      <div class="battle-log">
-        <h3>战斗日志</h3>
-        <div class="log-content">
-          <div v-for="roundData in battleLogs" :key="roundData.round" class="round-section">
-            <div class="round-header">
-              回合{{ roundData.round }}：
-            </div>
-            <div class="round-logs">
-              <div 
-                v-for="(log, index) in roundData.logs" 
-                :key="index" 
-                class="log-entry"
-              >
-                {{ log }}
+
+        <div class="battle-command-deck">
+          <transition name="skill-panel">
+            <div v-if="showSkills" class="skills-section">
+              <div class="skills-section__header">
+                <h4>技能</h4>
+                <button type="button" class="skills-close-btn" @click="showSkills = false">收起</button>
+              </div>
+              <div class="skills-grid">
+                <button
+                  v-for="skill in skills"
+                  :key="skill.id"
+                  @click="useSelectedSkill(skill)"
+                  class="skill-btn"
+                  :class="getElementColorClass(playerElf?.elementType)"
+                >
+                  <span class="skill-btn__name">{{ skill.skillName }}</span>
+                  <span class="skill-btn__cost">{{ skill.costMp }} MP</span>
+                </button>
               </div>
             </div>
+          </transition>
+
+          <transition name="skill-panel">
+            <div v-if="showSwitchElf" class="command-panel command-panel--switch">
+              <div class="skills-section__header">
+                <h4>更换精灵</h4>
+                <button type="button" class="skills-close-btn" @click="closeSwitchElf">收起</button>
+              </div>
+              <div v-if="loadingBattleElves" class="command-panel__empty">加载中...</div>
+              <div v-else class="battle-elves-list inline-battle-elves-list">
+                <div v-for="elf in battleElves" :key="elf.id" class="elf-card horizontal" :class="{ 'current': elf && elf.id === playerElf.id }">
+                  <template v-if="elf && elf.elfState !== 2">
+                    <div class="elf-image">
+                      <img :src="getElfImage(elf.elfId)" :alt="elf.elfName || `精灵 ${elf.elfId}`" />
+                    </div>
+                    <div class="elf-info">
+                      <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
+                      <div class="elf-stats">
+                        <p>等级: {{ elf.level }}</p>
+                        <p>系别: {{ getElementType(elf.elementType) }}</p>
+                        <div class="hp-bar">
+                          <div class="hp-fill" :style="{ width: (Math.max(0, elf.hp) / elf.maxHp) * 100 + '%' }"></div>
+                        </div>
+                        <p>HP: {{ Math.max(0, elf.hp) }}/{{ elf.maxHp }}</p>
+                        <p>MP: {{ elf.mp }}/{{ elf.maxMp }}</p>
+                      </div>
+                      <div v-if="elf && elf.id !== playerElf.id" class="card-actions">
+                        <button 
+                          @click="selectElfToSwitch(elf)" 
+                          class="select-btn" 
+                          :disabled="!elf || elf.elfState === 2 || elf.elfState === 0"
+                          :class="{ 'disabled': !elf || elf.elfState === 2 || elf.elfState === 0 }"
+                        >
+                          {{ !elf ? '未知' : (elf.elfState === 2 ? '已死亡' : elf.elfState === 0 ? '战斗中' : '选择') }}
+                        </button>
+                      </div>
+                      <div v-else class="current-tag">当前出战</div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </transition>
+
+          <transition name="skill-panel">
+            <div v-if="showPotions" class="command-panel command-panel--potions">
+              <div class="skills-section__header">
+                <h4>药品</h4>
+                <button type="button" class="skills-close-btn" @click="showPotions = false">收起</button>
+              </div>
+              <div v-if="potions.length === 0" class="command-panel__empty">
+                <p>没有可用的药品</p>
+              </div>
+              <div v-else class="potion-list inline-potion-list">
+                <div v-for="potion in potions" :key="potion.id" class="potion-item" @click="usePotion(potion)">
+                  <div class="potion-image">
+                    <img :src="getPotionImage(potion.name)" :alt="potion.name">
+                  </div>
+                  <div class="potion-info">
+                    <h4>{{ potion.name }}</h4>
+                    <p>{{ potion.description }}</p>
+                    <p class="potion-count">数量: {{ potion.count }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+
+          <div class="battle-actions">
+            <div class="action-buttons">
+              <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
+              <button
+                @click="useSkill"
+                class="action-btn skill-action-btn"
+                :class="getElementColorClass(playerElf?.elementType)"
+                :disabled="isButtonsDisabled"
+              >技能</button>
+              <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
+              <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
+              <button @click="openPotionsPanel" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
+            </div>
           </div>
         </div>
       </div>
+
+      <transition name="log-drawer">
+        <div v-if="isBattleLogOpen" class="battle-log-layer" @click.self="closeBattleLog">
+          <aside class="battle-log-drawer" role="dialog" aria-modal="true" aria-label="战斗记录">
+            <div class="battle-log__header">
+              <h3>战斗记录</h3>
+              <button type="button" class="drawer-close-btn" @click="closeBattleLog">关闭</button>
+            </div>
+            <div class="log-content">
+              <div v-for="roundData in battleLogs" :key="roundData.round" class="round-section">
+                <div class="round-header">
+                  回合{{ roundData.round }}：
+                </div>
+                <div class="round-logs">
+                  <div v-for="(log, index) in roundData.logs" :key="index" class="log-entry">
+                    {{ log }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </transition>
       
       <!-- 战斗结果 -->
       <div v-if="showResult" class="battle-result">
@@ -178,7 +321,7 @@
           <div class="summary-content" v-html="aiSummary.replace(/\n/g, '<br>')"></div>
         </div>
         <button @click="getAISummary" class="summary-btn" v-if="!aiSummary">获取AI战报总结</button>
-        <button @click="backToPVE" class="result-btn">返回关卡</button>
+        <button @click="backToPVE" class="result-btn">{{ battleResultActionLabel }}</button>
       </div>
       
       <!-- 御三家选择弹窗 -->
@@ -199,75 +342,6 @@
           </div>
           <div class="modal-buttons">
             <button @click="closeStarterSelection" class="cancel-btn">关闭</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 精灵切换弹窗 -->
-      <div v-if="showSwitchElf" class="modal-overlay">
-        <div class="modal-content switch-elf-modal">
-          <h2>选择精灵</h2>
-          <p>选择一只精灵出战</p>
-          <div v-if="loadingBattleElves" class="loading">加载中...</div>
-          <div v-else class="battle-elves-list">
-            <div v-for="elf in battleElves" :key="elf.id" class="elf-card horizontal" :class="{ 'current': elf && elf.id === playerElf.id }">
-              <template v-if="elf && elf.elfState !== 2">
-                <div class="elf-image">
-                  <img :src="getElfImage(elf.elfId)" :alt="elf.elfName || `精灵 ${elf.elfId}`" />
-                </div>
-                <div class="elf-info">
-                  <h4>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h4>
-                  <div class="elf-stats">
-                    <p>等级: {{ elf.level }}</p>
-                    <p>系别: {{ getElementType(elf.elementType) }}</p>
-                    <div class="hp-bar">
-                      <div class="hp-fill" :style="{ width: (Math.max(0, elf.hp) / elf.maxHp) * 100 + '%' }"></div>
-                    </div>
-                    <p>HP: {{ Math.max(0, elf.hp) }}/{{ elf.maxHp }}</p>
-                    <p>MP: {{ elf.mp }}/{{ elf.maxMp }}</p>
-                  </div>
-                  <div v-if="elf && elf.id !== playerElf.id" class="card-actions">
-                    <button 
-                      @click="selectElfToSwitch(elf)" 
-                      class="select-btn" 
-                      :disabled="!elf || elf.elfState === 2 || elf.elfState === 0"
-                      :class="{ 'disabled': !elf || elf.elfState === 2 || elf.elfState === 0 }"
-                    >
-                      {{ !elf ? '未知' : (elf.elfState === 2 ? '已死亡' : elf.elfState === 0 ? '战斗中' : '选择') }}
-                    </button>
-                  </div>
-                  <div v-else class="current-tag">当前出战</div>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button @click="closeSwitchElf" class="cancel-btn">取消</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 药品使用弹窗 -->
-      <div v-if="showPotions" class="modal-overlay">
-        <div class="modal-content">
-          <h2>使用药品</h2>
-          <div v-if="potions.length === 0" class="no-items">
-            <p>没有可用的药品</p>
-          </div>
-          <div v-else class="potion-list">
-            <div v-for="potion in potions" :key="potion.id" class="potion-item" @click="usePotion(potion)">
-              <div class="potion-image">
-                <img :src="getPotionImage(potion.name)" :alt="potion.name">
-              </div>
-              <div class="potion-info">
-                <h4>{{ potion.name }}</h4>
-                <p>{{ potion.description }}</p>
-                <p class="potion-count">数量: {{ potion.count }}</p>
-              </div>
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button @click="showPotions = false" class="cancel-btn">取消</button>
           </div>
         </div>
       </div>
@@ -298,6 +372,7 @@ import { trainApi } from '../api/train'
 import { useBattleStore } from '../stores/battleStore'
 import { NetworkManager } from '../utils/network'
 import BattleReconnectDialog from '../components/BattleReconnectDialog.vue'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -305,6 +380,23 @@ const route = useRoute()
 // 网络管理器实例
 let networkManager = null
 const battleStore = useBattleStore()
+
+const resolveElementTheme = (elementType, skillName = '') => {
+  if (skillName.includes('火')) return 'fire'
+  if (skillName.includes('水')) return 'water'
+  if (skillName.includes('草') || skillName.includes('叶') || skillName.includes('藤') || skillName.includes('孢')) return 'grass'
+
+  switch (elementType) {
+    case 1:
+      return 'fire'
+    case 2:
+      return 'water'
+    case 3:
+      return 'grass'
+    default:
+      return 'arcane'
+  }
+}
 
 const navigateTo = (path) => {
   router.push(path)
@@ -368,6 +460,7 @@ const elfDeathCallback = ref(null)
 const battleBgm = ref(null)
 // 按钮禁用状态
 const isButtonsDisabled = ref(false)
+const isBattleLogOpen = ref(false)
 
 // 保存战斗类型（在onMounted时初始化，避免onUnmounted时route.query丢失）
 let currentBattleType = ''
@@ -381,6 +474,76 @@ const skills = ref([])
 const potions = ref([])
 // 药品使用弹窗
 const showPotions = ref(false)
+const projectileParticles = [1, 2, 3, 4, 5, 6]
+
+const battleMode = computed(() => route.query.type === 'train' ? 'train' : 'pve')
+const battleNavPath = computed(() => battleMode.value === 'train' ? '/train' : '/pve')
+const battleStageLabel = computed(() => battleMode.value === 'train' ? '训练擂台' : '冒险战场')
+const battleRoundDisplay = computed(() => String(currentRound.value || 1).padStart(2, '0'))
+const battleArenaClass = computed(() => `arena-${resolveElementTheme(enemyElementType.value, enemyName.value || '')}`)
+const showProjectile = computed(() => attackAnimation.value && !!attackingSide.value && currentSkill.value && currentSkill.value !== '普通攻击')
+const projectileMotionClass = computed(() => attackingSide.value === 'player' ? 'move-right' : 'move-left')
+const currentAttackElement = computed(() => {
+  const attackerElementType = attackingSide.value === 'player'
+    ? playerElf.value?.elementType
+    : enemyElementType.value
+  return resolveElementTheme(attackerElementType, currentSkill.value || '')
+})
+const projectileElementClass = computed(() => `projectile-${currentAttackElement.value}`)
+const currentStrikeClass = computed(() => currentSkill.value === '普通攻击' ? 'is-basic-strike' : 'is-skill-strike')
+const isMannequinEnemy = computed(() => (enemyName.value || '').includes('训练人偶'))
+const battleResultActionLabel = computed(() => battleMode.value === 'train' ? '返回训练' : '返回关卡')
+
+const closeCommandPanels = () => {
+  showSkills.value = false
+  showSwitchElf.value = false
+  showPotions.value = false
+}
+
+const toggleBattleLog = () => {
+  isBattleLogOpen.value = !isBattleLogOpen.value
+}
+
+const closeBattleLog = () => {
+  isBattleLogOpen.value = false
+}
+
+const handleBattlePageKeydown = (event) => {
+  if (event.key !== 'Escape') return
+
+  closeCommandPanels()
+
+  if (isBattleLogOpen.value) {
+    isBattleLogOpen.value = false
+  }
+}
+
+const enemySpriteSrc = computed(() => {
+  if (enemyName.value === '迪莫') {
+    return new URL('../assets/photo/t01ad4c8a8c1b78d5e9.jpg', import.meta.url).href
+  }
+  if (enemyName.value === '焰阳火灵') {
+    return new URL('../assets/photo/78714861ed8311a9d5af0982af3bf12196230622.jpg', import.meta.url).href
+  }
+  if (enemyName.value === '惊涛水灵') {
+    return new URL('../assets/photo/7acb0a46f21fbe096b63310c0e2a1b338744ebf807da.png', import.meta.url).href
+  }
+  if (enemyName.value === '魔草巫灵') {
+    return new URL('../assets/photo/ac6eddc451da81cb39db2c96742dc7160924ab189b1f.png', import.meta.url).href
+  }
+  if ((enemyName.value || '').includes('训练人偶') && enemyElementType.value === 1) {
+    return new URL('../assets/photo/火-训练人偶.png', import.meta.url).href
+  }
+  if ((enemyName.value || '').includes('训练人偶') && enemyElementType.value === 2) {
+    return new URL('../assets/photo/水-训练人偶.png', import.meta.url).href
+  }
+  if ((enemyName.value || '').includes('训练人偶') && enemyElementType.value === 3) {
+    return new URL('../assets/photo/草-训练人偶.png', import.meta.url).href
+  }
+  return new URL('../assets/hero.png', import.meta.url).href
+})
+
+const enemySpriteAlt = computed(() => enemyName.value || '敌人')
 
 // 计算HP百分比
 const enemyHpPercentage = computed(() => {
@@ -427,6 +590,20 @@ const getElementType = (elementType) => {
       return '光系'
     default:
       return '未知'
+  }
+}
+
+// 根据elementType获取CSS颜色类名
+const getElementColorClass = (elementType) => {
+  switch (elementType) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
   }
 }
 
@@ -1698,6 +1875,7 @@ const attack = async () => {
 }
 
 const useSkill = () => {
+  closeCommandPanels()
   showSkills.value = true
 }
 
@@ -2607,6 +2785,7 @@ const loadBattleElves = async () => {
 
 // 打开精灵切换弹窗
 const switchElf = async () => {
+  closeCommandPanels()
   await loadBattleElves()
   showSwitchElf.value = true
 }
@@ -2614,6 +2793,12 @@ const switchElf = async () => {
 // 关闭精灵切换弹窗
 const closeSwitchElf = () => {
   showSwitchElf.value = false
+}
+
+const openPotionsPanel = async () => {
+  closeCommandPanels()
+  await loadPotions()
+  showPotions.value = true
 }
 
 // 显示精灵死亡切换弹窗
@@ -3017,6 +3202,8 @@ onMounted(async () => {
   currentBattleType = route.query.type || ''
   console.log('[DEBUG] onMounted - currentBattleType:', currentBattleType)
   
+  window.addEventListener('keydown', handleBattlePageKeydown)
+
   // 创建网络管理器实例并初始化
   networkManager = new NetworkManager()
   networkManager.init()
@@ -3031,6 +3218,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleBattlePageKeydown)
+
   // 清除倒计时
   if (countdownTimer.value) {
     clearInterval(countdownTimer.value)
@@ -3284,108 +3473,248 @@ h1 {
   line-height: 1.4;
 }
 
-/* 战斗场景 */
+/* 战斗场景 HUD化重构 */
 .battle-field {
+  position: relative;
+  width: 100%;
+  min-height: 50vh;
+  margin-bottom: 20px;
+  background: transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* HUD面板定位 */
+.hud {
+  position: absolute;
+  top: 10px;
+  width: 320px;
+  z-index: 10;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.85);
+  border: 2px solid #555;
+  color: white;
+  padding: 10px 15px;
+  backdrop-filter: blur(5px);
+}
+.player-hud {
+  left: 10px;
+  border-color: #4caf50;
+  border-left-width: 6px;
+}
+.enemy-hud {
+  right: 10px;
+  border-color: #f44336;
+  border-right-width: 6px;
+}
+.empty-hud {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  border-color: #9e9e9e;
+  height: 80px;
+}
+
+/* 内部面板样式 */
+.elf-info-box .info-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 10px;
+  align-items: baseline;
+  margin-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 5px;
+}
+.elf-info-box h4 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+}
+.elf-info-box .level {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #ffca28;
+}
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.1);
+  margin-bottom: 10px;
 }
 
-.enemy-section, .player-section {
+/* 状态条 */
+.bars .bar-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.bar-bg {
   flex: 1;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+.bar-fill {
+  height: 100%;
+  transition: width 0.3s ease-out;
+}
+.hp-fill {
+  background: linear-gradient(90deg, #e53935, #ef5350);
+}
+.mp-fill {
+  background: linear-gradient(90deg, #1e88e5, #42a5f5);
+}
+.bar-text {
+  min-width: 60px;
+  text-align: right;
+  font-family: monospace;
+  font-weight: bold;
+}
+
+/* 战斗主舞台 */
+.battle-stage {
+  flex: 1;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  padding-bottom: 40px;
+  margin-top: 100px; /* Leave space for HUD */
+  position: relative;
+}
+
+/* 精灵立绘去除圆形束缚 */
+.sprite-wrapper {
+  position: relative;
   text-align: center;
+  transition: transform 0.3s ease;
+  z-index: 5;
+}
+.sprite-img {
+  max-width: 200px;
+  max-height: 250px;
+  object-fit: contain;
+  filter: drop-shadow(0 15px 15px rgba(0,0,0,0.4));
+  transition: filter 0.3s ease;
+}
+/* 人偶大小稍微调小一点 */
+.mannequin-img {
+  max-width: 150px;
+  max-height: 180px;
 }
 
-.elf-card {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 20px;
-  margin: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+/* 技能名称浮动 */
+.skill-name-float {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ff9800, #ff5722);
+  color: white;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 10px rgba(255, 87, 34, 0.5);
+  animation: floatUpFade 1.2s forwards;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
-.elf-image {
-  margin-bottom: 15px;
+@keyframes floatUpFade {
+  0% { opacity: 0; top: -10px; transform: translateX(-50%) scale(0.8); }
+  20% { opacity: 1; top: -40px; transform: translateX(-50%) scale(1.1); }
+  80% { opacity: 1; top: -60px; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; top: -80px; transform: translateX(-50%) scale(0.9); }
 }
 
-.elf-image img {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
+/* 粒子特出容器(例如火球) */
+.particle-track {
+  position: absolute;
+  bottom: 80px;
+  left: 15%;
+  right: 15%;
+  height: 50px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.particle {
+  position: absolute;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle, #fff 10%, #ffeb3b 40%, #ff5722 80%);
   border-radius: 50%;
-  border: 3px solid #ff8c00;
+  box-shadow: 0 0 20px 10px rgba(255, 87, 34, 0.6);
+  opacity: 0;
 }
 
-.enemy-elf {
-  border-color: #f44336;
-  transition: all 0.3s ease;
+.particle.move-right {
+  animation: shootRight 0.8s ease-in forwards;
 }
 
-.player-elf {
-  border-color: #4caf50;
-  transition: all 0.3s ease;
+.particle.move-left {
+  right: 0;
+  animation: shootLeft 0.8s ease-in forwards;
 }
 
-.elf-card.attacking {
-  border-color: #ff9800 !important;
-  box-shadow: 0 0 20px rgba(255, 152, 0, 0.6);
+@keyframes shootRight {
+  0% { left: 0%; opacity: 0; transform: scale(0.5); }
+  10% { left: 10%; opacity: 1; transform: scale(1); }
+  90% { left: 90%; opacity: 1; transform: scale(1.2); }
+  100% { left: 100%; opacity: 0; transform: scale(2); }
+}
+
+@keyframes shootLeft {
+  0% { right: 0%; opacity: 0; transform: scale(0.5); }
+  10% { right: 10%; opacity: 1; transform: scale(1); }
+  90% { right: 90%; opacity: 1; transform: scale(1.2); }
+  100% { right: 100%; opacity: 0; transform: scale(2); }
+}
+
+/* 攻击动画红白闪烁 (Flash Red/White) */
+.sprite-wrapper.attacking .sprite-img {
   animation: attackFlash 1s ease-in-out;
 }
 
 @keyframes attackFlash {
-  0% { box-shadow: 0 0 0 rgba(255, 152, 0, 0); }
-  50% { box-shadow: 0 0 30px rgba(255, 152, 0, 0.8); }
-  100% { box-shadow: 0 0 0 rgba(255, 152, 0, 0); }
+  0% { filter: drop-shadow(0 15px 15px rgba(0,0,0,0.4)) brightness(1); }
+  20% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)) brightness(1.5); }
+  40% { filter: drop-shadow(0 0 20px rgba(255, 0, 0, 0.8)) brightness(0.8) sepia(1) hue-rotate(-50deg) saturate(5); }
+  60% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)) brightness(1.5); }
+  80% { filter: drop-shadow(0 0 20px rgba(255, 0, 0, 0.8)) brightness(0.8) sepia(1) hue-rotate(-50deg) saturate(5); }
+  100% { filter: drop-shadow(0 15px 15px rgba(0,0,0,0.4)) brightness(1); }
 }
 
-.elf-card.attacking .elf-image img {
-  animation: impactEffect 1s ease-in-out;
+/* 受击击退动画 (Knockback Effect) */
+.sprite-wrapper.hurt {
+  animation: knockbackEffect 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-@keyframes impactEffect {
-  0% { transform: scale(1); }
-  25% { transform: scale(1.2) rotate(5deg); }
-  50% { transform: scale(1.1) rotate(-5deg); }
-  75% { transform: scale(1.2) rotate(3deg); }
-  100% { transform: scale(1) rotate(0); }
-}
-
-.elf-info h4 {
-  margin-top: 0;
-  color: #333;
-}
-
-.elf-info p {
-  margin: 5px 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.skill-name {
-  margin-top: 10px;
-  padding: 5px 10px;
-  background: rgba(255, 152, 0, 0.2);
-  color: #ff9800;
-  border-radius: 15px;
-  font-weight: bold;
-  text-align: center;
-  animation: skillNameFade 1s ease-in-out;
-}
-
-@keyframes skillNameFade {
-  0% { opacity: 0; transform: translateY(10px); }
-  50% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-10px); }
+@keyframes knockbackEffect {
+  0% { transform: translateX(0); filter: brightness(1); }
+  20% { transform: translateX(-30px) rotate(-5deg); filter: brightness(2) contrast(2); } /* Assuming player hit, we will use general shake instead since we don't know side */
+  40% { transform: translateX(20px) rotate(3deg); filter: brightness(0.5) sepia(1) hue-rotate(-50deg) saturate(5); }
+  60% { transform: translateX(-10px) rotate(-2deg); }
+  80% { transform: translateX(5px) rotate(1deg); }
+  100% { transform: translateX(0); filter: brightness(1); }
 }
 
 .hp-bar {
   width: 100%;
   height: 10px;
-  background: #e0e0e0;
+  background: var(--color-neutral-300);
   border-radius: 5px;
   overflow: hidden;
   margin: 10px 0;
@@ -3393,64 +3722,106 @@ h1 {
 
 .hp-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--color-success);
+  transition: width 0.5s ease;
+}
+
+.mp-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--color-neutral-300);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.mp-fill {
+  height: 100%;
+  background: var(--color-stat-mp);
   transition: width 0.5s ease;
 }
 
 /* 战斗操作 */
 .battle-actions {
-  margin-bottom: 30px;
-  padding: 20px;
-  background: rgba(245, 245, 245, 0.8);
-  border-radius: 10px;
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  margin-top: auto;
+  padding: 15px 20px;
+  background: rgba(20, 20, 20, 0.9);
+  border-radius: 15px 15px 0 0;
+  border-top: 3px solid #ff8c00;
+  box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
+  z-index: 100;
+}
+
+.battle-actions h3 {
+  color: #fff;
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
 }
 
 .action-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin: 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
 }
 
 .action-btn {
-  padding: 15px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 20px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 30px;
+  font-size: 1.05rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .attack-btn {
-  background: #ff5722;
+  background: linear-gradient(135deg, #d32f2f, #f44336);
   color: white;
+  box-shadow: 0 4px 10px rgba(244, 67, 54, 0.4);
 }
 
 .skill-btn {
-  background: #2196f3;
+  background: linear-gradient(135deg, #1976d2, #2196f3);
   color: white;
+  box-shadow: 0 4px 10px rgba(33, 150, 243, 0.4);
 }
 
 .switch-btn {
-  background: #ffeb3b;
+  background: linear-gradient(135deg, #fbc02d, #ffeb3b);
   color: #333;
+  box-shadow: 0 4px 10px rgba(255, 235, 59, 0.4);
 }
 
 .flee-btn {
-  background: #9e9e9e;
+  background: linear-gradient(135deg, #757575, #9e9e9e);
   color: white;
+  box-shadow: 0 4px 10px rgba(158, 158, 158, 0.4);
 }
 
 .potion-btn {
-  background: #4caf50;
+  background: linear-gradient(135deg, #388e3c, #4caf50);
   color: white;
-  grid-column: span 2;
+  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.4);
 }
 
-.action-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+  filter: brightness(1.1);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(1);
 }
 
 .skills-section {
@@ -3479,6 +3850,37 @@ h1 {
 
 .skill-btn:hover {
   background: #bbdefb;
+}
+
+/* 技能元素类型颜色 */
+.skill-btn.element-fire {
+  background: var(--color-fire-bg);
+  border-color: var(--color-fire);
+  color: var(--color-fire-text);
+}
+
+.skill-btn.element-fire:hover {
+  background: oklch(0.85 0.08 30);
+}
+
+.skill-btn.element-water {
+  background: var(--color-water-bg);
+  border-color: var(--color-water);
+  color: var(--color-water-text);
+}
+
+.skill-btn.element-water:hover {
+  background: oklch(0.85 0.06 240);
+}
+
+.skill-btn.element-grass {
+  background: var(--color-grass-bg);
+  border-color: var(--color-grass);
+  color: var(--color-grass-text);
+}
+
+.skill-btn.element-grass:hover {
+  background: oklch(0.85 0.06 150);
 }
 
 /* 战斗日志 */
@@ -3690,7 +4092,7 @@ h1 {
 }
 
 .elf-death-dialog .confirm-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-light) 100%);
   color: white;
   border: none;
   padding: 12px 40px;
@@ -3699,12 +4101,12 @@ h1 {
   font-size: 16px;
   font-weight: bold;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 15px oklch(0.65 0.18 50 / 0.4);
 }
 
 .elf-death-dialog .confirm-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 20px oklch(0.65 0.18 50 / 0.6);
 }
 
 .potion-list {
@@ -4063,5 +4465,1095 @@ h1 {
   60% { transform: translateX(-5px); }
   80% { transform: translateX(5px); }
   100% { transform: translateX(0); }
+}
+
+/* Game-style battle scene overrides */
+.home-container {
+  min-height: 100vh;
+  padding: 0 20px 20px;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top, rgba(255, 153, 51, 0.14), transparent 28%),
+    linear-gradient(180deg, #05070d 0%, #09111f 32%, #101a29 100%);
+  color: #f8f2e9;
+}
+
+.battle-container {
+  max-width: 1400px;
+  margin: 10px auto 0;
+  min-height: calc(100vh - 108px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.battle-status-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  width: 100%;
+}
+
+.battle-status-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.battle-status-side--left {
+  justify-content: flex-start;
+}
+
+.battle-status-side--right {
+  justify-content: flex-end;
+}
+
+.battle-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 112, 0.16);
+  background: rgba(8, 12, 22, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: rgba(255, 238, 214, 0.84);
+}
+
+.battle-status-chip--stage {
+  color: rgba(255, 220, 162, 0.9);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.battle-status-chip--countdown {
+  gap: 8px;
+}
+
+.battle-status-chip__label {
+  color: rgba(255, 222, 184, 0.72);
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.battle-status-chip__value {
+  color: #ffd07b;
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-shadow: 0 0 18px rgba(255, 191, 80, 0.3);
+}
+
+.battle-status-chip__unit {
+  color: rgba(255, 231, 196, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.round-display {
+  margin: 0;
+  justify-content: flex-start;
+  padding: 0;
+  max-width: none;
+  border: none;
+  background: none;
+}
+
+.round-text {
+  margin-right: 12px;
+  color: rgba(255, 222, 184, 0.72);
+  letter-spacing: 0.2em;
+  font-size: 0.82rem;
+}
+
+.round-number {
+  color: #ffd07b;
+  font-size: 2rem;
+  text-shadow: 0 0 20px rgba(255, 191, 80, 0.4);
+}
+
+.enemy-dialog {
+  max-width: min(760px, 100%);
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 181, 77, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(12, 15, 27, 0.88), rgba(38, 14, 18, 0.78));
+  box-shadow: 0 12px 24px rgba(5, 7, 13, 0.26);
+  animation: dialogReveal 260ms ease-out;
+}
+
+.dialog-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.enemy-name {
+  color: #ffb299;
+}
+
+.dialog-text {
+  color: rgba(255, 244, 224, 0.84);
+}
+
+.battle-shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+}
+
+.battle-field {
+  position: relative;
+  height: clamp(380px, calc(100vh - 300px), 560px);
+  min-height: 380px;
+  border: 1px solid rgba(255, 194, 107, 0.16);
+  border-radius: 32px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 196, 127, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(8, 12, 22, 0.98) 0%, rgba(13, 21, 36, 0.96) 100%);
+  box-shadow:
+    0 24px 50px rgba(4, 8, 15, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.battle-field.arena-fire {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 133, 61, 0.28), transparent 28%),
+    linear-gradient(180deg, rgba(255, 120, 34, 0.08), rgba(20, 16, 19, 0.96));
+}
+
+.battle-field.arena-water {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(89, 182, 255, 0.28), transparent 28%),
+    linear-gradient(180deg, rgba(64, 148, 255, 0.08), rgba(11, 18, 34, 0.96));
+}
+
+.battle-field.arena-grass {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(96, 212, 128, 0.24), transparent 28%),
+    linear-gradient(180deg, rgba(76, 175, 80, 0.08), rgba(12, 21, 20, 0.96));
+}
+
+.battle-field__sky,
+.battle-field__mist,
+.battle-field__spotlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.battle-field__sky {
+  background:
+    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.08), transparent 20%),
+    radial-gradient(circle at 78% 14%, rgba(255, 255, 255, 0.08), transparent 18%);
+}
+
+.battle-field__mist {
+  inset: auto 5% 12%;
+  height: 180px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12), transparent 70%);
+  filter: blur(24px);
+  opacity: 0.55;
+}
+
+.battle-field__spotlight {
+  width: 38%;
+  height: 72%;
+  top: auto;
+  bottom: 14%;
+  filter: blur(8px);
+  opacity: 0.38;
+}
+
+.battle-field__spotlight--left {
+  left: 2%;
+  background: radial-gradient(circle at 50% 50%, rgba(88, 160, 255, 0.26), transparent 65%);
+}
+
+.battle-field__spotlight--right {
+  right: 2%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 115, 77, 0.26), transparent 65%);
+}
+
+.hud {
+  top: 10px;
+  width: min(270px, calc(50% - 20px));
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 210, 145, 0.16);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.9), rgba(12, 15, 24, 0.84));
+  box-shadow: 0 10px 18px rgba(4, 8, 14, 0.24);
+}
+
+.player-hud {
+  left: 10px;
+  border-left: 3px solid rgba(99, 202, 122, 0.92);
+}
+
+.enemy-hud {
+  right: 10px;
+  border-right: 3px solid rgba(255, 118, 82, 0.92);
+}
+
+.hud-caption {
+  display: block;
+  margin-bottom: 1px;
+  color: rgba(255, 225, 179, 0.68);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.elf-info-box .info-header {
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.elf-info-box h4 {
+  font-size: 0.96rem;
+}
+
+.elf-info-box .level {
+  font-size: 0.78rem;
+}
+
+.type-badge {
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffeccc;
+}
+
+.bars {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bars .bar-container {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.bar-label {
+  color: rgba(255, 237, 207, 0.72);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.bar-bg {
+  margin-right: 0;
+  height: 9px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.bar-fill {
+  border-radius: 999px;
+}
+
+.hp-fill {
+  background: linear-gradient(90deg, #f44336, #ff8a65);
+}
+
+.mp-fill {
+  background: linear-gradient(90deg, #4d8cff, #7cc9ff);
+}
+
+.bar-text {
+  min-width: 64px;
+  color: rgba(255, 244, 224, 0.88);
+  font-size: 0.7rem;
+}
+
+.battle-stage {
+  margin-top: 0;
+  position: relative;
+  height: 100%;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(56px, 15vw, 180px);
+  min-height: 0;
+  padding: 124px 6% 96px;
+}
+
+.battle-stage__ground {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  width: min(72%, 860px);
+  height: 110px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(255, 234, 193, 0.22), rgba(77, 59, 47, 0.1) 38%, rgba(5, 7, 13, 0) 72%);
+  box-shadow: 0 0 40px rgba(255, 176, 78, 0.12);
+}
+
+.battle-stage__label {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(12, 15, 24, 0.7);
+  border: 1px solid rgba(255, 205, 125, 0.18);
+  color: rgba(255, 237, 207, 0.8);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.sprite-wrapper {
+  z-index: 2;
+}
+
+.player-sprite,
+.enemy-sprite {
+  min-width: 220px;
+}
+
+.player-sprite {
+  transform-origin: center bottom;
+}
+
+.enemy-sprite {
+  transform-origin: center bottom;
+}
+
+.sprite-aura {
+  position: absolute;
+  inset: 12% auto auto 50%;
+  width: 70%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.sprite-aura--player {
+  background: radial-gradient(circle, rgba(107, 173, 255, 0.36), rgba(107, 173, 255, 0));
+}
+
+.sprite-aura--enemy {
+  background: radial-gradient(circle, rgba(255, 125, 89, 0.34), rgba(255, 125, 89, 0));
+}
+
+.sprite-img {
+  position: relative;
+  max-width: clamp(180px, 20vw, 260px);
+  max-height: clamp(230px, 32vh, 320px);
+  filter: drop-shadow(0 22px 24px rgba(0, 0, 0, 0.42));
+}
+
+.enemy-sprite .sprite-img {
+  transform: scaleX(-1);
+}
+
+.enemy-sprite.is-mannequin .sprite-img {
+  max-width: clamp(145px, 13vw, 190px);
+  max-height: clamp(180px, 24vh, 230px);
+}
+
+.skill-name-float {
+  top: -24px;
+  background: linear-gradient(135deg, rgba(255, 232, 180, 0.94), rgba(255, 131, 48, 0.98));
+  color: #3c1600;
+  box-shadow: 0 16px 30px rgba(255, 136, 56, 0.24);
+}
+
+.particle-track {
+  left: 16%;
+  right: 16%;
+  bottom: 154px;
+  height: 84px;
+  z-index: 5;
+}
+
+.particle-core,
+.particle {
+  position: absolute;
+  top: 50%;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.particle-core {
+  width: 52px;
+  height: 52px;
+  left: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.98), rgba(255, 210, 120, 0.96) 35%, rgba(255, 118, 44, 0.7) 70%, rgba(255, 118, 44, 0));
+  box-shadow: 0 0 28px rgba(255, 148, 51, 0.65);
+}
+
+.particle {
+  width: 22px;
+  height: 8px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 190, 120, 0));
+  opacity: 0.8;
+}
+
+.particle-track.move-right .particle-core {
+  animation: projectileMoveRight 0.82s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.particle-track.move-left .particle-core {
+  animation: projectileMoveLeft 0.82s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.particle-track.move-right .particle {
+  animation: projectileSparkRight 0.82s ease-out forwards;
+}
+
+.particle-track.move-left .particle {
+  animation: projectileSparkLeft 0.82s ease-out forwards;
+}
+
+.particle-1 { animation-delay: 0.02s; top: 20%; }
+.particle-2 { animation-delay: 0.08s; top: 34%; }
+.particle-3 { animation-delay: 0.14s; top: 50%; }
+.particle-4 { animation-delay: 0.2s; top: 62%; }
+.particle-5 { animation-delay: 0.26s; top: 76%; }
+.particle-6 { animation-delay: 0.32s; top: 44%; }
+
+.particle-track.projectile-fire .particle-core {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.98), rgba(255, 208, 102, 0.95) 30%, rgba(255, 94, 58, 0.76) 72%, rgba(255, 94, 58, 0));
+  box-shadow: 0 0 30px rgba(255, 112, 70, 0.7);
+}
+
+.particle-track.projectile-water .particle-core {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.98), rgba(167, 232, 255, 0.95) 30%, rgba(68, 154, 255, 0.74) 72%, rgba(68, 154, 255, 0));
+  box-shadow: 0 0 30px rgba(87, 171, 255, 0.68);
+}
+
+.particle-track.projectile-grass .particle-core {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.98), rgba(220, 255, 193, 0.96) 30%, rgba(98, 206, 109, 0.74) 72%, rgba(98, 206, 109, 0));
+  box-shadow: 0 0 30px rgba(88, 198, 112, 0.7);
+}
+
+.particle-track.projectile-arcane .particle-core {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.98), rgba(219, 215, 255, 0.96) 30%, rgba(152, 120, 255, 0.72) 72%, rgba(152, 120, 255, 0));
+  box-shadow: 0 0 30px rgba(152, 120, 255, 0.66);
+}
+
+.impact-flash {
+  position: absolute;
+  inset: 20% 10% 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  mix-blend-mode: screen;
+  animation: impactFlash 320ms ease-out;
+  pointer-events: none;
+}
+
+.sprite-wrapper.attacking .sprite-img {
+  animation: attackFlash 0.96s ease-in-out;
+}
+
+.player-sprite.hurt {
+  animation: playerKnockback 0.46s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.enemy-sprite.hurt {
+  animation: enemyKnockback 0.46s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.battle-command-deck {
+  position: relative;
+}
+
+.skills-section,
+.command-panel,
+.battle-actions,
+.battle-log-drawer {
+  border-radius: 26px;
+  border: 1px solid rgba(255, 191, 112, 0.14);
+  background: rgba(11, 15, 24, 0.86);
+  box-shadow: 0 16px 28px rgba(4, 8, 15, 0.24);
+}
+
+.skills-section,
+.command-panel,
+.battle-log-drawer {
+  padding: 18px 20px;
+}
+
+.skills-section__header,
+.battle-log__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.skills-section__header h4,
+.battle-log__header h3 {
+  margin: 0;
+  color: #fff2d6;
+}
+
+.skills-close-btn,
+.drawer-close-btn {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 197, 112, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 242, 214, 0.84);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.skills-close-btn:hover,
+.drawer-close-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.skills-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.skill-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 16px;
+  font-weight: 700;
+}
+
+.skill-btn__name {
+  font-size: 1rem;
+}
+
+.skill-btn__cost {
+  color: inherit;
+  opacity: 0.78;
+  font-size: 0.82rem;
+}
+
+.skills-section {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  max-height: min(260px, 36vh);
+  overflow-y: auto;
+}
+
+.command-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  max-height: min(320px, 46vh);
+  overflow-y: auto;
+}
+
+.command-panel__empty {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  color: rgba(247, 237, 220, 0.72);
+  text-align: center;
+}
+
+.inline-potion-list {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.inline-potion-list .potion-item {
+  border: 1px solid rgba(255, 194, 107, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 14px;
+}
+
+.inline-potion-list .potion-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 18px rgba(4, 8, 15, 0.18);
+}
+
+.inline-potion-list .potion-info h4 {
+  color: #fff0d5;
+}
+
+.inline-potion-list .potion-info p {
+  color: rgba(247, 237, 220, 0.72);
+}
+
+.inline-potion-list .potion-count {
+  color: #9ee184;
+}
+
+.inline-battle-elves-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.inline-battle-elves-list .elf-card.horizontal {
+  height: 100%;
+  min-height: 108px;
+  border-color: rgba(255, 194, 107, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.inline-battle-elves-list .elf-card.horizontal:hover {
+  box-shadow: 0 10px 20px rgba(4, 8, 15, 0.16);
+}
+
+.inline-battle-elves-list .elf-card.horizontal.current {
+  border-color: rgba(99, 202, 122, 0.44);
+  background: rgba(99, 202, 122, 0.08);
+}
+
+.inline-battle-elves-list .elf-card.horizontal .elf-info h4,
+.inline-battle-elves-list .elf-card.horizontal .elf-stats p {
+  color: rgba(247, 237, 220, 0.82);
+}
+
+.inline-battle-elves-list .elf-card.horizontal .elf-stats {
+  gap: 0.7rem;
+}
+
+.battle-actions {
+  position: relative;
+  bottom: auto;
+  padding: 14px 16px 16px;
+  border-top: none;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(24, 30, 45, 0.96), rgba(10, 13, 21, 0.98)),
+    rgba(11, 15, 24, 0.92);
+  z-index: 20;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.action-btn {
+  min-width: 0;
+  min-height: 52px;
+  border-radius: 16px;
+  text-transform: none;
+  letter-spacing: 0.06em;
+  font-size: 0.94rem;
+}
+
+.skill-action-btn {
+  background: linear-gradient(135deg, #2b74ff, #38a9ff);
+  color: white;
+  box-shadow: 0 10px 24px rgba(56, 169, 255, 0.24);
+}
+
+.battle-log-toggle {
+  flex-shrink: 0;
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 196, 112, 0.2);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(26, 31, 48, 0.94), rgba(11, 14, 22, 0.96));
+  color: #fff0d2;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 10px 20px rgba(4, 8, 15, 0.28);
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.battle-log-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(4, 8, 15, 0.38);
+}
+
+.battle-log-toggle.is-open {
+  background: linear-gradient(180deg, rgba(255, 145, 61, 0.94), rgba(201, 77, 28, 0.94));
+}
+
+.battle-log-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: flex-end;
+  padding: 88px 20px 20px;
+  background: rgba(4, 7, 13, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.battle-log-drawer {
+  width: min(380px, calc(100vw - 28px));
+  height: min(calc(100vh - 108px), 780px);
+  display: flex;
+  flex-direction: column;
+}
+
+.log-content {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 196, 112, 0.1);
+  background: rgba(6, 9, 15, 0.76);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.round-logs {
+  display: grid;
+  gap: 6px;
+}
+
+.round-section {
+  border-left-color: rgba(255, 177, 75, 0.72);
+}
+
+.round-header {
+  color: #ffcf82;
+}
+
+.log-entry {
+  margin-left: 12px;
+  color: rgba(248, 240, 226, 0.78);
+}
+
+.battle-result {
+  width: min(92vw, 700px);
+  border: 1px solid rgba(255, 198, 111, 0.24);
+  background: linear-gradient(180deg, rgba(18, 22, 34, 0.98), rgba(9, 12, 19, 0.98));
+  color: #fff4df;
+}
+
+.battle-result h2,
+.ai-summary h3 {
+  color: #ffd07b;
+}
+
+.ai-summary {
+  border-color: rgba(255, 198, 111, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.summary-content {
+  color: rgba(247, 239, 224, 0.82);
+}
+
+@keyframes dialogReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes projectileMoveRight {
+  0% {
+    left: 4%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.4);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    left: 92%;
+    opacity: 0;
+    transform: translateY(-50%) scale(1.24);
+  }
+}
+
+@keyframes projectileMoveLeft {
+  0% {
+    left: 92%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.4);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    left: 4%;
+    opacity: 0;
+    transform: translateY(-50%) scale(1.24);
+  }
+}
+
+@keyframes projectileSparkRight {
+  0% {
+    left: 8%;
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.4);
+  }
+  18% {
+    opacity: 0.95;
+  }
+  100% {
+    left: 86%;
+    opacity: 0;
+    transform: translateY(-50%) scaleX(1.6);
+  }
+}
+
+@keyframes projectileSparkLeft {
+  0% {
+    left: 86%;
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.4);
+  }
+  18% {
+    opacity: 0.95;
+  }
+  100% {
+    left: 8%;
+    opacity: 0;
+    transform: translateY(-50%) scaleX(1.6);
+  }
+}
+
+@keyframes playerKnockback {
+  0% { transform: translateX(0) scale(1); }
+  25% { transform: translateX(-24px) translateY(-8px) scale(0.98); }
+  50% { transform: translateX(10px) translateY(2px) scale(1.02); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes enemyKnockback {
+  0% { transform: translateX(0) scale(1); }
+  25% { transform: translateX(24px) translateY(-8px) scale(0.98); }
+  50% { transform: translateX(-10px) translateY(2px) scale(1.02); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes impactFlash {
+  0% { opacity: 0; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+.skill-panel-enter-active,
+.skill-panel-leave-active,
+.log-drawer-enter-active,
+.log-drawer-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.skill-panel-enter-from,
+.skill-panel-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.log-drawer-enter-from,
+.log-drawer-leave-to {
+  opacity: 0;
+}
+
+.log-drawer-enter-from .battle-log-drawer,
+.log-drawer-leave-to .battle-log-drawer {
+  transform: translateX(24px);
+}
+
+@media (max-width: 980px) {
+  .home-container {
+    padding: 0 14px 24px;
+  }
+
+  .battle-container {
+    min-height: auto;
+  }
+
+  .battle-field {
+    height: auto;
+    min-height: 700px;
+  }
+
+  .hud {
+    width: calc(100% - 36px);
+  }
+
+  .player-hud,
+  .enemy-hud {
+    left: 18px;
+    right: 18px;
+  }
+
+  .enemy-hud {
+    top: 136px;
+    border-right-width: 1px;
+    border-left: 4px solid rgba(255, 118, 82, 0.92);
+  }
+
+  .battle-stage {
+    min-height: 560px;
+    padding: 292px 6% 132px;
+  }
+
+  .player-sprite,
+  .enemy-sprite {
+    min-width: 0;
+  }
+
+  .action-buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .skills-section {
+    max-height: min(300px, 42vh);
+  }
+
+  .command-panel {
+    max-height: min(340px, 48vh);
+  }
+
+  .inline-battle-elves-list {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .battle-container {
+    margin-top: 12px;
+  }
+
+  .battle-field {
+    min-height: 760px;
+    border-radius: 24px;
+  }
+
+  .battle-stage {
+    min-height: 520px;
+    padding: 292px 8% 126px;
+  }
+
+  .sprite-img {
+    max-width: 170px;
+    max-height: 220px;
+  }
+
+  .battle-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-status-chip {
+    min-height: 38px;
+  }
+
+  .battle-status-side,
+  .battle-status-side--left,
+  .battle-status-side--right {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .battle-command-deck {
+    padding-bottom: 0;
+  }
+
+  .battle-actions {
+    padding: 16px;
+  }
+
+  .action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action-btn {
+    flex: unset;
+    width: 100%;
+    min-height: 54px;
+    font-size: 0.92rem;
+  }
+
+  .skills-section,
+  .command-panel,
+  .battle-log-layer {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .skills-section__header,
+  .battle-log__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .skills-section {
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+  }
+
+  .command-panel {
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+  }
+
+  .inline-battle-elves-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 82vw);
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .battle-log-toggle {
+    min-width: 104px;
+    min-height: 42px;
+    padding: 0 14px;
+    font-size: 0.82rem;
+  }
+
+  .battle-log-layer {
+    align-items: flex-end;
+    padding: 72px 10px 10px;
+  }
+
+  .battle-log-drawer {
+    width: 100%;
+    height: min(calc(100vh - 82px), 78vh);
+  }
 }
 </style>

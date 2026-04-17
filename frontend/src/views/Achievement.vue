@@ -1,26 +1,13 @@
 <template>
   <div class="achievement-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button class="nav-btn" @click="navigateTo('/')">首页</button>
-        <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-        <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-        <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-        <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-        <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-        <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-        <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-        <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-        <button class="nav-btn active" @click="navigateTo('/achievement')">成就</button>
-        <button class="nav-btn" @click="logout">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
     
     <!-- 主内容区 -->
     <div class="main-content">
-      <h2 class="page-title">成就系统</h2>
+      <div class="page-header">
+        <p class="section-eyebrow">ACHIEVEMENTS</p>
+        <h1>成就系统</h1>
+      </div>
       
       <!-- 成就列表 -->
       <div class="achievement-content">
@@ -75,6 +62,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { achievementApi } from '../api/achievement'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 const user = ref(null)
@@ -244,142 +232,129 @@ onMounted(async () => {
 /* 全局样式 */
 .achievement-container {
   min-height: 100vh;
-  background-image: url('https://a0ai.marscode.cn/api/ide/v1/text_to_image?prompt=colorful%20fantasy%20game%20background%20with%20magical%20elements%20and%20floating%20islands&image_size=landscape_16_9');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  font-family: 'Arial', sans-serif;
-}
-
-/* 导航栏 */
-.nav-bar {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ff6b00;
-  text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: transparent;
-  color: white;
-  border: 1px solid #ff6b00;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-  background: #ff6b00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
-}
-
-.nav-btn.active {
-  background: #ff6b00;
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
 /* 主内容区 */
 .main-content {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 2rem;
+  max-width: 1200px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.page-title {
-  color: #ff6b00;
+.page-header {
   text-align: center;
   margin-bottom: 2rem;
-  font-size: 2rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
 }
 
 /* 成就内容 */
 .achievement-content {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 107, 0, 0.3);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  border: none;
 }
 
-.loading {
+.loading, .no-data {
   text-align: center;
   padding: 3rem;
-  color: #666;
-  font-size: 1.2rem;
-}
-
-.no-data {
-  text-align: center;
-  padding: 3rem;
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 1.2rem;
 }
 
 .achievement-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  padding-bottom: 40px;
 }
 
 .achievement-card {
-  background: white;
-  border-radius: 15px;
+  position: relative;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.96), rgba(16, 9, 3, 0.96));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.4);
+  border-radius: 20px;
   padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  border: 2px solid rgba(255, 107, 0, 0.2);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  overflow: visible;
   display: flex;
-  gap: 1rem;
+  gap: 1.2rem;
+  align-items: center;
 }
 
 .achievement-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(255, 107, 0, 0.3);
+  box-shadow: 0 24px 40px rgba(255, 140, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 195, 112, 0.4);
 }
 
+/* 成就完成状态 - 金色荣誉 */
 .achievement-card.completed {
-  border-color: #4CAF50;
-  background: rgba(76, 175, 80, 0.05);
+  border-top-color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.4);
+  background: linear-gradient(180deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.96));
+  box-shadow: 0 16px 28px rgba(255, 215, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.achievement-card.completed:hover {
+  box-shadow: 0 24px 40px rgba(255, 215, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 215, 0, 0.6);
 }
 
 .achievement-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 0;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
   overflow: hidden;
-  border: 2px solid #ff6b00;
+  border: 2px solid rgba(255, 169, 79, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(255, 129, 35, 0.3);
+  position: relative;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.achievement-card.completed .achievement-icon {
+  border-color: #ffd700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
 }
 
 .achievement-icon img {
-  width: 60px;
-  height: 60px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -388,120 +363,124 @@ onMounted(async () => {
 }
 
 .achievement-info h3 {
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-size: 1.2rem;
+  color: #ff9c3a;
+  margin: 0 0 0.4rem 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(255, 140, 0, 0.2);
+}
+
+.achievement-card.completed .achievement-info h3 {
+  color: #ffd700;
+  text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
 }
 
 .achievement-description {
-  color: #666;
-  margin-bottom: 1rem;
+  color: rgba(247, 239, 224, 0.75);
+  margin: 0 0 1rem 0;
   font-size: 0.9rem;
   line-height: 1.4;
 }
 
 .achievement-progress {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 0.8rem;
 }
 
 .progress-bar {
   width: 100%;
-  height: 8px;
-  background: #e0e0e0;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ff6b00, #ff9e4f);
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
   border-radius: 4px;
-  transition: width 0.3s ease;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 8px rgba(255, 122, 26, 0.6);
 }
 
+/* 成就完成进度条 - 金色 */
 .achievement-card.completed .progress-fill {
-  background: linear-gradient(90deg, #4CAF50, #81C784);
+  background: linear-gradient(90deg, #fada5e, #ffd700);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
 }
 
 .progress-text {
   font-size: 0.8rem;
-  color: #666;
+  color: rgba(247, 239, 224, 0.6);
   font-weight: 600;
-}
-
-.claim-btn {
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.claim-btn:hover {
-  background: linear-gradient(135deg, #388E3C 0%, #66BB6A 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-}
-
-.claimed-text {
-  color: #4CAF50;
-  font-weight: 600;
-  font-size: 0.9rem;
+  align-self: flex-end;
+  letter-spacing: 0.05em;
 }
 
 .completed-text {
-  color: #4CAF50;
-  font-weight: 600;
+  color: #ffd700;
+  font-weight: 700;
   font-size: 0.9rem;
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  text-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
 }
 
 .uncompleted-text {
-  color: #ff6b00;
-  font-weight: 600;
+  color: #ff9c3a;
+  font-weight: 700;
   font-size: 0.9rem;
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 156, 58, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 156, 58, 0.2);
 }
 
 /* 成就完成弹窗 */
 .achievement-toast {
   position: fixed;
-  top: 20px;
+  top: 80px;
   right: 20px;
   z-index: 1000;
-  animation: slideIn 0.5s ease-out;
+  animation: slideInToast 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 .toast-content {
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-  color: white;
+  background: linear-gradient(135deg, rgba(35, 25, 5, 0.96), rgba(20, 15, 2, 0.98));
+  color: #fff4df;
   padding: 15px 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 215, 0, 0.2);
   display: flex;
   align-items: center;
   gap: 15px;
-  min-width: 200px;
-  max-width: 300px;
+  min-width: 250px;
+  max-width: 350px;
 }
 
 .toast-icon {
-  width: 50px;
-  height: 50px;
-  border: 2px solid white;
-  border-radius: 0;
+  width: 48px;
+  height: 48px;
+  border: 2px solid #ffd700;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
 }
 
 .toast-icon img {
-  width: 35px;
-  height: 35px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -510,23 +489,26 @@ onMounted(async () => {
 }
 
 .toast-text h4 {
-  margin: 0 0 5px 0;
-  font-size: 16px;
-  font-weight: bold;
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffd700;
+  text-shadow: 0 0 5px rgba(255, 215, 0, 0.4);
+  letter-spacing: 0.05em;
 }
 
 .toast-text p {
   margin: 0;
-  font-size: 14px;
-  opacity: 0.9;
+  font-size: 13px;
+  color: rgba(247, 239, 224, 0.8);
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
+@keyframes slideInToast {
+  0% {
+    transform: translateX(120%);
     opacity: 0;
   }
-  to {
+  100% {
     transform: translateX(0);
     opacity: 1;
   }
@@ -535,16 +517,16 @@ onMounted(async () => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .main-content {
+    padding: 0 15px;
+  }
+
+  .main-content {
     padding: 1rem;
+    margin-top: 10px;
   }
   
-  .nav-menu {
-    gap: 0.5rem;
-  }
-  
-  .nav-btn {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
+  .page-header h1 {
+    font-size: 2.2rem;
   }
   
   .achievement-grid {
@@ -552,16 +534,12 @@ onMounted(async () => {
   }
   
   .achievement-card {
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .achievement-icon {
-    margin: 0 auto;
+    flex-direction: row;
+    align-items: flex-start;
   }
   
   .achievement-toast {
-    top: 10px;
+    top: 70px;
     right: 10px;
     left: 10px;
   }

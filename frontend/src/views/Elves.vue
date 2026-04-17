@@ -1,52 +1,79 @@
 <template>
   <div class="home-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-          <button class="nav-btn" @click="navigateTo('/')">首页</button>
-          <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-          <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-          <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-          <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-          <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-          <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-          <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
-          <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-          <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-          <button class="nav-btn" @click="logout">退出</button>
-        </div>
-    </nav>
-    
+    <GameTopNav />
+
     <!-- 主内容区 -->
     <div class="main-content">
-      <h1>我的精灵</h1>
+      <div class="page-header">
+        <p class="section-eyebrow">ACTIVE ROSTER</p>
+        <h1>我的精灵</h1>
+      </div>
+
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else class="elves-list">
-        <div v-for="elf in elves" :key="elf.id" class="elf-card">
-          <img :src="getElfImage(elf.elfId)" :alt="elf.elfId" class="elf-image">
-          <h3>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h3>
-          <p>等级: {{ elf.level }}</p>
-          <p>系别: {{ getElementType(elf.elfId) }}</p>
-          <p v-if="elf.level < 10">经验: {{ elf.exp }}/{{ elf.expNeed }}</p>
-          <p v-else>状态: 已满级</p>
-          <p>HP: {{ elf.maxHp }}</p>
-          <p>MP: {{ elf.maxMp }}</p>
-          <p>攻击: {{ elf.attack }}</p>
-          <p>防御: {{ elf.defense }}</p>
-          <p>速度: {{ elf.speed }}</p>
-          <p v-if="elf.fightOrder > 0" class="active-tag">出战：{{ elf.fightOrder }}号位</p>
-          <div class="battle-order-selector">
-            <select v-model="selectedOrder[elf.id]" class="order-select">
-              <option value="0">不出战</option>
-              <option value="1">1号位</option>
-              <option value="2">2号位</option>
-              <option value="3">3号位</option>
-            </select>
-            <button @click="setActiveElf(elf.id, selectedOrder[elf.id])">设置</button>
+        <div v-for="elf in elves" :key="elf.id" class="elf-card" :class="getElementColorClass(elf.elfId)">
+          <div class="elf-card__media">
+            <div class="elf-card__halo"></div>
+            <img :src="getElfImage(elf.elfId)" :alt="elf.elfId" class="elf-image">
           </div>
-          <button @click="viewElfDetail(elf.id)" class="detail-btn">查看详情</button>
+          <div class="elf-info">
+            <h3>
+              {{ elf.elfName || `精灵 ${elf.elfId}` }}
+              <span class="element-badge" :class="getElementColorClass(elf.elfId)">{{ getElementType(elf.elfId) }}</span>
+            </h3>
+            <div class="elf-meta">
+              <span class="elf-meta__item">等级 {{ elf.level }}</span>
+              <span v-if="elf.fightOrder > 0" class="active-tag">出战：{{ elf.fightOrder }}号位</span>
+              <span v-else class="standby-tag">未出战</span>
+            </div>
+            <div class="elf-stats">
+              <div class="stat-row">
+                <div class="stat-item">
+                  <span class="stat-label">HP</span>
+                  <span class="stat-value stat-hp">{{ elf.maxHp }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">MP</span>
+                  <span class="stat-value stat-mp">{{ elf.maxMp }}</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <div class="stat-item">
+                  <span class="stat-label">攻击</span>
+                  <span class="stat-value">{{ elf.attack }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">防御</span>
+                  <span class="stat-value">{{ elf.defense }}</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <div class="stat-item">
+                  <span class="stat-label">速度</span>
+                  <span class="stat-value">{{ elf.speed }}</span>
+                </div>
+                <div class="stat-item">
+                  <span v-if="elf.level < 10" class="stat-label">经验</span>
+                  <span v-else class="stat-label">状态</span>
+                  <span v-if="elf.level < 10" class="stat-value">{{ elf.exp }}/{{ elf.expNeed }}</span>
+                  <span v-else class="stat-value stat-max">已满级</span>
+                </div>
+              </div>
+            </div>
+            <div class="elf-actions-wrapper">
+              <div class="battle-order-selector">
+                <select v-model="selectedOrder[elf.id]" class="order-select">
+                  <option value="0">不出战</option>
+                  <option value="1">1号位</option>
+                  <option value="2">2号位</option>
+                  <option value="3">3号位</option>
+                </select>
+                <button @click="setActiveElf(elf.id, selectedOrder[elf.id])" class="order-btn">设置</button>
+              </div>
+              <button @click="viewElfDetail(elf.id)" class="detail-btn" :class="getElementColorClass(elf.elfId)">查看详情</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -57,6 +84,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { userElfApi } from '../api/userElf'
+import GameTopNav from '../components/GameTopNav.vue'
 
 // 根据精灵ID获取图片路径
 const getElfImage = (elfId) => {
@@ -83,6 +111,20 @@ const getElementType = (elfId) => {
       return '草系'
     default:
       return '未知'
+  }
+}
+
+// 根据精灵ID获取元素颜色CSS类名
+const getElementColorClass = (elfId) => {
+  switch (elfId) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
   }
 }
 
@@ -128,7 +170,7 @@ const setActiveElf = async (elfId, fightOrder) => {
     const user = JSON.parse(localStorage.getItem('user'))
     // 确保fightOrder是数字类型
     const order = parseInt(fightOrder)
-    
+
     // 出战顺序校验：1-3号位不能重复
     if (order > 0) {
       const existingElf = elves.value.find(elf => elf.fightOrder === order && elf.id !== elfId)
@@ -137,7 +179,7 @@ const setActiveElf = async (elfId, fightOrder) => {
         return
       }
     }
-    
+
     const response = await userElfApi.setActive(elfId, order)
     if (response.code === 200) {
       // 重新获取精灵列表
@@ -169,256 +211,418 @@ onMounted(() => {
 /* 全局样式 */
 .home-container {
   min-height: 100vh;
-  background-image: url('https://a0ai.marscode.cn/api/ide/v1/text_to_image?prompt=colorful%20fantasy%20game%20background%20with%20magical%20elements%20and%20floating%20islands&image_size=landscape_16_9');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  font-family: 'Arial', sans-serif;
-}
-
-/* 导航栏 */
-.nav-bar {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ff6b00;
-  text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: transparent;
-  color: white;
-  border: 1px solid #ff6b00;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-  background: #ff6b00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
 /* 主内容区 */
 .main-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  max-width: 1400px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-h1 {
+.page-header {
   text-align: center;
-  margin-bottom: 2rem;
-  color: #4CAF50;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-  font-size: 2rem;
+  margin-bottom: 0.5rem;
 }
 
-.loading, .error {
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.loading,
+.error {
   text-align: center;
-  padding: 3rem;
-  font-size: 1.2rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin: 2rem auto;
-  max-width: 500px;
+  padding: 48px 24px;
+  border-radius: 28px;
+  border: 1px dashed rgba(255, 169, 79, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 28px rgba(4, 8, 15, 0.24);
+  font-size: 1.05rem;
 }
 
 .error {
-  color: #f44336;
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  color: #fc8181;
+  border-color: rgba(252, 129, 129, 0.3);
 }
 
 .loading {
-  color: #666;
-  border: 1px solid rgba(102, 102, 102, 0.3);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* 精灵列表 */
 .elves-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  padding-bottom: 40px;
 }
 
 .elf-card {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 0;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.96), rgba(16, 9, 3, 0.96));
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
   position: relative;
-  text-align: center;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(76, 175, 80, 0.3);
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.elf-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 218, 157, 0.3), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .elf-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(76, 175, 80, 0.3);
+  border-color: rgba(255, 194, 107, 0.4);
+  box-shadow: 0 24px 40px rgba(255, 140, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.elf-image {
-  width: 120px;
-  height: 120px;
+/* 元素边框 */
+.elf-card.element-fire {
+  border-top: 3px solid rgba(252, 129, 129, 0.8);
+}
+.elf-card.element-fire:hover {
+  border-color: rgba(252, 129, 129, 0.5);
+  box-shadow: 0 24px 40px rgba(252, 129, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.elf-card.element-water {
+  border-top: 3px solid rgba(99, 179, 237, 0.8);
+}
+.elf-card.element-water:hover {
+  border-color: rgba(99, 179, 237, 0.5);
+  box-shadow: 0 24px 40px rgba(99, 179, 237, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.elf-card.element-grass {
+  border-top: 3px solid rgba(104, 211, 145, 0.8);
+}
+.elf-card.element-grass:hover {
+  border-color: rgba(104, 211, 145, 0.5);
+  box-shadow: 0 24px 40px rgba(104, 211, 145, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.elf-card__media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 173, 91, 0.1), transparent 58%),
+    rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.elf-card__halo {
+  position: absolute;
+  inset: auto 16% 10%;
+  height: 28px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 196, 112, 0.28), transparent);
+  filter: blur(10px);
+}
+
+.elf-card .elf-image {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 12px;
   object-fit: cover;
-  border-radius: 50%;
-  margin-bottom: 1.5rem;
-  border: 3px solid #4CAF50;
-  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
-  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .elf-card:hover .elf-image {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(255, 255, 255, 0.05);
 }
 
-.elf-card h3 {
-  margin-top: 0;
-  color: #333;
-  font-size: 1.3rem;
-  margin-bottom: 1rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+/* 元素图片边框 */
+.elf-card.element-fire .elf-image {
+  border-color: rgba(252, 129, 129, 0.5);
+  box-shadow: 0 4px 12px rgba(252, 129, 129, 0.3);
+}
+.elf-card.element-water .elf-image {
+  border-color: rgba(99, 179, 237, 0.5);
+  box-shadow: 0 4px 12px rgba(99, 179, 237, 0.3);
+}
+.elf-card.element-grass .elf-image {
+  border-color: rgba(104, 211, 145, 0.5);
+  box-shadow: 0 4px 12px rgba(104, 211, 145, 0.3);
 }
 
-.elf-card p {
-  margin: 0.5rem 0;
-  color: #666;
-  font-size: 0.9rem;
+.elf-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 1.5rem;
+}
+
+.elf-info h3 {
+  margin: 0;
+  color: #fff4df;
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 元素徽章 */
+.element-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.element-badge.element-fire { background: rgba(252, 129, 129, 0.1); color: #fc8181; border-color: rgba(252, 129, 129, 0.3); }
+.element-badge.element-water { background: rgba(99, 179, 237, 0.1); color: #63b3ed; border-color: rgba(99, 179, 237, 0.3); }
+.element-badge.element-grass { background: rgba(104, 211, 145, 0.1); color: #68d391; border-color: rgba(104, 211, 145, 0.3); }
+
+/* 元信息标签 */
+.elf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.elf-meta__item {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e0;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .active-tag {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
+  background: rgba(104, 211, 145, 0.15);
+  border: 1px solid rgba(104, 211, 145, 0.4) !important;
+  color: #9ae6b4 !important;
 }
 
-/* 出战顺序选择器 */
-.battle-order-selector {
-  margin-top: 1.5rem;
+.standby-tag {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #a0aec0 !important;
+}
+
+/* 属性统计 */
+.elf-stats {
+  display: grid;
+  gap: 8px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.stat-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-label {
+  color: #a0aec0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  color: #f8f1e4;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.stat-hp { color: #68d391; }
+.stat-mp { color: #b794f4; }
+.stat-max { color: #f6e05e; font-size: 0.85rem; }
+
+/* 操作区 */
+.elf-actions-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 5px;
+  padding-top: 15px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.battle-order-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .order-select {
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  font-size: 1rem;
-  background-color: white;
-  cursor: pointer;
   flex: 1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff4df;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.5)' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
   transition: all 0.3s ease;
+}
+
+.order-select option {
+  background: #1a1f2e;
+  color: #fff4df;
 }
 
 .order-select:focus {
   outline: none;
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+  border-color: rgba(255, 140, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
 }
 
-/* 按钮样式 */
-.battle-order-selector button {
-  margin-top: 0;
-  padding: 0.8rem 1.5rem;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
-  color: white;
+.order-btn {
+  padding: 8px 16px;
   border: none;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #48bb78, #38a169);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 4px 10px rgba(72, 187, 120, 0.3);
   white-space: nowrap;
 }
 
-.battle-order-selector button:hover {
-  background: linear-gradient(135deg, #388E3C 0%, #66BB6A 100%);
+.order-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 15px rgba(72, 187, 120, 0.5);
 }
 
+.order-btn:active {
+  transform: translateY(0);
+}
+
+/* 详情按钮 */
 .detail-btn {
-  margin-top: 1rem;
-  padding: 0.8rem 1.5rem;
-  background: linear-gradient(135deg, #2196F3 0%, #64B5F6 100%);
-  color: white;
+  width: 100%;
+  padding: 10px;
   border: none;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #ff9c3a, #ff7a1a);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
-  width: 100%;
+  box-shadow: 0 4px 10px rgba(255, 122, 26, 0.3);
+  text-align: center;
 }
 
 .detail-btn:hover {
-  background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 15px rgba(255, 122, 26, 0.5);
 }
 
-/* 响应式设计 */
+.detail-btn:active {
+  transform: translateY(0);
+}
+
+.detail-btn.element-fire {
+  background: linear-gradient(90deg, #fc8181, #e53e3e);
+  box-shadow: 0 4px 10px rgba(229, 62, 62, 0.3);
+}
+
+.detail-btn.element-water {
+  background: linear-gradient(90deg, #63b3ed, #3182ce);
+  box-shadow: 0 4px 10px rgba(49, 130, 206, 0.3);
+}
+
+.detail-btn.element-grass {
+  background: linear-gradient(90deg, #68d391, #38a169);
+  box-shadow: 0 4px 10px rgba(56, 161, 105, 0.3);
+}
+
+/* 响应式 */
 @media (max-width: 768px) {
   .main-content {
-    padding: 1rem;
+    padding: 0 15px;
+  }
+
+  .main-content {
+    padding: 0 15px;
+  }
+  
+  .page-header {
+    text-align: center;
+  }
+
+  .page-header h1 {
+    font-size: 2.2rem;
   }
   
   .elves-list {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-  
-  .battle-order-selector {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .battle-order-selector button {
-    width: 100%;
-  }
-  
-  .nav-menu {
-    gap: 0.5rem;
-  }
-  
-  .nav-btn {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 }
 </style>

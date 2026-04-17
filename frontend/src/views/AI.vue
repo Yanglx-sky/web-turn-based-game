@@ -1,74 +1,64 @@
 <template>
   <div class="ai-container">
-    <!-- 顶部导航栏 -->
-    <nav class="nav-bar">
-      <div class="nav-logo">洛克王国</div>
-      <div class="nav-menu">
-        <button class="nav-btn" @click="navigateTo('/')">首页</button>
-        <button class="nav-btn" @click="navigateTo('/elves')">我的精灵</button>
-        <button class="nav-btn" @click="navigateTo('/pve')">冒险</button>
-        <button class="nav-btn" @click="navigateTo('/shop')">商店</button>
-        <button class="nav-btn" @click="navigateTo('/bag')">背包</button>
-        <button class="nav-btn" @click="navigateTo('/train')">训练</button>
-        <button class="nav-btn" @click="navigateTo('/rank')">排行榜</button>
-        <button class="nav-btn" @click="navigateTo('/achievement')">成就</button>
-        <button class="nav-btn" @click="navigateTo('/ai')">AI助手</button>
-        <button class="nav-btn" @click="navigateTo('/chat')">聊天</button>
-        <button class="nav-btn" @click="logout">退出</button>
-      </div>
-    </nav>
+    <GameTopNav />
     
     <div class="main-content">
-      <h2>AI精灵训练助手</h2>
-      
-      <div class="ai-header">
+      <div class="page-header">
+        <p class="section-eyebrow">AI ASSISTANT</p>
+        <h1>AI精灵训练助手</h1>
         <p class="ai-subtitle">为你提供精灵训练建议和战斗策略</p>
       </div>
       
-      <div class="chat-container">
-        <div class="chat-messages">
-          <div 
-            v-for="(message, index) in chatMessages" 
-            :key="index" 
-            class="chat-message" 
-            :class="message.role === 'user' ? 'user-message' : 'ai-message'"
-          >
-            <div class="message-content">{{ message.content }}</div>
-            <div class="message-time">{{ message.time }}</div>
-          </div>
-          <div v-if="isStreaming" class="chat-message ai-message">
-            <div class="message-content">{{ streamingContent }}</div>
-            <div class="message-time">正在输入...</div>
+      <div class="ai-workspace">
+        <div class="chat-section">
+          <div class="chat-container">
+            <div class="chat-messages">
+              <div 
+                v-for="(message, index) in chatMessages" 
+                :key="index" 
+                class="chat-message" 
+                :class="message.role === 'user' ? 'user-message' : 'ai-message'"
+              >
+                <div class="message-content">{{ message.content }}</div>
+                <div class="message-time">{{ message.time }}</div>
+              </div>
+              <div v-if="isStreaming" class="chat-message ai-message">
+                <div class="message-content">{{ streamingContent }}</div>
+                <div class="message-time">正在输入...</div>
+              </div>
+            </div>
+            
+            <div class="chat-input">
+              <input 
+                type="text" 
+                v-model="userInput" 
+                placeholder="输入你的问题..." 
+                @keyup.enter="sendMessage"
+                :disabled="isStreaming"
+              >
+              <button 
+                class="btn send-btn" 
+                @click="sendMessage"
+                :disabled="isStreaming || !userInput.trim()"
+              >
+                发送
+              </button>
+            </div>
           </div>
         </div>
         
-        <div class="chat-input">
-          <input 
-            type="text" 
-            v-model="userInput" 
-            placeholder="输入你的问题..." 
-            @keyup.enter="sendMessage"
-            :disabled="isStreaming"
-          >
-          <button 
-            class="btn send-btn" 
-            @click="sendMessage"
-            :disabled="isStreaming || !userInput.trim()"
-          >
-            发送
-          </button>
+        <div class="sidebar-section">
+          <div class="ai-info">
+            <div class="info-item">每日额度<span>{{ aiCallLimit }}次</span></div>
+            <div class="info-item">今日已用<span>{{ aiCallCount }}次</span></div>
+            <div class="info-item">剩余次数<span class="highlight">{{ aiCallLimit - aiCallCount }}次</span></div>
+          </div>
+          
+          <div class="ai-actions">
+            <button class="action-btn" @click="clearChat">清空对话</button>
+            <button class="action-btn" @click="getTrainingSummary">训练总结</button>
+          </div>
         </div>
-      </div>
-      
-      <div class="ai-actions">
-        <button class="btn action-btn" @click="clearChat">清空对话</button>
-        <button class="btn action-btn" @click="getTrainingSummary">训练总结</button>
-      </div>
-      
-      <div class="ai-info">
-        <p>每日AI调用限制：{{ aiCallLimit }}次</p>
-        <p>今日已使用：{{ aiCallCount }}次</p>
-        <p>剩余次数：{{ aiCallLimit - aiCallCount }}次</p>
       </div>
     </div>
   </div>
@@ -77,6 +67,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import GameTopNav from '../components/GameTopNav.vue'
 
 const router = useRouter()
 
@@ -488,96 +479,89 @@ onUnmounted(() => {
 /* 全局样式 */
 .ai-container {
   min-height: 100vh;
-  background-image: url('https://a0ai.marscode.cn/api/ide/v1/text_to_image?prompt=colorful%20fantasy%20game%20background%20with%20magical%20elements%20and%20floating%20islands&image_size=landscape_16_9');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  font-family: 'Arial', sans-serif;
-}
-
-/* 导航栏 */
-.nav-bar {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #ff6b00;
-  text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
-}
-
-.nav-menu {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: transparent;
-  color: white;
-  border: 1px solid #ff6b00;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-  background: #ff6b00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
+  padding: 0 20px 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 165, 81, 0.16), transparent 24%),
+    linear-gradient(180deg, #06080f 0%, #101827 52%, #111d2e 100%);
+  color: #f8f1e4;
+  overflow-x: hidden;
 }
 
 .main-content {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 15px;
-  padding: 40px;
-  max-width: 800px;
-  margin: 0 auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 1100px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-h2 {
-  text-align: center;
-  margin-bottom: 1rem;
-  color: #ff8c00;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-  font-size: 28px;
+.ai-workspace {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-top: 10px;
 }
 
-.ai-header {
+.chat-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-section {
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 标题区域 */
+.page-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 0.5rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #fff4df;
+  font-weight: 800;
+  font-size: 2.8rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+}
+
+.section-eyebrow {
+  margin: 0;
+  color: rgba(255, 220, 162, 0.78);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
 }
 
 .ai-subtitle {
-  color: #666;
-  font-size: 16px;
-  margin: 0;
+  color: rgba(247, 239, 224, 0.6);
+  font-size: 1rem;
+  margin: 0.5rem 0 1rem;
 }
 
 /* 对话容器 */
 .chat-container {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.85), rgba(16, 9, 3, 0.85));
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.5);
+  border-radius: 20px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
-  margin-bottom: 20px;
-  border: 2px solid #ff8c00;
+  display: flex;
+  flex-direction: column;
+  height: 65vh;
+  min-height: 500px;
 }
 
 .chat-messages {
-  max-height: 500px;
+  flex: 1;
   overflow-y: auto;
   padding: 20px;
   display: flex;
@@ -585,12 +569,21 @@ h2 {
   gap: 15px;
 }
 
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 156, 58, 0.3);
+  border-radius: 4px;
+}
+
 .chat-message {
-  max-width: 80%;
-  padding: 12px 16px;
+  max-width: 85%;
+  padding: 14px 18px;
   border-radius: 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   animation: fadeIn 0.3s ease;
+  line-height: 1.6;
 }
 
 @keyframes fadeIn {
@@ -606,73 +599,89 @@ h2 {
 
 .user-message {
   align-self: flex-end;
-  background: #e3f2fd;
+  background: linear-gradient(135deg, rgba(255, 156, 58, 0.15), rgba(255, 122, 26, 0.15));
+  border: 1px solid rgba(255, 156, 58, 0.3);
   border-bottom-right-radius: 4px;
+  color: #fff4df;
+  box-shadow: 0 4px 12px rgba(255, 122, 26, 0.05);
 }
 
 .ai-message {
   align-self: flex-start;
-  background: #f5f5f5;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom-left-radius: 4px;
+  color: rgba(247, 239, 224, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .message-content {
-  font-size: 16px;
-  line-height: 1.5;
-  margin-bottom: 4px;
+  font-size: 0.95rem;
+  margin-bottom: 5px;
+  white-space: pre-wrap;
 }
 
 .message-time {
-  font-size: 12px;
-  color: #999;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
   text-align: right;
 }
 
 /* 输入区域 */
 .chat-input {
   display: flex;
-  padding: 15px;
-  border-top: 1px solid #eee;
-  background: #f9f9f9;
+  padding: 15px 20px;
+  background: rgba(0, 0, 0, 0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: center;
 }
 
 .chat-input input {
   flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #ddd;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 25px;
-  font-size: 16px;
-  margin-right: 10px;
-  transition: border-color 0.3s ease;
+  font-size: 0.95rem;
+  margin-right: 15px;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.chat-input input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .chat-input input:focus {
   outline: none;
-  border-color: #ff8c00;
-  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 156, 58, 0.5);
+  box-shadow: 0 0 0 2px rgba(255, 156, 58, 0.2);
 }
 
 .send-btn {
-  background: linear-gradient(135deg, #ff8c00, #ff6b00);
-  color: white;
+  background: linear-gradient(135deg, #ffe1a2, #ff9c3a 55%, #ff7a1a);
+  color: #2d1a0a;
+  box-shadow: 0 4px 12px rgba(255, 132, 29, 0.2);
   border: none;
   border-radius: 25px;
-  padding: 0 24px;
-  font-size: 16px;
-  font-weight: bold;
+  padding: 0 28px;
+  height: 48px;
+  font-size: 0.95rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.3);
+  letter-spacing: 0.05em;
 }
 
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ff6b00, #e65c00);
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(255, 140, 0, 0.4);
+  box-shadow: 0 8px 16px rgba(255, 132, 29, 0.35);
 }
 
 .send-btn:disabled {
-  background: #ccc;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.3);
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -680,75 +689,106 @@ h2 {
 /* 操作按钮 */
 .ai-actions {
   display: flex;
+  flex-direction: column;
   gap: 15px;
-  justify-content: center;
-  margin-bottom: 20px;
 }
 
 .action-btn {
-  background: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 25px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: bold;
+  background: rgba(16, 9, 3, 0.8);
+  color: #fff4df;
+  border: 1px solid rgba(255, 156, 58, 0.3);
+  border-radius: 16px;
+  padding: 12px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+  width: 100%;
 }
 
 .action-btn:hover {
-  background: #43a047;
+  background: rgba(255, 156, 58, 0.15);
+  border-color: rgba(255, 156, 58, 0.8);
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(76, 175, 80, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 156, 58, 0.15);
 }
 
 /* AI信息 */
 .ai-info {
-  text-align: center;
-  padding: 15px;
-  background: rgba(255, 140, 0, 0.1);
-  border-radius: 10px;
-  border: 2px solid #ff8c00;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 20px;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.85), rgba(16, 9, 3, 0.85));
+  border-radius: 20px;
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(162, 255, 196, 0.5);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.ai-info p {
-  margin: 5px 0;
-  color: #666;
-  font-size: 14px;
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: rgba(247, 239, 224, 0.7);
+  font-size: 0.85rem;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-item span {
+  color: #ffc107;
+  font-size: 1.2rem;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
+}
+
+.info-item span.highlight {
+  color: #a2ffc4;
+  text-shadow: 0 0 5px rgba(162, 255, 196, 0.3);
 }
 
 @media (max-width: 768px) {
-  .ai-container {
-    padding: 10px;
-  }
-  
   .main-content {
-    padding: 20px;
+    padding: 0 15px;
+  }
+
+  .ai-workspace {
+    flex-direction: column;
+    gap: 15px;
   }
   
-  .nav-menu {
+  .sidebar-section {
+    width: 100%;
+    flex-direction: column-reverse;
+  }
+
+  .ai-info {
+    flex-direction: row;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: space-around;
+    padding: 15px;
   }
   
-  .nav-btn {
-    font-size: 0.8rem;
-    padding: 0.4rem 0.8rem;
-  }
-  
-  .chat-message {
-    max-width: 90%;
+  .info-item {
+    align-items: center;
+    border-bottom: none;
+    padding-bottom: 0;
   }
   
   .ai-actions {
-    flex-wrap: wrap;
+    flex-direction: row;
   }
   
-  .action-btn {
-    flex: 1;
-    min-width: 120px;
+  .chat-container {
+    height: 60vh;
+    min-height: 400px;
   }
 }
 </style>
