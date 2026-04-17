@@ -198,13 +198,13 @@
         <div class="equip-list">
           <div v-for="equip in availableEquips" :key="equip.id" 
             class="equip-item" 
-            :class="{ 'bound': equip.elfId && equip.elfId !== elfDetail.elf.id, 'worn': equip.elfId && equip.elfId === elfDetail.elf.id && equip.isWorn }"
-            @click="!equip.elfId || (equip.elfId === elfDetail.elf.id && !equip.isWorn) ? selectEquip(equip.id) : null"
+            :class="{ 'bound': equip.isWorn && equip.elfId && equip.elfId !== elfDetail.elf.id, 'worn': equip.isWorn && equip.elfId && equip.elfId === elfDetail.elf.id }"
+            @click="!equip.isWorn || (equip.isWorn && equip.elfId === elfDetail.elf.id) ? selectEquip(equip.itemId) : null"
           >
             <div class="equip-item-image">
               <img :src="getEquipImage(equip.type, equip.name)" :alt="equip.name" />
-              <div v-if="equip.elfId && equip.elfId !== elfDetail.elf.id" class="bound-tag">已绑定</div>
-              <div v-else-if="equip.elfId && equip.elfId === elfDetail.elf.id && equip.isWorn" class="bound-tag current">已装备</div>
+              <div v-if="equip.isWorn && equip.elfId && equip.elfId !== elfDetail.elf.id" class="bound-tag">已绑定</div>
+              <div v-else-if="equip.isWorn && equip.elfId && equip.elfId === elfDetail.elf.id" class="bound-tag current">已装备</div>
             </div>
             <div class="equip-item-info">
               <h4>{{ equip.name }}</h4>
@@ -420,9 +420,9 @@ const selectEquip = async (equipId) => {
   try {
     let response
     if (currentEquipType.value === 1) {
-      response = await equipApi.equipWeapon(user.id, elfDetail.value.elf.id, equipId)
+      response = await equipApi.equipWeapon(elfDetail.value.elf.id, equipId)
     } else {
-      response = await equipApi.equipArmor(user.id, elfDetail.value.elf.id, equipId)
+      response = await equipApi.equipArmor(elfDetail.value.elf.id, equipId)
     }
     
     if (response.code === 200) {
@@ -456,6 +456,10 @@ const selectEquip = async (equipId) => {
         // 然后重新加载精灵详情和装备信息
         await loadElfDetail(elfDetail.value.elf.id)
         await loadEquippedItems()
+        // 重新加载可用装备列表，更新绑定状态
+        if (showEquipModal.value) {
+          await loadEquipsByType(currentEquipType.value === 1 ? 3 : 4)
+        }
       } else {
         alert('卸下失败: ' + response.msg)
       }
@@ -482,6 +486,10 @@ const selectEquip = async (equipId) => {
         // 然后重新加载精灵详情和装备信息
         await loadElfDetail(elfDetail.value.elf.id)
         await loadEquippedItems()
+        // 重新加载可用装备列表，更新绑定状态
+        if (showEquipModal.value) {
+          await loadEquipsByType(currentEquipType.value === 1 ? 3 : 4)
+        }
       } else {
         alert('卸下失败: ' + response.msg)
       }

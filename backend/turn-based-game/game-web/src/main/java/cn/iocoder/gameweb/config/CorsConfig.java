@@ -12,7 +12,7 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        // 允许所有来源
+        // 允许所有来源（使用allowedOriginPatterns而不是allowedOrigins）
         config.addAllowedOriginPattern("*");
         // 允许所有请求方法
         config.addAllowedMethod("*");
@@ -20,6 +20,10 @@ public class CorsConfig {
         config.addAllowedHeader("*");
         // 允许携带凭证
         config.setAllowCredentials(true);
+        // 暴露所有响应头
+        config.addExposedHeader("*");
+        // 预检请求缓存时间
+        config.setMaxAge(3600L);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

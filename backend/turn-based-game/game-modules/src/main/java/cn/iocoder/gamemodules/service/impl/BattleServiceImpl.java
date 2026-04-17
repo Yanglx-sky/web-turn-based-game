@@ -10,6 +10,7 @@ import cn.iocoder.gamemodules.service.BattleService;
 import cn.iocoder.gamemodules.service.UserService;
 import cn.iocoder.gamemodules.util.BattleUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Service
 public class BattleServiceImpl implements BattleService {
 
@@ -48,10 +50,16 @@ public class BattleServiceImpl implements BattleService {
     private SkillMapper skillMapper;
     
     @Autowired
+    private cn.iocoder.gamemodules.mapper.MonsterSkillMapper monsterSkillMapper;
+    
+    @Autowired
     private BattleSecurityInterceptor battleSecurityInterceptor;
     
     @Autowired
     private UserService userService;
+    
+    @Autowired
+    private cn.iocoder.gamemodules.service.AchievementService achievementService;
     
     // ==================== Redis相关 ====================
     @Autowired
@@ -59,7 +67,7 @@ public class BattleServiceImpl implements BattleService {
 
     @Override
     @Transactional
-    public Result<Map<String, Object>> startBattle(Long userId, Long userElfId, Integer levelId) {
+    public Result<Map<String, Object>> startBattle(Long userId, Integer levelId) {
         // 生成唯一的battleId
         String battleId = UUID.randomUUID().toString();
 
@@ -74,24 +82,44 @@ public class BattleServiceImpl implements BattleService {
         battleRecord.setStatus(0); // 0=战斗中
         battleRecordMapper.insert(battleRecord);
 
-        // 初始化精灵状态
-        UserElf userElf = userElfMapper.selectById(userElfId);
-        if (userElf != null) {
+        // 查询玩家配置的出战精灵列表（按fight_order排序）
+        List<UserElf> battleElves = userElfMapper.selectList(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserElf>()
+                .eq("user_id", userId)
+                .gt("fight_order", 0)
+                .orderByAsc("fight_order")
+        );
+
+        if (battleElves.isEmpty()) {
+            return Result.error("请先设置出战精灵");
+        }
+
+        // 初始化所有出战精灵状态到battle_record_elf
+        UserElf firstElf = null;
+        Elf firstElfTemplate = null;
+        for (int i = 0; i < battleElves.size(); i++) {
+            UserElf userElf = battleElves.get(i);
             BattleRecordElf battleElf = new BattleRecordElf();
             battleElf.setBattleId(battleId);
-            battleElf.setElfId(userElfId);
-            battleElf.setCurrentHp(userElf.getHp());
-            battleElf.setCurrentMp(userElf.getMp());
-            battleElf.setElfState(0); // 0=战斗中
+            battleElf.setElfId(userElf.getId());
+            battleElf.setCurrentHp(userElf.getMaxHp());  // 战斗开始时满血
+            battleElf.setCurrentMp(userElf.getMaxMp());  // 战斗开始时满蓝
+            // 第一只为战斗中，其他为可上场
+            battleElf.setElfState(i == 0 ? 0 : 1); // 0=战斗中, 1=可上场
             battleElf.setCreateTime(LocalDateTime.now());
             battleElf.setUpdateTime(LocalDateTime.now());
             battleRecordElfMapper.insert(battleElf);
+
+            // 记录第一只精灵用于返回
+            if (i == 0) {
+                firstElf = userElf;
+                firstElfTemplate = elfMapper.selectById(userElf.getElfId());
+            }
         }
 
         // 初始化怪物状态
         Level level = levelMapper.selectById(levelId);
         if (level != null) {
-            // 假设每个关卡只有一个怪物，实际项目中可能需要从配置中获取多个怪物
             Monster monster = monsterMapper.selectById(level.getMonsterId());
             if (monster != null) {
                 BattleRecordMonster battleMonster = new BattleRecordMonster();
@@ -113,31 +141,57 @@ public class BattleServiceImpl implements BattleService {
         Map<String, Object> result = new HashMap<>();
         result.put("battleId", battleId);
         result.put("battleInfo", battleRecord);
-        
-        // 添加userElf信息
-        if (userElf != null) {
+
+        // 添加第一只精灵信息（当前战斗中）
+        if (firstElf != null) {
             Map<String, Object> userElfInfo = new HashMap<>();
-            userElfInfo.put("id", userElf.getId());
-            userElfInfo.put("elfId", userElf.getElfId());
-            userElfInfo.put("userId", userElf.getUserId());
-            userElfInfo.put("level", userElf.getLevel());
-            userElfInfo.put("exp", userElf.getExp());
-            userElfInfo.put("hp", userElf.getMaxHp());
-            userElfInfo.put("maxHp", userElf.getMaxHp());
-            userElfInfo.put("mp", userElf.getMaxMp());
-            userElfInfo.put("maxMp", userElf.getMaxMp());
-            userElfInfo.put("attack", userElf.getAttack());
-            userElfInfo.put("defense", userElf.getDefense());
-            userElfInfo.put("speed", userElf.getSpeed());
-            
-            // 从Elf实体中获取elementType
+            userElfInfo.put("id", firstElf.getId());
+            userElfInfo.put("elfId", firstElf.getElfId());
+            userElfInfo.put("userId", firstElf.getUserId());
+            userElfInfo.put("level", firstElf.getLevel());
+            userElfInfo.put("exp", firstElf.getExp());
+            userElfInfo.put("hp", firstElf.getMaxHp()); // 战斗开始时满血
+            userElfInfo.put("maxHp", firstElf.getMaxHp());
+            userElfInfo.put("mp", firstElf.getMaxMp()); // 战斗开始时满蓝
+            userElfInfo.put("maxMp", firstElf.getMaxMp());
+            userElfInfo.put("attack", firstElf.getAttack());
+            userElfInfo.put("defense", firstElf.getDefense());
+            userElfInfo.put("speed", firstElf.getSpeed());
+
+            if (firstElfTemplate != null) {
+                userElfInfo.put("elementType", firstElfTemplate.getElementType());
+                userElfInfo.put("elfName", firstElfTemplate.getElfName());
+                result.put("elfElementType", firstElfTemplate.getElementType());
+                result.put("elfName", firstElfTemplate.getElfName());
+            }
+
+            result.put("userElf", userElfInfo);
+            result.put("playerElfHp", firstElf.getMaxHp());
+            result.put("elfMp", firstElf.getMaxMp());
+        }
+
+        // 添加所有出战精灵列表
+        List<Map<String, Object>> allElvesInfo = new ArrayList<>();
+        for (UserElf userElf : battleElves) {
+            Map<String, Object> elfInfo = new HashMap<>();
+            elfInfo.put("id", userElf.getId());
+            elfInfo.put("elfId", userElf.getElfId());
+            elfInfo.put("level", userElf.getLevel());
+            elfInfo.put("maxHp", userElf.getMaxHp());
+            elfInfo.put("maxMp", userElf.getMaxMp());
+            elfInfo.put("attack", userElf.getAttack());
+            elfInfo.put("defense", userElf.getDefense());
+            elfInfo.put("speed", userElf.getSpeed());
+            elfInfo.put("fightOrder", userElf.getFightOrder());
+
             Elf elf = elfMapper.selectById(userElf.getElfId());
             if (elf != null) {
-                userElfInfo.put("elementType", elf.getElementType());
+                elfInfo.put("elementType", elf.getElementType());
+                elfInfo.put("elfName", elf.getElfName());
             }
-            
-            result.put("userElf", userElfInfo);
+            allElvesInfo.add(elfInfo);
         }
+        result.put("allBattleElves", allElvesInfo);
 
         // 添加monster信息
         if (level != null) {
@@ -147,7 +201,7 @@ public class BattleServiceImpl implements BattleService {
                 monsterInfo.put("id", monster.getId());
                 monsterInfo.put("monsterId", monster.getId());
                 monsterInfo.put("name", monster.getMonsterName());
-                monsterInfo.put("level", 1); // 怪物等级默认为1
+                monsterInfo.put("level", 1);
                 monsterInfo.put("hp", monster.getHp());
                 monsterInfo.put("maxHp", monster.getHp());
                 monsterInfo.put("mp", monster.getMp());
@@ -157,7 +211,6 @@ public class BattleServiceImpl implements BattleService {
                 monsterInfo.put("speed", monster.getSpeed());
                 monsterInfo.put("elementType", monster.getElementType());
                 result.put("monster", monsterInfo);
-                // 添加前端需要的字段
                 result.put("monsterName", monster.getMonsterName());
                 result.put("monsterElementType", monster.getElementType());
                 result.put("monsterHp", monster.getHp());
@@ -296,150 +349,271 @@ public class BattleServiceImpl implements BattleService {
     @Override
     @Transactional
     public Result<Map<String, Object>> normalAttack(Long userId) {
-        try {
-            // 1. 加载战斗实体
-            Map<String, Object> entities = BattleUtils.loadBattleEntities(
-                    userId, battleRecordMapper, battleRecordElfMapper, battleRecordMonsterMapper,
-                    userElfMapper, elfMapper, monsterMapper, levelMapper);
-            
-            BattleRecord battleRecord = (BattleRecord) entities.get("battleRecord");
-            Level level = (Level) entities.get("level");
-            BattleRecordElf userElfRecord = (BattleRecordElf) entities.get("userElfRecord");
-            BattleRecordMonster monsterRecord = (BattleRecordMonster) entities.get("monsterRecord");
-            UserElf userElf = (UserElf) entities.get("userElf");
-            Elf elf = (Elf) entities.get("elf");
-            Monster monster = (Monster) entities.get("monster");
-            
-            // 2. 执行普通攻击
-            int damage = BattleUtils.executePlayerAttack("attack", null, userElfRecord, userElf, elf, monster, skillMapper);
-            
-            // 3. 更新怪物血量
-            int originalMonsterHp = BattleUtils.updateMonsterHp(monsterRecord, damage, battleRecordMonsterMapper);
-            
-            // 4. 增加回合数
-            battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
-            battleRecordMapper.updateById(battleRecord);
-            
-            // 5. 判断怪物是否死亡
-            boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
-            
-            // 6. 构建战斗日志
-            String attackLog = BattleUtils.generateAttackLog(elf.getElfName(), "attack", null, damage);
-            List<String> logs;
-            
-            if (monsterDead) {
-                // 处理胜利
-                BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
-                        battleSecurityInterceptor, userService, this::checkAndDeductDailyLimit);
-                
-                int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
-                int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
-                int[] actualReward = checkAndDeductDailyLimit(userId, new Integer[]{expReward, goldReward});
-                
-                String victoryLog = BattleUtils.generateVictoryLog(actualReward[0], actualReward[1], expReward, goldReward);
-                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(), 
-                        monsterRecord.getCurrentHp(), null, true, false);
-                logs.add(victoryLog);
-            } else {
-                // 敌人反击
-                int enemyDamage = BattleUtils.executeEnemyCounterattack(userElfRecord, userElf, monster, battleRecordElfMapper);
-                String enemyAttackLog = BattleUtils.generateEnemyAttackLog(monster.getMonsterName(), enemyDamage);
-                
-                boolean playerDead = userElfRecord.getCurrentHp() <= 0;
-                if (playerDead) {
-                    battleRecord.setStatus(2); // 2=失败
-                    battleRecordMapper.updateById(battleRecord);
-                    battleSecurityInterceptor.updateBattleStatus(userId, false);
-                }
-                
-                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
-                        monsterRecord.getCurrentHp(), enemyAttackLog, false, playerDead);
-            }
-            
-            // 7. 构建返回结果
-            Map<String, Object> result = BattleUtils.buildBattleResult(
-                    battleRecord, userElfRecord, userElf, monsterRecord, monster, level, monsterDead, logs);
-            
-            return Result.success(result);
-            
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        return executePlayerAction(userId, "attack", null);
     }
-
+    
     @Override
     @Transactional
     public Result<Map<String, Object>> useSkill(Long userId, Integer skillId) {
+        return executePlayerAction(userId, "skill", skillId);
+    }
+    
+    /**
+     * 执行玩家行动（普通攻击或使用技能）
+     * 只结算玩家攻击部分，不触发怪物反击
+     */
+    private Result<Map<String, Object>> executePlayerAction(Long userId, String actionType, Integer skillId) {
         try {
-            // 1. 加载战斗实体
-            Map<String, Object> entities = BattleUtils.loadBattleEntities(
-                    userId, battleRecordMapper, battleRecordElfMapper, battleRecordMonsterMapper,
-                    userElfMapper, elfMapper, monsterMapper, levelMapper);
-            
-            BattleRecord battleRecord = (BattleRecord) entities.get("battleRecord");
-            Level level = (Level) entities.get("level");
-            BattleRecordElf userElfRecord = (BattleRecordElf) entities.get("userElfRecord");
-            BattleRecordMonster monsterRecord = (BattleRecordMonster) entities.get("monsterRecord");
-            UserElf userElf = (UserElf) entities.get("userElf");
-            Elf elf = (Elf) entities.get("elf");
-            Monster monster = (Monster) entities.get("monster");
-            
-            // 2. 查询技能信息
-            Skill skill = skillMapper.selectById(skillId);
-            if (skill == null) {
-                return Result.error("技能不存在");
+            // 1. 查询当前战斗
+            BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+            if (battleRecord == null) {
+                return Result.error("当前没有进行中的战斗");
             }
             
-            // 3. 执行技能攻击
-            int damage = BattleUtils.executePlayerAttack("skill", skillId, userElfRecord, userElf, elf, monster, skillMapper);
+            // 2. 查询关卡信息
+            Level level = levelMapper.selectById(battleRecord.getLevelId());
             
-            // 4. 更新怪物血量（MP已在executePlayerAttack中扣除）
-            battleRecordElfMapper.updateById(userElfRecord);
-            int originalMonsterHp = BattleUtils.updateMonsterHp(monsterRecord, damage, battleRecordMonsterMapper);
+            // 3. 查询精灵战斗记录
+            List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+            if (elves.isEmpty()) {
+                return Result.error("精灵信息不存在");
+            }
             
-            // 5. 增加回合数
+            // 查找当前战斗中的精灵（elfState=0）
+            BattleRecordElf userElfRecord = null;
+            for (BattleRecordElf elfRecord : elves) {
+                if (elfRecord.getElfState() != null && elfRecord.getElfState() == 0) {
+                    userElfRecord = elfRecord;
+                    break;
+                }
+            }
+            
+            if (userElfRecord == null) {
+                return Result.error("当前没有战斗中的精灵");
+            }
+            
+            // 4. 查询怪物战斗记录
+            List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
+            if (monsters.isEmpty()) {
+                return Result.error("怪物信息不存在");
+            }
+            BattleRecordMonster monsterRecord = monsters.get(0);
+            
+            // 5. 查询用户精灵信息
+            UserElf userElf = userElfMapper.selectById(userElfRecord.getElfId());
+            if (userElf == null) {
+                return Result.error("精灵不存在");
+            }
+            
+            // 6. 查询精灵模板信息
+            Elf elf = elfMapper.selectById(userElf.getElfId());
+            if (elf == null) {
+                return Result.error("精灵模板信息不存在");
+            }
+            
+            // 7. 查询怪物信息
+            Monster monster = monsterMapper.selectById(monsterRecord.getMonsterId());
+            if (monster == null) {
+                return Result.error("怪物不存在");
+            }
+            
+            // 8. 查询技能信息（如果是使用技能）
+            Skill skill = null;
+            if ("skill".equals(actionType) && skillId != null) {
+                skill = skillMapper.selectById(skillId);
+                if (skill == null) {
+                    return Result.error("技能不存在");
+                }
+            }
+            
+            List<String> logs = new ArrayList<>();
+            
+            // 9. 检查当前精灵是否已死亡（HP<=0或elfState=2），如果是则自动切换
+            if (userElfRecord.getCurrentHp() == null || userElfRecord.getCurrentHp() <= 0 
+                || (userElfRecord.getElfState() != null && userElfRecord.getElfState() == 2)) {
+                // 当前精灵已死亡，需要切换到下一个精灵
+                List<BattleRecordElf> allElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+                BattleRecordElf nextElfRecord = null;
+                
+                // 查找下一个HP>0且elfState=1的精灵
+                boolean foundCurrent = false;
+                for (BattleRecordElf elfRecord : allElves) {
+                    if (elfRecord.getElfId().equals(userElfRecord.getElfId())) {
+                        foundCurrent = true;
+                        continue;
+                    }
+                    if (foundCurrent && elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                        && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                        nextElfRecord = elfRecord;
+                        break;
+                    }
+                }
+                
+                // 如果没找到，从头开始找
+                if (nextElfRecord == null) {
+                    for (BattleRecordElf elfRecord : allElves) {
+                        if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                            && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                            nextElfRecord = elfRecord;
+                            break;
+                        }
+                    }
+                }
+                
+                if (nextElfRecord == null) {
+                    // 没有可用的精灵，战斗失败
+                    BattleUtils.handleDefeat(battleRecord, battleSecurityInterceptor, userId, battleRecordMapper);
+                    logs.add("战斗失败！你的所有出战精灵都被击败了");
+                    battleRecordMapper.updateById(battleRecord);
+                    
+                    Map<String, Object> result = BattleUtils.buildBattleResult(
+                            battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, level, false, logs);
+                    return Result.success(result);
+                }
+                
+                // 切换到新精灵
+                UserElf nextElf = userElfMapper.selectById(nextElfRecord.getElfId());
+                Elf nextElfTemplate = elfMapper.selectById(nextElf.getElfId());
+                String nextElfName = nextElfTemplate != null ? nextElfTemplate.getElfName() : "未知精灵";
+                
+                logs.add("新回合开始！");
+                logs.add(nextElfName + " 登场！");
+                
+                // 注意：如果精灵已经死亡（elfState=2），不要修改其状态为1
+                // 只需要确保HP和MP为0即可
+                if (userElfRecord.getElfState() != null && userElfRecord.getElfState() != 2) {
+                    // 精灵还未标记为死亡，现在标记
+                    userElfRecord.setElfState(2); // 2=死亡
+                }
+                userElfRecord.setCurrentHp(0);
+                userElfRecord.setCurrentMp(0);
+                userElfRecord.setUpdateTime(LocalDateTime.now());
+                battleRecordElfMapper.updateById(userElfRecord);
+                
+                // 将下一个精灵标记为战斗中
+                nextElfRecord.setElfState(0); // 0=战斗中
+                nextElfRecord.setUpdateTime(LocalDateTime.now());
+                battleRecordElfMapper.updateById(nextElfRecord);
+                
+                // 重新查询新精灵的信息
+                userElf = nextElf;
+                elf = nextElfTemplate;
+                
+                // 更新userElfRecord引用为新的精灵记录
+                userElfRecord = nextElfRecord;
+            }
+            
+            // 10. 根据速度判断出手顺序
+            Integer playerSpeed = userElf.getSpeed();
+            Integer monsterSpeed = monster.getSpeed();
+            boolean playerFirst = (playerSpeed != null ? playerSpeed : 0) >= (monsterSpeed != null ? monsterSpeed : 0);
+            boolean monsterDead = false; // 声明在外部，供后续使用
+            
+            logs.add("新回合开始！");
+            
+            if (playerFirst) {
+                // 玩家先出手
+                logs.add("你的精灵" + elf.getElfName() + "速度更快，先发起攻击！");
+                
+                // 执行玩家攻击
+                monsterDead = executePlayerAttackRound(userId, actionType, skillId, skill,
+                        userElfRecord, userElf, elf, monsterRecord, monster, battleRecord, logs);
+                
+                // 如果怪物死亡，处理胜利逻辑
+                if (monsterDead) {
+                    log.debug("怪物死亡，处理胜利逻辑, userId={}, levelId={}", userId, level.getId());
+                    BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
+                            battleSecurityInterceptor, userService);
+                    recordBattleVictory(userId, level.getId(), battleRecord.getBattleId());
+                    
+                    int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
+                    int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+                    String victoryLog = BattleUtils.generateVictoryLog(expReward, goldReward, expReward, goldReward);
+                    logs.add(victoryLog);
+                } else {
+                    // 怪物存活，执行怪物反击
+                    boolean playerDead = executeMonsterAttackRound(userId, userElfRecord, userElf, elf,
+                            monsterRecord, monster, battleRecord, logs);
+                    
+                    // 如果玩家死亡，检查是否需要切换精灵
+                    if (playerDead) {
+                        // executeMonsterAttackRound已经处理了精灵切换逻辑
+                        // 这里只需要重新查询最新的精灵信息
+                        userElfRecord = battleRecordElfMapper.selectById(userElfRecord.getId());
+                        userElf = userElfMapper.selectById(userElfRecord.getElfId());
+                        elf = elfMapper.selectById(userElf.getElfId());
+                    }
+                }
+            } else {
+                // 怪物先出手
+                logs.add("怪物" + monster.getMonsterName() + "速度更快，先发起攻击！");
+                
+                // 执行怪物攻击
+                boolean playerDead = executeMonsterAttackRound(userId, userElfRecord, userElf, elf,
+                        monsterRecord, monster, battleRecord, logs);
+                
+                // 如果玩家死亡，检查是否需要切换精灵
+                if (playerDead) {
+                    // executeMonsterAttackRound已经处理了精灵切换逻辑
+                    userElfRecord = battleRecordElfMapper.selectById(userElfRecord.getId());
+                    userElf = userElfMapper.selectById(userElfRecord.getElfId());
+                    elf = elfMapper.selectById(userElf.getElfId());
+                    
+                    // 切换精灵后，玩家仍然可以攻击
+                    monsterDead = executePlayerAttackRound(userId, actionType, skillId, skill,
+                            userElfRecord, userElf, elf, monsterRecord, monster, battleRecord, logs);
+                    
+                    if (monsterDead) {
+                        log.debug("怪物死亡，处理胜利逻辑, userId={}, levelId={}", userId, level.getId());
+                        BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
+                                battleSecurityInterceptor, userService);
+                        recordBattleVictory(userId, level.getId(), battleRecord.getBattleId());
+                        
+                        int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
+                        int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+                        String victoryLog = BattleUtils.generateVictoryLog(expReward, goldReward, expReward, goldReward);
+                        logs.add(victoryLog);
+                    }
+                } else {
+                    // 玩家存活，执行玩家攻击
+                    monsterDead = executePlayerAttackRound(userId, actionType, skillId, skill,
+                            userElfRecord, userElf, elf, monsterRecord, monster, battleRecord, logs);
+                    
+                    if (monsterDead) {
+                        log.debug("怪物死亡，处理胜利逻辑, userId={}, levelId={}", userId, level.getId());
+                        BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
+                                battleSecurityInterceptor, userService);
+                        recordBattleVictory(userId, level.getId(), battleRecord.getBattleId());
+                        
+                        int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
+                        int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+                        String victoryLog = BattleUtils.generateVictoryLog(expReward, goldReward, expReward, goldReward);
+                        logs.add(victoryLog);
+                    }
+                }
+            }
+            
+            // 增加回合数
             battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
             battleRecordMapper.updateById(battleRecord);
             
-            // 6. 判断怪物是否死亡
-            boolean monsterDead = monsterRecord.getCurrentHp() <= 0;
-            
-            // 7. 构建战斗日志
-            String attackLog = BattleUtils.generateAttackLog(elf.getElfName(), "skill", skill.getSkillName(), damage);
-            List<String> logs;
-            
-            if (monsterDead) {
-                // 处理胜利
-                BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
-                        battleSecurityInterceptor, userService, this::checkAndDeductDailyLimit);
-                
-                int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
-                int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
-                int[] actualReward = checkAndDeductDailyLimit(userId, new Integer[]{expReward, goldReward});
-                
-                String victoryLog = BattleUtils.generateVictoryLog(actualReward[0], actualReward[1], expReward, goldReward);
-                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
-                        monsterRecord.getCurrentHp(), null, true, false);
-                logs.add(victoryLog);
-            } else {
-                // 敌人反击
-                int enemyDamage = BattleUtils.executeEnemyCounterattack(userElfRecord, userElf, monster, battleRecordElfMapper);
-                String enemyAttackLog = BattleUtils.generateEnemyAttackLog(monster.getMonsterName(), enemyDamage);
-                
-                boolean playerDead = userElfRecord.getCurrentHp() <= 0;
-                if (playerDead) {
-                    battleRecord.setStatus(2); // 2=失败
-                    battleRecordMapper.updateById(battleRecord);
-                    battleSecurityInterceptor.updateBattleStatus(userId, false);
-                }
-                
-                logs = BattleUtils.buildBattleLogs(attackLog, originalMonsterHp, monster.getHp(),
-                        monsterRecord.getCurrentHp(), enemyAttackLog, false, playerDead);
-            }
-            
-            // 8. 构建返回结果
+            // 11. 构建返回结果
             Map<String, Object> result = BattleUtils.buildBattleResult(
-                    battleRecord, userElfRecord, userElf, monsterRecord, monster, level, monsterDead, logs);
+                    battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, level, 
+                    monsterRecord.getCurrentHp() <= 0, logs);
+            
+            // 15. 判断是否显示御三家选择
+            // 第一关胜利且只有1只精灵，或第二关胜利且只有2只精灵
+            if (monsterDead && level != null) {
+                int levelId = level.getId();
+                long elfCount = userElfMapper.selectCount(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserElf>()
+                        .eq("user_id", userId)
+                );
+                // 第一关胜利且只有1只精灵，或第二关胜利且只有2只精灵
+                boolean showStarterSelection = (levelId == 1 && elfCount == 1) || (levelId == 2 && elfCount == 2);
+                result.put("showStarterSelection", showStarterSelection);
+            }
             
             return Result.success(result);
             
@@ -447,6 +621,325 @@ public class BattleServiceImpl implements BattleService {
             return Result.error(e.getMessage());
         }
     }
+    
+    /**
+     * 执行怪物行动（由前端在玩家行动后调用）
+     * 只结算怪物攻击部分
+     */
+    @Override
+    @Transactional
+    public Result<Map<String, Object>> executeMonsterTurn(Long userId) {
+        try {
+            // 1. 查询当前战斗
+            BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+            if (battleRecord == null) {
+                return Result.error("当前没有进行中的战斗");
+            }
+            
+            // 2. 查询精灵战斗记录
+            List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+            if (elves.isEmpty()) {
+                return Result.error("精灵信息不存在");
+            }
+            
+            // 查找当前战斗中的精灵（elfState=0）
+            BattleRecordElf userElfRecord = null;
+            for (BattleRecordElf elfRecord : elves) {
+                if (elfRecord.getElfState() != null && elfRecord.getElfState() == 0) {
+                    userElfRecord = elfRecord;
+                    break;
+                }
+            }
+            
+            if (userElfRecord == null) {
+                return Result.error("当前没有战斗中的精灵");
+            }
+            
+            // 3. 查询怪物战斗记录
+            List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
+            if (monsters.isEmpty()) {
+                return Result.error("怪物信息不存在");
+            }
+            BattleRecordMonster monsterRecord = monsters.get(0);
+            
+            // 4. 查询用户精灵信息
+            UserElf userElf = userElfMapper.selectById(userElfRecord.getElfId());
+            if (userElf == null) {
+                return Result.error("精灵不存在");
+            }
+            
+            // 5. 查询精灵模板信息
+            Elf elf = elfMapper.selectById(userElf.getElfId());
+            if (elf == null) {
+                return Result.error("精灵模板信息不存在");
+            }
+            
+            // 6. 查询怪物信息
+            Monster monster = monsterMapper.selectById(monsterRecord.getMonsterId());
+            if (monster == null) {
+                return Result.error("怪物不存在");
+            }
+            
+            List<String> logs = new ArrayList<>();
+            
+            // 7. 执行怪物攻击
+            Map<String, Object> enemyResult = BattleUtils.executeMonsterAction(
+                    userElfRecord, userElf, elf, monsterRecord, monster, 
+                    battleRecordElfMapper, monsterSkillMapper, skillMapper, battleRecordMonsterMapper);
+            int enemyDamage = (int) enemyResult.get("damage");
+            String attackType = (String) enemyResult.get("attackType");
+            String enemyAttackLog = BattleUtils.generateEnemyAttackLogWithDetail(monster.getMonsterName(), attackType, enemyDamage);
+            logs.add(enemyAttackLog);
+            
+            // 8. 检查玩家是否死亡
+            boolean playerDead = userElfRecord.getCurrentHp() <= 0;
+            
+            if (playerDead) {
+                // 精灵死亡，标记为死亡状态，等待用户确认切换
+                // 注意：executeMonsterAction已经设置了elfState=2和HP=0，这里只需要设置MP和更新时间
+                userElfRecord.setCurrentMp(0);
+                userElfRecord.setUpdateTime(LocalDateTime.now());
+                battleRecordElfMapper.updateById(userElfRecord);
+                
+                // 同步更新userElf表中的HP为0，防止切换页面还能使用
+                userElf.setHp(0);
+                userElfMapper.updateById(userElf);
+                
+                logs.add("你的精灵" + elf.getElfName() + "被击败了！");
+                
+                // 查询是否还有可用的精灵（从数据库获取最新状态）
+                List<BattleRecordElf> allElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+                BattleRecordElf nextElfRecord = null;
+                
+                // 查找下一个HP>0且elfState=1的精灵
+                boolean foundCurrent = false;
+                for (BattleRecordElf elfRecord : allElves) {
+                    if (elfRecord.getElfId().equals(userElfRecord.getElfId())) {
+                        foundCurrent = true;
+                        continue;
+                    }
+                    if (foundCurrent && elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                        && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                        nextElfRecord = elfRecord;
+                        break;
+                    }
+                }
+                
+                // 如果没找到，从头开始找
+                if (nextElfRecord == null) {
+                    for (BattleRecordElf elfRecord : allElves) {
+                        if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                            && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                            nextElfRecord = elfRecord;
+                            break;
+                        }
+                    }
+                }
+                
+                if (nextElfRecord == null) {
+                    // 没有可用的精灵，战斗失败
+                    BattleUtils.handleDefeat(battleRecord, battleSecurityInterceptor, userId, battleRecordMapper);
+                    logs.add("战斗失败！你的所有出战精灵都被击败了");
+                    
+                    Map<String, Object> result = BattleUtils.buildBattleResult(
+                            battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, null, false, logs);
+                    return Result.success(result);
+                }
+                
+                // 有可用精灵，等待用户确认切换
+                logs.add("请确认切换下一只精灵");
+                
+                // 增加回合数
+                battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
+                battleRecordMapper.updateById(battleRecord);
+                
+                // 注意：battle_record_elf.elfId存储的是user_elf的ID，不是elf表的ID
+                // 所以nextElfRecord.getElfId()就是userElf的ID
+                Long nextUserElfId = nextElfRecord.getElfId();
+                
+                // 返回结果，标记需要用户确认切换
+                Map<String, Object> result = BattleUtils.buildBattleResult(
+                        battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, null, false, logs);
+                result.put("needSwitch", true); // 标记需要切换精灵
+                result.put("nextElfId", nextUserElfId); // 下一只精灵的userElf ID
+                result.put("nextElfHp", nextElfRecord.getCurrentHp()); // 下一只精灵的HP
+                result.put("nextElfMp", nextElfRecord.getCurrentMp()); // 下一只精灵的MP
+                return Result.success(result);
+            }
+            
+            // 9. 增加回合数
+            battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
+            battleRecordMapper.updateById(battleRecord);
+            
+            // 10. 构建返回结果
+            Map<String, Object> result = BattleUtils.buildBattleResult(
+                    battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, null, false, logs);
+            
+            return Result.success(result);
+            
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+    
+    /**
+     * 执行玩家攻击回合
+     * @return 怪物是否死亡
+     */
+    private boolean executePlayerAttackRound(Long userId, String actionType, Integer skillId, Skill skill,
+            BattleRecordElf userElfRecord, UserElf userElf, Elf elf,
+            BattleRecordMonster monsterRecord, Monster monster, BattleRecord battleRecord, List<String> logs) {
+        
+        int damage;
+        String skillName = null;
+        
+        if ("attack".equals(actionType)) {
+            damage = BattleUtils.executePlayerAttack("attack", null, userElfRecord, userElf, elf, monster, skillMapper);
+        } else {
+            damage = BattleUtils.executePlayerAttack("skill", skillId, userElfRecord, userElf, elf, monster, skillMapper);
+            skillName = skill != null ? skill.getSkillName() : null;
+            battleRecordElfMapper.updateById(userElfRecord);
+        }
+        
+        // 更新怪物HP
+        int originalMonsterHp = monsterRecord.getCurrentHp();
+        monsterRecord.setCurrentHp(Math.max(0, monsterRecord.getCurrentHp() - damage));
+        monsterRecord.setUpdateTime(LocalDateTime.now());
+        battleRecordMonsterMapper.updateById(monsterRecord);
+        
+        // 生成日志
+        String attackLog = BattleUtils.generateAttackLog(elf.getElfName(), actionType, skillName, damage);
+        logs.add(attackLog);
+        logs.add(String.format("敌人HP: %d/%d → %d/%d", 
+                originalMonsterHp, monster.getHp(), monsterRecord.getCurrentHp(), monster.getHp()));
+        
+        return monsterRecord.getCurrentHp() <= 0;
+    }
+    
+    /**
+     * 执行怪物攻击回合
+     * @return 玩家是否死亡（如果切换了精灵则返回false）
+     */
+    private boolean executeMonsterAttackRound(Long userId, BattleRecordElf userElfRecord, UserElf userElf, Elf elf,
+            BattleRecordMonster monsterRecord, Monster monster, BattleRecord battleRecord, List<String> logs) {
+        
+        Map<String, Object> enemyResult = BattleUtils.executeMonsterAction(
+                userElfRecord, userElf, elf, monsterRecord, monster, 
+                battleRecordElfMapper, monsterSkillMapper, skillMapper, battleRecordMonsterMapper);
+        int enemyDamage = (int) enemyResult.get("damage");
+        String attackType = (String) enemyResult.get("attackType");
+        String enemyAttackLog = BattleUtils.generateEnemyAttackLogWithDetail(monster.getMonsterName(), attackType, enemyDamage);
+        logs.add(enemyAttackLog);
+        
+        // 检查玩家是否死亡
+        if (userElfRecord.getCurrentHp() > 0) {
+            return false; // 玩家存活
+        }
+        
+        // 玩家死亡，尝试切换精灵
+        return handlePlayerDeath(userId, userElfRecord, userElf, elf, battleRecord, logs);
+    }
+    
+    /**
+     * 处理玩家精灵死亡，尝试切换下一个精灵
+     * @return 如果还有可用精灵返回false（切换成功），没有则返回true（战斗失败）
+     */
+    private boolean handlePlayerDeath(Long userId, BattleRecordElf userElfRecord, UserElf userElf, Elf elf,
+            BattleRecord battleRecord, List<String> logs) {
+        
+        Long deadElfId = userElfRecord.getElfId(); // 保存当前死亡的精灵ID
+        
+        // 先将当前精灵的HP设置为0并保存，确保数据库中状态正确
+        userElfRecord.setCurrentHp(0);
+        userElfRecord.setCurrentMp(0);
+        userElfRecord.setElfState(2); // 2=死亡
+        userElfRecord.setUpdateTime(LocalDateTime.now());
+        battleRecordElfMapper.updateById(userElfRecord);
+        
+        log.debug("精灵死亡, elfId={}, battleId={}", deadElfId, battleRecord.getBattleId());
+        
+        // 查询该战斗中所有的精灵记录（从数据库获取最新状态）
+        List<BattleRecordElf> allElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+        log.debug("战斗中精灵总数={}", allElves.size());
+        
+        // 查找下一个HP>0且elfState=1的精灵（跳过已死亡的精灵）
+        BattleRecordElf nextElfRecord = null;
+        boolean foundDead = false;
+        
+        // 第一次遍历：从当前精灵之后找
+        for (BattleRecordElf elfRecord : allElves) {
+            if (elfRecord.getElfId().equals(deadElfId)) {
+                foundDead = true;
+                continue;
+            }
+            if (foundDead && elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0 
+                && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                nextElfRecord = elfRecord;
+                break;
+            }
+        }
+        
+        // 如果没找到，从头开始找
+        if (nextElfRecord == null) {
+            for (BattleRecordElf elfRecord : allElves) {
+                if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0 
+                    && !elfRecord.getElfId().equals(deadElfId)
+                    && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                    nextElfRecord = elfRecord;
+                    break;
+                }
+            }
+        }
+        
+        if (nextElfRecord == null) {
+            // 没有可用的精灵，判定战败
+            BattleUtils.handleDefeat(battleRecord, battleSecurityInterceptor, userId, battleRecordMapper);
+            logs.add("战斗失败！你的所有出战精灵都被击败了");
+            return true;
+        }
+        
+        log.debug("找到下一个精灵, elfId={}, hp={}", nextElfRecord.getElfId(), nextElfRecord.getCurrentHp());
+        
+        // 查询新精灵的详细信息
+        UserElf nextElf = userElfMapper.selectById(nextElfRecord.getElfId());
+        if (nextElf == null) {
+            BattleUtils.handleDefeat(battleRecord, battleSecurityInterceptor, userId, battleRecordMapper);
+            logs.add("战斗失败！精灵信息不存在");
+            return true;
+        }
+        
+        Elf nextElfTemplate = elfMapper.selectById(nextElf.getElfId());
+        String nextElfName = nextElfTemplate != null ? nextElfTemplate.getElfName() : "未知精灵";
+        
+        // 切换到下一个精灵
+        logs.add("你的精灵被击败！" + nextElfName + " 登场！");
+        
+        // 注意：如果精灵已经死亡（elfState=2），不要修改其状态
+        // BattleUtils.executeMonsterAction 已经设置了elfState=2
+        // 只需要确保HP和MP为0即可
+        if (userElfRecord.getElfState() != null && userElfRecord.getElfState() != 2) {
+            // 精灵还未标记为死亡，现在标记
+            userElfRecord.setElfState(2); // 2=死亡
+        }
+        userElfRecord.setCurrentHp(0);
+        userElfRecord.setCurrentMp(0);
+        userElfRecord.setUpdateTime(LocalDateTime.now());
+        battleRecordElfMapper.updateById(userElfRecord);
+        
+        // 将下一个精灵标记为战斗中
+        nextElfRecord.setElfState(0); // 0=战斗中
+        nextElfRecord.setUpdateTime(LocalDateTime.now());
+        battleRecordElfMapper.updateById(nextElfRecord);
+        
+        log.debug("精灵切换, deadElfId={}, newElfId={}", userElfRecord.getElfId(), nextElfRecord.getElfId());
+        
+        logs.add(nextElfName + " 加入了战斗！");
+        
+        // 切换成功，玩家继续存活
+        return false;
+    }
+
+
 
     @Override
     @Transactional
@@ -457,46 +950,164 @@ public class BattleServiceImpl implements BattleService {
             return Result.error("当前没有进行中的战斗");
         }
 
-        // 查询用户的精灵
-        UserElf userElf = userElfMapper.selectById(elfId);
-        if (userElf == null || !userElf.getUserId().equals(userId)) {
-            return Result.error("精灵不存在或不属于当前用户");
-        }
-
-        // 查询精灵信息
-        Elf elf = elfMapper.selectById(userElf.getElfId());
-        if (elf == null) {
-            return Result.error("精灵信息不存在");
-        }
-
-        // 查询原精灵状态
+        // 查询该战斗中所有的精灵记录
         List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
         if (elves.isEmpty()) {
             return Result.error("精灵信息不存在");
         }
 
-        // 替换精灵
-        BattleRecordElf oldElf = elves.get(0);
-        oldElf.setElfId(elfId);
-        oldElf.setCurrentHp(userElf.getHp());
-        oldElf.setCurrentMp(userElf.getMp());
-        oldElf.setElfState(0); // 0=战斗中
-        oldElf.setUpdateTime(LocalDateTime.now());
-        battleRecordElfMapper.updateById(oldElf);
+        // 获取当前战斗中的精灵（elfState=0）
+        // 注意：在精灵死亡切换的场景中，当前精灵可能已经是elfState=2（死亡）
+        BattleRecordElf currentElfRecord = null;
+        for (BattleRecordElf elfRecord : elves) {
+            if (elfRecord.getElfState() != null && (elfRecord.getElfState() == 0 || elfRecord.getElfState() == 2)) {
+                currentElfRecord = elfRecord;
+                break;
+            }
+        }
+        
+        if (currentElfRecord == null) {
+            return Result.error("当前没有战斗中的精灵");
+        }
+        
+        // 验证目标精灵是否在出战列表中
+        BattleRecordElf targetElfRecord = null;
+        for (BattleRecordElf elfRecord : elves) {
+            if (elfRecord.getElfId().equals(elfId)) {
+                targetElfRecord = elfRecord;
+                break;
+            }
+        }
+
+        if (targetElfRecord == null) {
+            return Result.error("该精灵不在出战列表中");
+        }
+
+        // 验证目标精灵是否存活且可上场（elfState=1）
+        if (targetElfRecord.getCurrentHp() == null || targetElfRecord.getCurrentHp() <= 0
+            || targetElfRecord.getElfState() == null || targetElfRecord.getElfState() != 1) {
+            return Result.error("该精灵已死亡或不可上场，无法切换");
+        }
+
+        // 不能切换到当前精灵
+        if (currentElfRecord.getElfId().equals(elfId)) {
+            return Result.error("已经在战斗中");
+        }
+
+        // 查询用户的精灵信息
+        UserElf targetUserElf = userElfMapper.selectById(elfId);
+        if (targetUserElf == null || !targetUserElf.getUserId().equals(userId)) {
+            return Result.error("精灵不存在或不属于当前用户");
+        }
+
+        // 查询精灵模板信息
+        Elf targetElfTemplate = elfMapper.selectById(targetUserElf.getElfId());
+        if (targetElfTemplate == null) {
+            return Result.error("精灵信息不存在");
+        }
+
+        // 更新原精灵状态为可上场（如果原精灵已死亡，则不修改其状态）
+        if (currentElfRecord.getElfState() != null && currentElfRecord.getElfState() != 2) {
+            // 只有活着的精灵才能设置为可上场
+            currentElfRecord.setElfState(1); // 1=可上场
+            currentElfRecord.setUpdateTime(LocalDateTime.now());
+            battleRecordElfMapper.updateById(currentElfRecord);
+        }
+
+        // 更新目标精灵状态为战斗中
+        targetElfRecord.setElfState(0); // 0=战斗中
+        targetElfRecord.setUpdateTime(LocalDateTime.now());
+        battleRecordElfMapper.updateById(targetElfRecord);
 
         // 构建返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("status", 0); // 0=战斗中
-        result.put("elf", Map.of(
-            "id", userElf.getId(),
-            "elfId", userElf.getElfId(),
-            "hp", userElf.getHp(),
-            "maxHp", userElf.getMaxHp(),
-            "mp", userElf.getMp(),
-            "maxMp", userElf.getMaxMp(),
-            "level", userElf.getLevel(),
-            "elementType", elf.getElementType()
-        ));
+        
+        // 构建精灵信息（使用HashMap避免Map.of的10个键值对限制）
+        Map<String, Object> elfData = new HashMap<>();
+        elfData.put("id", targetUserElf.getId());
+        elfData.put("elfId", targetUserElf.getElfId());
+        elfData.put("hp", targetElfRecord.getCurrentHp());
+        elfData.put("maxHp", targetUserElf.getMaxHp());
+        elfData.put("mp", targetElfRecord.getCurrentMp());
+        elfData.put("maxMp", targetUserElf.getMaxMp());
+        elfData.put("level", targetUserElf.getLevel());
+        elfData.put("attack", targetUserElf.getAttack());
+        elfData.put("defense", targetUserElf.getDefense());
+        elfData.put("normalDamage", targetUserElf.getNormalDamage());
+        elfData.put("speed", targetUserElf.getSpeed());
+        elfData.put("elementType", targetElfTemplate.getElementType());
+        
+        result.put("elf", elfData);
+        // 添加精灵名字和系别到结果顶层，方便前端直接使用
+        result.put("elfName", targetElfTemplate.getElfName());
+        result.put("elfElementType", targetElfTemplate.getElementType());
+
+        return Result.success(result);
+    }
+
+    @Override
+    public Result<List<Map<String, Object>>> getBattleElves(Long userId) {
+        // 查询当前战斗
+        BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+        if (battleRecord == null) {
+            return Result.error("当前没有进行中的战斗");
+        }
+
+        // 从battle_record_elf查询战斗中的精灵
+        List<BattleRecordElf> battleElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+        if (battleElves == null || battleElves.isEmpty()) {
+            return Result.error("精灵信息不存在");
+        }
+
+        // 转换为包含精灵名字的Map列表
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (BattleRecordElf battleElf : battleElves) {
+            // 过滤掉已死亡的精灵（HP<=0或elfState=2）
+            if (battleElf.getCurrentHp() == null || battleElf.getCurrentHp() <= 0
+                || battleElf.getElfState() != null && battleElf.getElfState() == 2) {
+                continue;
+            }
+
+            // 注意：battle_record_elf.elfId存储的是user_elf的ID，不是elf表的ID
+            // 所以直接用selectById查询userElf
+            UserElf userElf = userElfMapper.selectById(battleElf.getElfId());
+            if (userElf == null) {
+                continue;
+            }
+
+            // 查询精灵模板信息
+            Elf elf = elfMapper.selectById(userElf.getElfId());
+            if (elf == null) {
+                continue;
+            }
+
+            Map<String, Object> elfMap = new HashMap<>();
+            elfMap.put("id", userElf.getId());
+            elfMap.put("userId", userElf.getUserId());
+            elfMap.put("elfId", userElf.getElfId());
+            elfMap.put("level", userElf.getLevel());
+            elfMap.put("exp", userElf.getExp());
+            elfMap.put("expNeed", userElf.getExpNeed());
+            elfMap.put("maxHp", userElf.getMaxHp());
+            elfMap.put("maxMp", userElf.getMaxMp());
+            elfMap.put("hp", battleElf.getCurrentHp()); // 使用battle_record_elf中的HP
+            elfMap.put("mp", battleElf.getCurrentMp()); // 使用battle_record_elf中的MP
+            elfMap.put("attack", userElf.getAttack());
+            elfMap.put("defense", userElf.getDefense());
+            elfMap.put("normalDamage", userElf.getNormalDamage());
+            elfMap.put("speed", userElf.getSpeed());
+            elfMap.put("isFight", userElf.getIsFight());
+            elfMap.put("fightOrder", userElf.getFightOrder());
+            elfMap.put("status", userElf.getStatus());
+            elfMap.put("elfState", battleElf.getElfState()); // 战斗中的状态
+
+            // 添加精灵名字和系别
+            elfMap.put("elfName", elf.getElfName());
+            elfMap.put("elementType", elf.getElementType());
+
+            result.add(elfMap);
+        }
 
         return Result.success(result);
     }
@@ -621,11 +1232,15 @@ public class BattleServiceImpl implements BattleService {
     @Override
     @Transactional
     public Result<Map<String, Object>> claimReward(Long userId, Integer levelId, String battleId) {
+        log.info("领取战斗奖励, userId={}, levelId={}, battleId={}", userId, levelId, battleId);
+        
         // 1. 校验战斗胜利标记（必须战斗胜利）
         String victoryKey = RedisKeyConstant.buildBattleVictoryKey(userId, levelId);
         String victoryBattleId = stringRedisTemplate.opsForValue().get(victoryKey);
         
         if (victoryBattleId == null || !victoryBattleId.equals(battleId)) {
+            log.warn("奖励领取验证失败, userId={}, victoryBattleId={}, expectedBattleId={}", 
+                userId, victoryBattleId, battleId);
             throw BattleException.noRewardPermission();
         }
         
@@ -652,15 +1267,53 @@ public class BattleServiceImpl implements BattleService {
         
         // 5. 发放奖励
         if (actualExp > 0) {
-            // 查询当前出战精灵并增加经验
-            BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
+            // 查询所有出战精灵并增加经验（每只出战精灵都获得完整经验，包括死亡的精灵）
+            // 注意：战斗胜利后status=1，不能使用selectCurrentBattleByUserId查询
+            // 应该通过battleId直接查询
+            QueryWrapper<BattleRecord> wrapper = new QueryWrapper<>();
+            wrapper.eq("battle_id", battleId);
+            BattleRecord battleRecord = battleRecordMapper.selectOne(wrapper);
+                    
             if (battleRecord != null) {
                 List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+                        
                 if (!elves.isEmpty()) {
-                    UserElf userElf = userElfMapper.selectById(elves.get(0).getElfId());
-                    if (userElf != null) {
-                        userElf.setExp(userElf.getExp() + actualExp);
-                        userElfMapper.updateById(userElf);
+                    log.debug("开始发放经验, 出战精灵数量={}", elves.size());
+                            
+                    // 遍历所有出战精灵，每只精灵都获得完整的经验奖励
+                    for (BattleRecordElf elfRecord : elves) {
+                        UserElf userElf = userElfMapper.selectById(elfRecord.getElfId());
+                        if (userElf != null) {
+                            userElf.setExp(userElf.getExp() + actualExp);
+                                    
+                            // 检查是否可以升级（可能连续升多级）
+                            int levelUpCount = 0;
+                            while (userElf.getExp() >= userElf.getExpNeed() && userElf.getLevel() < 10) {
+                                levelUpCount++;
+                                        
+                                // 升级处理
+                                userElf.setLevel(userElf.getLevel() + 1);
+                                userElf.setExp(userElf.getExp() - userElf.getExpNeed());
+                                userElf.setExpNeed(100L); // 经验需求怛为100
+                                // 属性提升
+                                userElf.setMaxHp(userElf.getMaxHp() + 20);
+                                userElf.setMaxMp(userElf.getMaxMp() + 10);
+                                userElf.setAttack(userElf.getAttack() + 5);
+                                userElf.setDefense(userElf.getDefense() + 3);
+                                userElf.setNormalDamage(userElf.getNormalDamage() + 2);
+                                userElf.setSpeed(userElf.getSpeed() + 2);
+                                // 满血满蓝
+                                userElf.setHp(userElf.getMaxHp());
+                                userElf.setMp(userElf.getMaxMp());
+                            }
+                                    
+                            if (levelUpCount > 0) {
+                                log.info("精灵升级, elfId={}, 升级{}级, 最终等级={}", 
+                                    userElf.getId(), levelUpCount, userElf.getLevel());
+                            }
+                                    
+                            userElfMapper.updateById(userElf);
+                        }
                     }
                 }
             }
@@ -674,7 +1327,10 @@ public class BattleServiceImpl implements BattleService {
         stringRedisTemplate.opsForValue().set(rewardKey, "1", 
                 Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
         
-        // 7. 构建返回结果
+        // 7. 清理用户战斗状态（在奖励领取完成后清理）
+        battleSecurityInterceptor.updateBattleStatus(userId, false);
+        
+        // 8. 构建返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("expReward", expReward);
         result.put("goldReward", goldReward);
@@ -785,8 +1441,11 @@ public class BattleServiceImpl implements BattleService {
      * 记录战斗胜利标记（内部方法，供战斗胜利时调用）
      */
     private void recordBattleVictory(Long userId, Integer levelId, String battleId) {
+        log.info("[胜利标记调试] recordBattleVictory方法被调用");
         String victoryKey = RedisKeyConstant.buildBattleVictoryKey(userId, levelId);
+        log.info("[胜利标记调试] victoryKey={}, battleId={}", victoryKey, battleId);
         stringRedisTemplate.opsForValue().set(victoryKey, battleId, 
                 Duration.ofSeconds(RedisKeyConstant.getSecondsUntilMidnight()));
+        log.info("[胜利标记调试] Redis设置完成");
     }
 }

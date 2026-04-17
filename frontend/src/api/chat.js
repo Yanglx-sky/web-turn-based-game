@@ -64,16 +64,24 @@ export const chatApi = {
 }
 
 /**
- * 好友相关API
+ * 好友的相关API
  */
 export const friendApi = {
+  /**
+   * 搜索用户（通过手机号）
+   * @param {string} phone - 手机号
+   */
+  searchUserByPhone: (phone) => api.get('/api/users/search', {
+    params: { phone }
+  }),
+
   /**
    * 发送好友申请
    * @param {number} friendId - 被申请人ID
    * @param {string} remark - 备注名称
    */
   sendFriendRequest: (friendId, remark) => 
-    api.post('/api/friends/request', null, {
+    api.post('/api/friends/requests', null, {
       params: { friendId, remark }
     }),
 
@@ -82,27 +90,21 @@ export const friendApi = {
    * @param {number} friendId - 申请人ID
    */
   acceptFriendRequest: (friendId) => 
-    api.post('/api/friends/accept', null, {
-      params: { friendId }
-    }),
+    api.put(`/api/friends/requests/${friendId}/accept`),
 
   /**
    * 拒绝好友申请
    * @param {number} friendId - 申请人ID
    */
   rejectFriendRequest: (friendId) => 
-    api.post('/api/friends/reject', null, {
-      params: { friendId }
-    }),
+    api.put(`/api/friends/requests/${friendId}/reject`),
 
   /**
    * 删除好友
    * @param {number} friendId - 好友ID
    */
   deleteFriend: (friendId) => 
-    api.post('/api/friends/delete', null, {
-      params: { friendId }
-    }),
+    api.delete(`/api/friends/${friendId}`),
 
   /**
    * 获取好友列表
@@ -112,30 +114,26 @@ export const friendApi = {
   /**
    * 获取待确认的好友申请列表
    */
-  getPendingRequests: () => api.get('/api/friends/pending'),
+  getPendingRequests: () => api.get('/api/friends/requests/pending'),
 
   /**
    * 拉黑好友
    * @param {number} friendId - 好友ID
    */
   blacklistFriend: (friendId) => 
-    api.post('/api/friends/blacklist', null, {
-      params: { friendId }
-    }),
+    api.put(`/api/friends/${friendId}/blacklist`),
 
   /**
    * 解除拉黑
    * @param {number} friendId - 好友ID
    */
   unblacklistFriend: (friendId) => 
-    api.post('/api/friends/unblacklist', null, {
-      params: { friendId }
-    }),
+    api.put(`/api/friends/${friendId}/unblacklist`),
 
   /**
    * 获取黑名单列表
    */
-  getBlacklist: () => api.get('/api/friends/blacklist'),
+  getBlacklist: () => api.get('/api/friends/blacklists'),
 
   /**
    * 更新好友备注
@@ -143,8 +141,8 @@ export const friendApi = {
    * @param {string} remark - 备注名称
    */
   updateRemark: (friendId, remark) => 
-    api.post('/api/friends/remark', null, {
-      params: { friendId, remark }
+    api.put(`/api/friends/${friendId}/remark`, null, {
+      params: { remark }
     }),
 
   /**
@@ -152,7 +150,5 @@ export const friendApi = {
    * @param {number} friendId - 好友ID
    */
   checkFriendship: (friendId) => 
-    api.get('/api/friends/check', {
-      params: { friendId }
-    })
+    api.get(`/api/friends/${friendId}/check`)
 }

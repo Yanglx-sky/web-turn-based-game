@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,10 +54,9 @@ public class LevelController {
     }
 
     @PostMapping("/enter")
-    @Operation(summary = "进入关卡", description = "进入指定关卡，精灵自动满血满蓝")
+    @Operation(summary = "进入关卡", description = "进入指定关卡，自动使用玩家配置的出战精灵列表")
     public Result<Map<String, Object>> enterLevel(HttpServletRequest request, 
-            @Parameter(name = "levelId", description = "关卡ID", required = true) Integer levelId,
-            @Parameter(name = "userElfId", description = "用户精灵ID", required = true) Long userElfId) {
+            @RequestBody Map<String, Object> params) {
         try {
             // 从请求头中获取token
             String token = request.getHeader("Authorization");
@@ -65,7 +65,29 @@ public class LevelController {
             }
             // 从token中获取userId
             Long userId = jwtUtil.getUserIdFromToken(token);
-            return battleService.startBattle(userId, userElfId, levelId);
+            
+            // 从请求体中获取参数
+            Object levelIdObj = params.get("levelId");
+            
+            Integer levelId = null;
+            
+            if (levelIdObj != null) {
+                if (levelIdObj instanceof Number) {
+                    levelId = ((Number) levelIdObj).intValue();
+                } else if (levelIdObj instanceof String) {
+                    try {
+                        levelId = Integer.parseInt((String) levelIdObj);
+                    } catch (NumberFormatException e) {
+                        logger.warn("无效的levelId格式: {}", levelIdObj);
+                    }
+                }
+            }
+            
+            if (levelId == null) {
+                return Result.error("缺少必要参数：levelId");
+            }
+            
+            return battleService.startBattle(userId, levelId);
         } catch (Exception e) {
             logger.error("获取用户信息失败: {}", e.getMessage(), e);
             return Result.error("获取用户信息失败: " + e.getMessage());

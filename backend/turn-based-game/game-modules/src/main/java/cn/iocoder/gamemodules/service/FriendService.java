@@ -4,6 +4,7 @@ import cn.iocoder.gamemodules.entity.FriendRelation;
 import cn.iocoder.gamecommon.result.Result;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 好友服务接口
@@ -43,13 +44,13 @@ public interface FriendService {
      * 获取好友列表
      * @param userId 当前用户ID
      */
-    Result<List<FriendRelation>> getFriendList(Long userId);
+    Result<List<Map<String, Object>>> getFriendList(Long userId);
 
     /**
      * 获取待确认的好友申请列表
      * @param userId 当前用户ID
      */
-    Result<List<FriendRelation>> getPendingRequests(Long userId);
+    Result<List<Map<String, Object>>> getPendingRequests(Long userId);
 
     /**
      * 拉黑好友

@@ -25,8 +25,58 @@
       <div class="chat-container">
         <!-- 侧边栏 -->
         <div class="chat-sidebar">
+          <!-- 功能切换下拉框 -->
+          <div class="section selector-section">
+            <select v-model="activeSection" class="section-selector">
+              <option value="channel">频道</option>
+              <option value="friend">好友</option>
+              <option value="request">好友申请</option>
+              <option value="search">添加好友</option>
+            </select>
+          </div>
+          
+          <!-- 搜索用户 -->
+          <div v-if="activeSection === 'search'" class="section search-section">
+            <h3>添加好友</h3>
+            <div class="search-box">
+              <input 
+                v-model="searchPhone" 
+                placeholder="输入手机号搜索" 
+                @keyup.enter="searchUser"
+              />
+              <button @click="searchUser" class="search-btn">搜索</button>
+            </div>
+            <div v-if="searchedUser" class="search-result">
+              <div class="user-info">
+                <span class="user-nickname">{{ searchedUser.nickname }}</span>
+              </div>
+              <button @click="sendFriendRequest" class="add-friend-btn">添加好友</button>
+            </div>
+          </div>
+          
+          <!-- 好友申请列表 -->
+          <div v-if="activeSection === 'request'" class="section request-section">
+            <h3>好友申请 <span v-if="pendingRequests.length > 0" class="badge">{{ pendingRequests.length }}</span></h3>
+            <div class="request-list">
+              <div v-if="pendingRequests.length === 0" class="empty-list">暂无申请</div>
+              <div 
+                v-for="request in pendingRequests" 
+                :key="request.userId"
+                class="request-item"
+              >
+                <div class="request-info">
+                  <span class="request-nickname">{{ request.nickname || '未知用户' }}</span>
+                </div>
+                <div class="request-actions">
+                  <button @click="acceptRequest(request.userId)" class="accept-btn">同意</button>
+                  <button @click="rejectRequest(request.userId)" class="reject-btn">拒绝</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- 频道列表 -->
-          <div class="section channel-section">
+          <div v-if="activeSection === 'channel'" class="section channel-section">
             <h3>频道</h3>
             <div class="channel-list">
               <div 
@@ -42,9 +92,10 @@
           </div>
           
           <!-- 好友列表 -->
-          <div class="section friend-section">
+          <div v-if="activeSection === 'friend'" class="section friend-section">
             <h3>好友</h3>
             <div class="friend-list">
+              <div v-if="friends.length === 0" class="empty-list">暂无好友</div>
               <div 
                 v-for="friend in friends" 
                 :key="friend.friendId"
@@ -52,10 +103,7 @@
                 :class="{ active: currentFriend?.friendId === friend.friendId }"
                 @click="switchFriend(friend)"
               >
-                <span class="friend-name">{{ friend.remark || `用户${friend.friendId}` }}</span>
-                <span v-if="unreadCounts[friend.friendId]" class="unread-badge">
-                  {{ unreadCounts[friend.friendId] }}
-                </span>
+                <span class="friend-name">{{ friend.nickname || friend.remark || `用户${friend.friendId}` }}</span>
               </div>
             </div>
           </div>
@@ -137,6 +185,14 @@ const isConnected = ref(false)
 const unreadCounts = ref({})
 const messageListRef = ref(null)
 
+// 功能切换
+const activeSection = ref('channel') // 默认显示频道
+
+// 好友申请相关
+const searchPhone = ref('')
+const searchedUser = ref(null)
+const pendingRequests = ref([])
+
 // WebSocket
 let ws = null
 let heartbeatTimer = null
@@ -153,7 +209,7 @@ const chatTitle = computed(() => {
     return currentChannel.value.channelName
   }
   if (currentFriend.value) {
-    return currentFriend.value.remark || `用户${currentFriend.value.friendId}`
+    return currentFriend.value.nickname || currentFriend.value.remark || `用户${currentFriend.value.friendId}`
   }
   return '请选择频道或好友'
 })
@@ -169,6 +225,7 @@ const canSend = computed(() => {
 onMounted(async () => {
   await loadChannels()
   await loadFriends()
+  await loadPendingRequests()
   initWebSocket()
 })
 
@@ -201,6 +258,93 @@ const loadFriends = async () => {
     }
   } catch (error) {
     console.error('加载好友失败:', error)
+  }
+}
+
+// 搜索用户
+const searchUser = async () => {
+  if (!searchPhone.value.trim()) {
+    alert('请输入手机号')
+    return
+  }
+  
+  try {
+    const response = await friendApi.searchUserByPhone(searchPhone.value.trim())
+    if (response.code === 200) {
+      searchedUser.value = response.data
+    } else {
+      searchedUser.value = null
+      alert(response.msg || '未找到该用户')
+    }
+  } catch (error) {
+    console.error('搜索用户失败:', error)
+    alert('搜索失败，请重试')
+  }
+}
+
+// 发送好友申请
+const sendFriendRequest = async () => {
+  if (!searchedUser.value) return
+  
+  try {
+    const response = await friendApi.sendFriendRequest(searchedUser.value.id, '')
+    if (response.code === 200) {
+      alert('好友申请已发送')
+      searchedUser.value = null
+      searchPhone.value = ''
+    } else {
+      alert(response.msg || '发送好友申请失败')
+    }
+  } catch (error) {
+    console.error('发送好友申请失败:', error)
+    alert('发送失败，请重试')
+  }
+}
+
+// 加载待处理的好友申请
+const loadPendingRequests = async () => {
+  try {
+    const response = await friendApi.getPendingRequests()
+    if (response.code === 200) {
+      pendingRequests.value = response.data || []
+    }
+  } catch (error) {
+    console.error('加载好友申请失败:', error)
+  }
+}
+
+// 同意好友申请
+const acceptRequest = async (friendId) => {
+  try {
+    const response = await friendApi.acceptFriendRequest(friendId)
+    if (response.code === 200) {
+      alert('已同意好友申请')
+      // 重新加载好友列表和申请列表
+      await loadFriends()
+      await loadPendingRequests()
+    } else {
+      alert(response.msg || '同意失败')
+    }
+  } catch (error) {
+    console.error('同意好友申请失败:', error)
+    alert('同意失败，请重试')
+  }
+}
+
+// 拒绝好友申请
+const rejectRequest = async (friendId) => {
+  try {
+    const response = await friendApi.rejectFriendRequest(friendId)
+    if (response.code === 200) {
+      alert('已拒绝好友申请')
+      // 重新加载申请列表
+      await loadPendingRequests()
+    } else {
+      alert(response.msg || '拒绝失败')
+    }
+  } catch (error) {
+    console.error('拒绝好友申请失败:', error)
+    alert('拒绝失败，请重试')
   }
 }
 
@@ -432,9 +576,10 @@ const getSenderName = (msg) => {
     return '我'
   }
   if (currentFriend.value) {
-    return currentFriend.value.remark || `用户${msg.senderId}`
+    return currentFriend.value.nickname || currentFriend.value.remark || `用户${msg.senderId}`
   }
-  return `用户${msg.senderId}`
+  // 频道消息使用senderNickname
+  return msg.senderNickname || `用户${msg.senderId}`
 }
 
 // 格式化时间
@@ -564,6 +709,37 @@ h1 {
   flex-direction: column;
 }
 
+/* 功能切换下拉框样式 */
+.selector-section {
+  padding: 15px;
+  border-bottom: 2px solid #e0e0e0;
+  background: #f9f9f9;
+}
+
+.section-selector {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #ff8c00;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.section-selector:hover {
+  border-color: #ff6f00;
+  box-shadow: 0 2px 8px rgba(255, 140, 0, 0.2);
+}
+
+.section-selector:focus {
+  border-color: #ff6f00;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1);
+}
+
 .section {
   padding: 20px;
   border-bottom: 1px solid #e0e0e0;
@@ -575,10 +751,170 @@ h1 {
   color: #ff8c00;
   font-weight: bold;
   text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.badge {
+  background: #ff4444;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* 搜索用户样式 */
+.search-section {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.search-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.search-box input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #ff8c00;
+}
+
+.search-btn {
+  padding: 8px 16px;
+  background: #ff8c00;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.search-btn:hover {
+  background: #ff6f00;
+}
+
+.search-result {
+  background: rgba(255, 140, 0, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.user-info {
+  margin-bottom: 10px;
+}
+
+.user-nickname {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.add-friend-btn {
+  width: 100%;
+  padding: 10px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.add-friend-btn:hover {
+  background: #43a047;
+}
+
+/* 好友申请样式 */
+.request-section {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.request-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.empty-list {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.request-item {
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.request-info {
+  margin-bottom: 10px;
+}
+
+.request-nickname {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.accept-btn,
+.reject-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.accept-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.accept-btn:hover {
+  background: #43a047;
+}
+
+.reject-btn {
+  background: #f44336;
+  color: white;
+}
+
+.reject-btn:hover {
+  background: #e53935;
 }
 
 .channel-list,
-.friend-list {
+.friend-list,
+.request-list {
   max-height: 300px;
   overflow-y: auto;
 }

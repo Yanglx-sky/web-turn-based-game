@@ -211,6 +211,17 @@ public class UserController {
         }
     }
 
+    @GetMapping("/search")
+    @Operation(summary = "搜索用户", description = "通过手机号搜索用户，仅返回昵称")
+    public Object searchUserByPhone(
+            @Parameter(name = "phone", description = "手机号", required = true) @RequestParam String phone) {
+        try {
+            return userService.searchUserByPhone(phone);
+        } catch (Exception e) {
+            return Result.error("搜索用户失败");
+        }
+    }
+
     // 请求参数类
     static class RegisterRequest {
         private String password;

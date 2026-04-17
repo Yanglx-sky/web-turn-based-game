@@ -39,23 +39,62 @@ public class EquipServiceImpl implements EquipService {
     }
 
     @Override
-    public Result<Map<String, Object>> equipWeapon(Long userId, Long elfId, Long userBagId) {
+    public Result<Map<String, Object>> equipWeapon(Long userId, Long elfId, Long weaponId) {
+        System.out.println("[DEBUG] ========== 装备武器开始 ==========");
+        System.out.println("[DEBUG] 参数 - userId: " + userId + ", elfId: " + elfId + ", weaponId: " + weaponId);
+        
         // 检查精灵是否存在且属于该用户
         QueryWrapper<UserElf> wrapper = new QueryWrapper<>();
         wrapper.eq("id", elfId).eq("user_id", userId);
         UserElf userElf = userElfMapper.selectOne(wrapper);
+        
         if (userElf == null) {
+            System.out.println("[DEBUG] 精灵查询失败 - 条件: id=" + elfId + " AND user_id=" + userId);
+            
+            UserElf anyElf = userElfMapper.selectById(elfId);
+            if (anyElf == null) {
+                System.out.println("[DEBUG] 错误原因: 精灵ID " + elfId + " 在数据库中不存在");
+            } else {
+                System.out.println("[DEBUG] 错误原因: 精灵ID " + elfId + " 存在，但属于用户 " + anyElf.getUserId() + "，而不是当前用户 " + userId);
+            }
+            
             return Result.error("精灵不存在或不属于该用户");
         }
+        
+        System.out.println("[DEBUG] 精灵查询成功 - 精灵ID: " + userElf.getId());
 
-        // 检查UserBag是否存在且属于该用户
+        // 根据weaponId查找用户背包中对应的未装备记录
         QueryWrapper<UserBag> userBagWrapper = new QueryWrapper<>();
-        userBagWrapper.eq("id", userBagId).eq("user_id", userId);
+        userBagWrapper.eq("user_id", userId);
+        userBagWrapper.eq("equip_config_id", weaponId);
         userBagWrapper.eq("is_worn", 0);
-        UserBag userBag = userBagMapper.selectOne(userBagWrapper);
-        if (userBag == null) {
+        
+        System.out.println("[DEBUG] 查询背包 - 条件: user_id=" + userId + ", equip_config_id=" + weaponId + ", is_worn=0");
+        
+        // 使用selectList避免TooManyResultsException
+        List<UserBag> userBags = userBagMapper.selectList(userBagWrapper);
+        
+        if (userBags == null || userBags.isEmpty()) {
+            System.out.println("[DEBUG] 背包记录查询失败");
+            
+            // 尝试查询是否有该装备（不管是否已装备）
+            QueryWrapper<UserBag> anyBagWrapper = new QueryWrapper<>();
+            anyBagWrapper.eq("user_id", userId);
+            anyBagWrapper.eq("equip_config_id", weaponId);
+            List<UserBag> anyBags = userBagMapper.selectList(anyBagWrapper);
+            
+            if (anyBags == null || anyBags.isEmpty()) {
+                System.out.println("[DEBUG] 错误原因: 用户 " + userId + " 的背包中没有 equip_config_id=" + weaponId + " 的装备");
+            } else {
+                System.out.println("[DEBUG] 错误原因: 装备存在但所有记录的 is_worn=1（已装备）");
+            }
+            
             return Result.error("您没有该装备或该装备已被使用");
         }
+        
+        // 取第一条未装备的记录
+        UserBag userBag = userBags.get(0);
+        System.out.println("[DEBUG] 背包记录查询成功 - userBag.id: " + userBag.getId() + ", is_worn: " + userBag.getIsWorn());
 
         // 检查装备是否存在且是武器
         Long equipConfigId = userBag.getEquipConfigId();
@@ -71,24 +110,23 @@ public class EquipServiceImpl implements EquipService {
         userBag.setIsWorn(1);
         userBag.setElfId(elfId);
         userBagMapper.updateById(userBag);
+        
+        System.out.println("[DEBUG] 已更新背包记录 - is_worn: 1, elf_id: " + elfId);
 
         // 装备武器
         userElf.setWeaponId(equipConfigId);
 
         // 直接计算并更新精灵属性
-        // 1. 获取当前装备的属性加成
         int attackBonus = weapon.getAtk();
         int hpBonus = weapon.getHp();
         int mpBonus = weapon.getMp();
         int speedBonus = weapon.getSpeed() != null ? weapon.getSpeed() : 0;
         
-        // 2. 更新精灵属性
         userElf.setAttack(userElf.getAttack() + attackBonus);
         userElf.setMaxHp(userElf.getMaxHp() + hpBonus);
         userElf.setMaxMp(userElf.getMaxMp() + mpBonus);
         userElf.setSpeed(userElf.getSpeed() + speedBonus);
         
-        // 3. 确保当前HP和MP不超过最大值
         if (userElf.getHp() > userElf.getMaxHp()) {
             userElf.setHp(userElf.getMaxHp());
         }
@@ -96,8 +134,9 @@ public class EquipServiceImpl implements EquipService {
             userElf.setMp(userElf.getMaxMp());
         }
         
-        // 4. 更新数据库
         userElfMapper.updateById(userElf);
+        
+        System.out.println("[DEBUG] 装备武器成功");
 
         Map<String, Object> result = new HashMap<>();
         result.put("elf", userElf);
@@ -107,7 +146,7 @@ public class EquipServiceImpl implements EquipService {
     }
 
     @Override
-    public Result<Map<String, Object>> equipArmor(Long userId, Long elfId, Long userBagId) {
+    public Result<Map<String, Object>> equipArmor(Long userId, Long elfId, Long armorId) {
         // 检查精灵是否存在且属于该用户
         QueryWrapper<UserElf> wrapper = new QueryWrapper<>();
         wrapper.eq("id", elfId).eq("user_id", userId);
@@ -118,7 +157,7 @@ public class EquipServiceImpl implements EquipService {
 
         // 检查UserBag是否存在且属于该用户
         QueryWrapper<UserBag> userBagWrapper = new QueryWrapper<>();
-        userBagWrapper.eq("id", userBagId).eq("user_id", userId);
+        userBagWrapper.eq("equip_config_id", armorId).eq("user_id", userId);
         userBagWrapper.eq("is_worn", 0);
         UserBag userBag = userBagMapper.selectOne(userBagWrapper);
         if (userBag == null) {

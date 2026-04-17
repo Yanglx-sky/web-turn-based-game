@@ -35,9 +35,18 @@ public class BattleSecurityInterceptor implements HandlerInterceptor {
     public boolean preHandle(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response, Object handler) throws Exception {
         String path = request.getRequestURI();
         
-        // 只拦截战斗相关接口
-        if (!path.contains("/battle/attack") && !path.contains("/battle/skill") && 
-            !path.contains("/battle/settlement") && !path.contains("/battle/reward")) {
+        // 只拦截战斗相关接口和训练相关接口
+        boolean isBattlePath = path.contains("/battle/attack") || path.contains("/battle/skill") || 
+            path.contains("/battle/settlement") || path.contains("/battle/reward") ||
+            path.contains("/battle/action") || path.contains("/battle/switch") ||
+            path.contains("/battle/flee") || path.contains("/battle/abandon") ||
+            path.contains("/battle/status");
+        
+        boolean isTrainPath = path.contains("/train/attack") || path.contains("/train/skill") ||
+            path.contains("/train/settlement") || path.contains("/train/monster_turn") ||
+            path.contains("/train/flee") || path.contains("/train/switch");
+        
+        if (!isBattlePath && !isTrainPath) {
             return true;
         }
 
@@ -75,24 +84,24 @@ public class BattleSecurityInterceptor implements HandlerInterceptor {
         }
         lastRequestTimeMap.put(userId, currentTime);
 
-        // 校验战斗状态
-        if (path.contains("/battle/attack") || path.contains("/battle/skill") || path.contains("/battle/settlement")) {
+        // 校验战斗状态（reward不需要校验，其他都需要）
+        // 训练模式也需要校验战斗状态
+        boolean isRewardPath = path.contains("/battle/reward");
+        if (!isRewardPath) {
             Boolean inBattle = battleStatusMap.get(userId);
             if (inBattle == null || !inBattle) {
+                System.err.println("[拦截器] 用户" + userId + "未进入战斗/训练，路径: " + path);
                 response.setStatus(400);
                 response.setContentType("application/json; charset=utf-8");
                 response.getWriter().write("{\"code\": 400, \"message\": \"未进入战斗或战斗已结束\", \"data\": null}");
                 return false;
             }
+            System.out.println("[拦截器] 用户" + userId + "战斗状态校验通过，路径: " + path);
         }
 
-        // 禁止直接调用奖励接口刷奖励
-        if (path.contains("/battle/reward")) {
-            response.setStatus(400);
-            response.setContentType("application/json; charset=utf-8");
-            response.getWriter().write("{\"code\": 400, \"message\": \"奖励接口不可直接调用\", \"data\": null}");
-            return false;
-        }
+        // 注意：/battle/reward 不再在此处拦截
+        // 原因：前端需要在战斗胜利后自动调用claimReward领取奖励
+        // 安全性由claimReward方法内部的胜利标记验证和幂等性验证保证
 
         // 禁止直接调用战斗结算接口
         if (path.contains("/battle/settlement")) {
@@ -103,8 +112,10 @@ public class BattleSecurityInterceptor implements HandlerInterceptor {
         }
 
         // 回合有序校验，防止重复出招、乱序出招
-        if (path.contains("/battle/attack") || path.contains("/battle/skill")) {
-            // 从请求参数中获取回合数
+        // 包括战斗模式和训练模式
+        if (path.contains("/battle/attack") || path.contains("/battle/skill") || path.contains("/battle/action") ||
+            path.contains("/train/attack") || path.contains("/train/skill")) {
+            // 从请求参数中获取回合数（对于/action接口，参数在RequestBody中，这里可能获取不到）
             String roundStr = request.getParameter("round");
             if (roundStr != null) {
                 try {

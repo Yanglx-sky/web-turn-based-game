@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 好友控制器
@@ -119,7 +120,7 @@ public class FriendController {
      */
     @GetMapping
     @Operation(summary = "获取好友列表", description = "获取当前用户的所有好友")
-    public Result<List<FriendRelation>> getFriendList(HttpServletRequest request) {
+    public Result<List<Map<String, Object>>> getFriendList(HttpServletRequest request) {
         Long userId = getUserIdFromRequest(request);
         if (userId == null) {
             return Result.error("未登录，无权限访问");
@@ -133,7 +134,7 @@ public class FriendController {
      */
     @GetMapping("/requests/pending")
     @Operation(summary = "获取待确认申请", description = "获取待确认的好友申请列表")
-    public Result<List<FriendRelation>> getPendingRequests(HttpServletRequest request) {
+    public Result<List<Map<String, Object>>> getPendingRequests(HttpServletRequest request) {
         Long userId = getUserIdFromRequest(request);
         if (userId == null) {
             return Result.error("未登录，无权限访问");

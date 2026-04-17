@@ -5,6 +5,6 @@ export const levelApi = {
   getLevelList: () => api.get('/api/levels'),
   // 获取关卡信息
   getLevelInfo: (levelId) => api.get(`/api/levels/${levelId}`),
-  // 进入关卡
-  enterLevel: (levelId, userElfId) => api.post('/api/levels/enter', { levelId, userElfId })
+  // 进入关卡（自动使用玩家配置的出战精灵列表）
+  enterLevel: (levelId) => api.post('/api/levels/enter', { levelId })
 }

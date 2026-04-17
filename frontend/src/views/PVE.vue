@@ -25,7 +25,7 @@
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else class="levels-list">
         <!-- 从数据库读取的关卡 -->
-        <div v-for="level in levels" :key="level.id" :class="['level-card', { 'locked': level.id > userCurrentLevel + 1 }]">
+        <div v-for="level in levels" :key="level.id" :class="['level-card', { 'locked': level.id > userCurrentLevel }]">
           <h3>关卡 {{ level.id }}</h3>
           <p>{{ level.levelName }}</p>
           <p>经验奖励: {{ level.rewardExp }}</p>
@@ -39,7 +39,7 @@
             </div>
             <p class="score">评分: {{ userLevelStars[level.id].score }}</p>
           </div>
-          <div v-if="level.id > userCurrentLevel + 1" class="locked-overlay">
+          <div v-if="level.id > userCurrentLevel" class="locked-overlay">
             <p>未解锁</p>
           </div>
           <button v-else @click="openBattleModal(level.id)">进入关卡</button>
@@ -117,7 +117,7 @@ const logout = () => {
 const levels = ref([])
 const loading = ref(true)
 const error = ref('')
-const userCurrentLevel = ref(0) // 用户当前解锁的关卡
+const userCurrentLevel = ref(1) // 用户当前解锁的关卡
 const userLevelStars = ref({}) // 用户关卡星级和评分
 
 // 出战精灵配置弹窗相关
@@ -149,7 +149,7 @@ const fetchLevels = async () => {
     const userStr = localStorage.getItem('user')
     if (userStr) {
       const user = JSON.parse(userStr)
-      if (user.currentLevel) {
+      if (user.currentLevel !== undefined && user.currentLevel !== null) {
         userCurrentLevel.value = user.currentLevel
       }
       
@@ -241,10 +241,13 @@ const confirmBattle = () => {
     alert('请先设置出战精灵')
     return
   }
-  // 进入选定的关卡，传递第一个出战精灵的ID
-  const firstElfId = battleElves.value[0].id
+  // 进入选定的关卡（后端会自动读取玩家的出战精灵列表）
+  if (!selectedLevelId.value) {
+    alert('参数错误，请重试')
+    return
+  }
   showBattleModal.value = false
-  router.push(`/battle/${selectedLevelId.value}?userElfId=${firstElfId}`)
+  router.push(`/battle/${selectedLevelId.value}`)
   selectedLevelId.value = null
 }
 

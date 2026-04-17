@@ -261,23 +261,13 @@ const loadStarterElves = async () => {
   try {
     loadingStarterElves.value = true
     console.log('调用elfApi.getStarterElves()')
-    // 直接使用fetch API测试，添加时间戳参数
-    const timestamp = new Date().getTime()
-    const url = `http://localhost:8080/api/elves/starter?t=${timestamp}`
-    console.log('请求URL:', url)
-    const fetchResponse = await fetch(url, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
-    console.log('fetch响应状态:', fetchResponse.status)
-    console.log('fetch响应头:', Object.fromEntries(fetchResponse.headers))
-    const responseData = await fetchResponse.json()
-    console.log('fetch响应数据:', responseData)
-    if (responseData && responseData.data && Array.isArray(responseData.data)) {
-      starterElves.value = responseData.data
+    
+    // 使用elfApi，会自动携带token
+    const response = await elfApi.getStarterElves()
+    console.log('御三家精灵响应:', response)
+    
+    if (response && response.code === 200 && response.data && Array.isArray(response.data)) {
+      starterElves.value = response.data
       console.log('御三家精灵列表:', starterElves.value)
     } else {
       console.log('响应格式不正确，设置御三家精灵列表为空数组')
@@ -345,8 +335,12 @@ const handleAvatarUpload = async (event) => {
     const formData = new FormData()
     formData.append('file', file)
     
-    const response = await fetch('http://localhost:8080/user/upload-avatar', {
+    const token = localStorage.getItem('token')
+    const response = await fetch('http://localhost:8080/users/upload-avatar', {
       method: 'POST',
+      headers: {
+        'Authorization': token
+      },
       body: formData
     })
     
@@ -365,7 +359,11 @@ const handleAvatarUpload = async (event) => {
         user.value = updateResponse.data
         localStorage.setItem('user', JSON.stringify(user.value))
         alert('头像上传成功！')
+      } else {
+        alert('头像保存失败：' + (updateResponse.msg || '未知错误'))
       }
+    } else {
+      alert('头像上传失败：' + (data.msg || '未知错误'))
     }
   } catch (error) {
     console.error('头像上传失败:', error)

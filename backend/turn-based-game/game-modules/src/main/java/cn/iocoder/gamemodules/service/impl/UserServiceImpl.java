@@ -67,7 +67,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname(nickname);
         user.setPhone(phone);
         user.setEmail(email);
-        user.setCurrentLevel(0);
+        user.setCurrentLevel(1);
         user.setStatus(1);
         user.setCreateTime(LocalDateTime.now());
         user.setUpdateTime(LocalDateTime.now());
@@ -234,6 +234,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             map.put("maxScore", record.getMaxScore());
             result.add(map);
         }
+
+        return Result.success(result);
+    }
+
+    @Override
+    public Result<Map<String, Object>> searchUserByPhone(String phone) {
+        // 根据手机号查找用户
+        User user = lambdaQuery()
+                .eq(User::getPhone, phone)
+                .one();
+
+        if (user == null) {
+            return Result.error("未找到该用户");
+        }
+
+        // 只返回用户的id和nickname，保护隐私
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", user.getId());
+        result.put("nickname", user.getNickname());
 
         return Result.success(result);
     }

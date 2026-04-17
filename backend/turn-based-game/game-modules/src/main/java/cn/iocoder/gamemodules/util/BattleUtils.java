@@ -50,81 +50,16 @@ public class BattleUtils {
         return elfTemplate != null ? elfTemplate.getElementType() : 0;
     }
 
-    // 判定先后手
-    public static boolean isPlayerFirst(int playerSpeed, int enemySpeed) {
-        return playerSpeed >= enemySpeed;
-    }
-
     /**
-     * 查询并验证战斗所需的所有实体信息
-     * @return Map包含: battleRecord, userElfRecord, monsterRecord, userElf, elf, monster, level
+     * 判断玩家是否先手（速度高者先手）
      */
-    public static Map<String, Object> loadBattleEntities(
-            Long userId,
-            BattleRecordMapper battleRecordMapper,
-            BattleRecordElfMapper battleRecordElfMapper,
-            BattleRecordMonsterMapper battleRecordMonsterMapper,
-            UserElfMapper userElfMapper,
-            ElfMapper elfMapper,
-            MonsterMapper monsterMapper,
-            LevelMapper levelMapper) {
-        
-        // 1. 查询当前战斗
-        BattleRecord battleRecord = battleRecordMapper.selectCurrentBattleByUserId(userId);
-        if (battleRecord == null) {
-            throw new RuntimeException("当前没有进行中的战斗");
-        }
-        
-        // 2. 查询关卡信息
-        Level level = levelMapper.selectById(battleRecord.getLevelId());
-        
-        // 3. 查询精灵状态
-        List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
-        if (elves.isEmpty()) {
-            throw new RuntimeException("精灵信息不存在");
-        }
-        BattleRecordElf userElfRecord = elves.get(0);
-        
-        // 4. 查询怪物状态
-        List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
-        if (monsters.isEmpty()) {
-            throw new RuntimeException("怪物信息不存在");
-        }
-        BattleRecordMonster monsterRecord = monsters.get(0);
-        
-        // 5. 查询用户精灵信息
-        UserElf userElf = userElfMapper.selectById(userElfRecord.getElfId());
-        if (userElf == null) {
-            throw new RuntimeException("精灵信息不存在");
-        }
-        
-        // 6. 查询精灵模板
-        Elf elf = elfMapper.selectById(userElf.getElfId());
-        if (elf == null) {
-            throw new RuntimeException("精灵模板不存在");
-        }
-        
-        // 7. 查询怪物实体
-        Monster monster = monsterMapper.selectById(monsterRecord.getMonsterId());
-        if (monster == null) {
-            throw new RuntimeException("怪物信息不存在");
-        }
-        
-        Map<String, Object> entities = new HashMap<>();
-        entities.put("battleRecord", battleRecord);
-        entities.put("level", level);
-        entities.put("userElfRecord", userElfRecord);
-        entities.put("monsterRecord", monsterRecord);
-        entities.put("userElf", userElf);
-        entities.put("elf", elf);
-        entities.put("monster", monster);
-        
-        return entities;
+    public static boolean isPlayerFirst(int playerSpeed, int monsterSpeed) {
+        return playerSpeed >= monsterSpeed;
     }
     
     /**
-     * 执行玩家攻击（普通攻击或技能）
-     * @return 伤害值
+     * 执行玩家攻击
+     * @return 造成的伤害
      */
     public static int executePlayerAttack(
             String actionType,
@@ -138,25 +73,33 @@ public class BattleUtils {
         int damage;
         
         if ("attack".equals(actionType)) {
-            damage = calculateNormalDamage(userElf.getAttack(), monster.getDefense());
+            // 普通攻击为真实伤害，直接返回normalDamage
+            damage = userElf.getNormalDamage() != null ? userElf.getNormalDamage() : 1;
+            
+            System.out.println("[DEBUG] 玩家普通攻击 - 真实伤害:" + damage);
         } else if ("skill".equals(actionType)) {
+            // 技能伤害需要公式计算和系别克制
             Skill skill = skillMapper.selectById(skillId);
             if (skill == null) {
                 throw new RuntimeException("技能不存在");
             }
             
-            // 检查MP
-            int mpCost = skill.getCostMp();
-            if (userElfRecord.getCurrentMp() < mpCost) {
-                throw new RuntimeException("MP不足");
+            // 检查MP是否足够
+            if (userElfRecord.getCurrentMp() < skill.getCostMp()) {
+                throw new RuntimeException("MP不足，无法使用技能");
             }
             
             // 扣除MP
-            userElfRecord.setCurrentMp(userElfRecord.getCurrentMp() - mpCost);
-            userElfRecord.setUpdateTime(LocalDateTime.now());
+            userElfRecord.setCurrentMp(userElfRecord.getCurrentMp() - skill.getCostMp());
             
+            // 计算基础伤害
             damage = calculateSkillDamage(skill, userElf.getAttack(), monster.getDefense(), 
                     elf.getElementType(), monster.getElementType());
+            
+            System.out.println("[DEBUG] 玩家技能攻击 - 技能名:" + skill.getSkillName() + 
+                              ", MP消耗:" + skill.getCostMp() + 
+                              ", 剩余MP:" + userElfRecord.getCurrentMp() +
+                              ", 造成伤害:" + damage);
         } else {
             throw new RuntimeException("无效的攻击类型");
         }
@@ -165,33 +108,82 @@ public class BattleUtils {
     }
     
     /**
-     * 更新怪物血量并返回原始血量
-     * @return 原始血量
+     * 执行怪物行动（优先使用技能）
+     * @return Map包含伤害值和攻击类型
      */
-    public static int updateMonsterHp(BattleRecordMonster monsterRecord, int damage, 
-                                      BattleRecordMonsterMapper monsterMapper) {
-        int originalHp = monsterRecord.getCurrentHp();
-        monsterRecord.setCurrentHp(Math.max(0, monsterRecord.getCurrentHp() - damage));
-        monsterRecord.setUpdateTime(LocalDateTime.now());
-        monsterMapper.updateById(monsterRecord);
-        return originalHp;
-    }
-    
-    /**
-     * 执行敌人反击
-     * @return 敌人造成的伤害
-     */
-    public static int executeEnemyCounterattack(BattleRecordElf userElfRecord, UserElf userElf,
-                                                Monster monster, BattleRecordElfMapper elfMapper) {
-        int enemyDamage = calculateNormalDamage(monster.getAttack(), userElf.getDefense());
-        System.out.println("[DEBUG] 敌人攻击 - 怪物攻击力:" + monster.getAttack() + 
-                          ", 玩家防御力:" + userElf.getDefense() + ", 计算伤害:" + enemyDamage);
+    public static Map<String, Object> executeMonsterAction(BattleRecordElf userElfRecord, UserElf userElf, Elf elf,
+                                                           BattleRecordMonster monsterRecord, Monster monster, 
+                                                           BattleRecordElfMapper elfMapper, 
+                                                           cn.iocoder.gamemodules.mapper.MonsterSkillMapper monsterSkillMapper,
+                                                           SkillMapper skillMapper,
+                                                           cn.iocoder.gamemodules.mapper.BattleRecordMonsterMapper monsterRecordMapper) {
+        int enemyDamage = 0;
+        String attackType = "普通攻击";
         
+        // 查询怪物的技能
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<cn.iocoder.gamemodules.entity.MonsterSkill> wrapper = 
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        wrapper.eq("monster_id", monster.getId());
+        List<cn.iocoder.gamemodules.entity.MonsterSkill> monsterSkills = monsterSkillMapper.selectList(wrapper);
+        
+        boolean skillUsed = false;
+        
+        // 如果有技能且MP足够，优先使用技能
+        if (monsterSkills != null && !monsterSkills.isEmpty() && monsterRecord.getCurrentMp() > 0) {
+            // 随机选择一个技能
+            cn.iocoder.gamemodules.entity.MonsterSkill randomSkill = monsterSkills.get((int) (Math.random() * monsterSkills.size()));
+            Skill skill = skillMapper.selectById(randomSkill.getSkillId());
+            
+            if (skill != null && monsterRecord.getCurrentMp() >= skill.getCostMp()) {
+                // 使用技能，扣除MP
+                monsterRecord.setCurrentMp(monsterRecord.getCurrentMp() - skill.getCostMp());
+                monsterRecord.setUpdateTime(LocalDateTime.now());
+                
+                // 计算技能伤害（包含系别克制）
+                int baseDamage = calculateSkillDamage(skill, monster.getAttack(), userElf.getDefense(),
+                        monster.getElementType(), elf.getElementType());
+                enemyDamage = baseDamage;
+                attackType = "技能 " + skill.getSkillName();
+                skillUsed = true;
+                
+                System.out.println("[DEBUG] 怪物使用技能 - 技能名:" + skill.getSkillName() + 
+                                  ", MP消耗:" + skill.getCostMp() + 
+                                  ", 剩余MP:" + monsterRecord.getCurrentMp() +
+                                  ", 造成伤害:" + enemyDamage);
+            }
+        }
+        
+        // 如果没有使用技能，则使用普通攻击（真实伤害）
+        if (!skillUsed) {
+            Integer normalDamage = monster.getNormalDamage();
+            enemyDamage = normalDamage != null ? normalDamage : 1;
+            attackType = "普通攻击";
+            
+            System.out.println("[DEBUG] 怪物使用普通攻击 - 真实伤害:" + enemyDamage);
+        }
+        
+        // 保存怪物状态到数据库（包括MP消耗）
+        if (monsterRecordMapper != null) {
+            monsterRecordMapper.updateById(monsterRecord);
+        }
+        
+        // 扣除玩家HP
         userElfRecord.setCurrentHp(Math.max(0, userElfRecord.getCurrentHp() - enemyDamage));
-        userElfRecord.setUpdateTime(LocalDateTime.now());
-        elfMapper.updateById(userElfRecord);
         
-        return enemyDamage;
+        // 如果HP<=0，设置elfState为2（死亡）
+        if (userElfRecord.getCurrentHp() <= 0) {
+            userElfRecord.setElfState(2); // 2=死亡
+        }
+        
+        userElfRecord.setUpdateTime(LocalDateTime.now());
+        elfMapper.updateById(userElfRecord);  // elfMapper参数类型是BattleRecordElfMapper
+        
+        // 返回结果
+        Map<String, Object> result = new HashMap<>();
+        result.put("damage", enemyDamage);
+        result.put("attackType", attackType);
+        
+        return result;
     }
     
     /**
@@ -226,6 +218,7 @@ public class BattleUtils {
             BattleRecord battleRecord,
             BattleRecordElf userElfRecord,
             UserElf userElf,
+            Elf elf,
             BattleRecordMonster monsterRecord,
             Monster monster,
             Level level,
@@ -233,12 +226,25 @@ public class BattleUtils {
             List<String> logs) {
         
         Map<String, Object> result = new HashMap<>();
-        result.put("status", monsterDead ? 1 : 0);
+        // status: 0=战斗中, 1=胜利, 2=失败
+        int status = battleRecord.getStatus() != null ? battleRecord.getStatus() : 0;
+        result.put("status", status);
         result.put("roundLogs", Arrays.asList(createRoundData(battleRecord.getCurrentRound(), logs)));
+        
+        // 精灵信息（包含切换后的精灵）
+        result.put("playerElfId", userElfRecord.getElfId());
         result.put("playerElfHp", userElfRecord.getCurrentHp());
         result.put("playerElfHpMax", userElf.getMaxHp());
         result.put("elfMp", userElfRecord.getCurrentMp());
         result.put("elfMpMax", userElf.getMaxMp());
+        
+        // 添加精灵名字和系别，方便前端直接使用
+        if (elf != null) {
+            result.put("elfName", elf.getElfName());
+            result.put("elfElementType", elf.getElementType());
+        }
+        
+        // 怪物信息
         result.put("monsterHp", monsterRecord.getCurrentHp());
         result.put("monsterMaxHp", monster.getHp());
         result.put("monsterMp", monsterRecord.getCurrentMp());
@@ -272,32 +278,22 @@ public class BattleUtils {
             UserElf userElf,
             UserElfMapper userElfMapper,
             cn.iocoder.gamecommon.interceptor.BattleSecurityInterceptor battleSecurityInterceptor,
-            cn.iocoder.gamemodules.service.UserService userService,
-            java.util.function.BiFunction<Long, Integer[], int[]> dailyLimitFunction) {
+            cn.iocoder.gamemodules.service.UserService userService) {
         
         battleRecord.setStatus(1); // 1=胜利
         
-        int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
-        int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
+        // 注意：经验发放统一在claimReward中处理，这里不再发放经验
+        // 原因：claimReward会给所有出战精灵发放经验，而不是只给当前精灵
         
-        // 检查并应用每日收益上限
-        int[] actualReward = dailyLimitFunction.apply(userId, new Integer[]{expReward, goldReward});
-        int actualExp = actualReward[0];
-        int actualGold = actualReward[1];
-        
-        // 给精灵增加经验
-        if (actualExp > 0) {
-            userElf.setExp(userElf.getExp() + actualExp);
-            userElfMapper.updateById(userElf);
+        // 解锁下一关：更新用户的current_level为当前关卡ID+1
+        if (level != null && level.getId() != null) {
+            userService.updateUserLevel(userId, level.getId() + 1);
         }
         
-        // 发放金币奖励
-        if (actualGold > 0) {
-            userService.addGold(userId, (long) actualGold);
-        }
-        
-        // 清理用户战斗状态
-        battleSecurityInterceptor.updateBattleStatus(userId, false);
+        // 注意：不要在这里清理战斗状态！
+        // 原因：claimReward需要查询战斗记录来发放经验
+        // 战斗状态清理应该在claimReward完成后执行
+        // battleSecurityInterceptor.updateBattleStatus(userId, false);
     }
     
     /**
@@ -319,6 +315,18 @@ public class BattleUtils {
     }
     
     /**
+     * 生成敌人攻击日志（区分技能和普通攻击）
+     */
+    public static String generateEnemyAttackLogWithDetail(String monsterName, String attackType, int damage) {
+        // 判断是否是训练人偶
+        if (monsterName.contains("训练人偶")) {
+            // 如果monsterName已经包含"训练人偶"，直接使用
+            return String.format("%s使用%s，造成了%d点伤害", monsterName, attackType, damage);
+        }
+        return String.format("怪物%s使用%s，造成了%d点伤害", monsterName, attackType, damage);
+    }
+    
+    /**
      * 生成胜利日志（包含每日上限提示）
      */
     public static String generateVictoryLog(int actualExp, int actualGold, int expReward, int goldReward) {
@@ -333,6 +341,93 @@ public class BattleUtils {
             victoryLog.append("（今日金币收益已达上限）");
         }
         return victoryLog.toString();
+    }
+
+    /**
+     * 检查玩家是否还有存活的出战精灵
+     * @param userId 用户ID
+     * @param battleRecordElfMapper 战斗记录精灵Mapper
+     * @param battleRecordMapper 战斗记录Mapper
+     * @return true=还有存活精灵，false=所有出战精灵都死亡
+     */
+    public static boolean hasAliveBattleElves(Long userId, 
+                                               cn.iocoder.gamemodules.mapper.BattleRecordElfMapper battleRecordElfMapper,
+                                               cn.iocoder.gamemodules.mapper.BattleRecordMapper battleRecordMapper) {
+        // 查询当前战斗
+        BattleRecord currentBattle = battleRecordMapper.selectCurrentBattleByUserId(userId);
+        if (currentBattle == null) {
+            return false;
+        }
+        
+        // 查询该战斗中所有的精灵记录
+        List<BattleRecordElf> battleElves = battleRecordElfMapper.selectByBattleId(currentBattle.getBattleId());
+        
+        // 检查是否有HP>0的精灵
+        for (BattleRecordElf elf : battleElves) {
+            if (elf.getCurrentHp() != null && elf.getCurrentHp() > 0) {
+                return true; // 还有存活的精灵
+            }
+        }
+        
+        return false; // 所有精灵都死亡
+    }
+
+    /**
+     * 获取下一个存活的出战精灵（按battle_record_elf中的顺序）
+     * @param userId 用户ID
+     * @param currentElfId 当前死亡的精灵ID（user_elf的id）
+     * @param battleId 战斗ID
+     * @param userElfMapper 用户精灵Mapper
+     * @param battleRecordElfMapper 战斗精灵记录Mapper
+     * @return 下一个存活的精灵，如果没有则返回null
+     */
+    public static UserElf getNextAliveElf(Long userId, Long currentElfId, String battleId,
+                                           cn.iocoder.gamemodules.mapper.UserElfMapper userElfMapper,
+                                           cn.iocoder.gamemodules.mapper.BattleRecordElfMapper battleRecordElfMapper) {
+        // 查询该战斗中所有的精灵记录（按插入顺序，即fight_order顺序）
+        List<BattleRecordElf> battleElves = battleRecordElfMapper.selectByBattleId(battleId);
+        
+        // 找到当前精灵的位置，返回下一个HP>0的精灵
+        boolean foundCurrent = false;
+        for (BattleRecordElf battleElf : battleElves) {
+            if (foundCurrent && battleElf.getCurrentHp() != null && battleElf.getCurrentHp() > 0) {
+                // 找到下一个存活的精灵
+                return userElfMapper.selectById(battleElf.getElfId());
+            }
+            if (battleElf.getElfId().equals(currentElfId)) {
+                foundCurrent = true;
+            }
+        }
+        
+        // 如果当前是最后一个，从头开始找
+        if (foundCurrent) {
+            for (BattleRecordElf battleElf : battleElves) {
+                if (battleElf.getCurrentHp() != null && battleElf.getCurrentHp() > 0 
+                    && !battleElf.getElfId().equals(currentElfId)) {
+                    return userElfMapper.selectById(battleElf.getElfId());
+                }
+            }
+        }
+        
+        return null; // 没有可用的精灵
+    }
+
+    /**
+     * 处理玩家战败
+     */
+    public static void handleDefeat(BattleRecord battleRecord,
+                                     cn.iocoder.gamecommon.interceptor.BattleSecurityInterceptor battleSecurityInterceptor,
+                                     Long userId,
+                                     cn.iocoder.gamemodules.mapper.BattleRecordMapper battleRecordMapper) {
+        battleRecord.setStatus(2); // 2=失败
+        
+        // 保存战斗记录到数据库
+        if (battleRecordMapper != null) {
+            battleRecordMapper.updateById(battleRecord);
+        }
+        
+        // 清理用户战斗状态
+        battleSecurityInterceptor.updateBattleStatus(userId, false);
     }
 
     // 战斗日志管理类

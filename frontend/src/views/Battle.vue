@@ -130,11 +130,11 @@
       <div class="battle-actions">
         <h3>战斗操作</h3>
         <div class="action-buttons">
-          <button @click="attack" class="action-btn attack-btn">攻击</button>
-          <button @click="useSkill" class="action-btn skill-btn">技能</button>
-          <button @click="switchElf" class="action-btn switch-btn">更换精灵</button>
-          <button @click="flee" class="action-btn flee-btn">逃跑</button>
-          <button @click="showPotions = true" class="action-btn potion-btn">药品</button>
+          <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
+          <button @click="useSkill" class="action-btn skill-btn" :disabled="isButtonsDisabled">技能</button>
+          <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
+          <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
+          <button @click="showPotions = true" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
         </div>
       </div>
       
@@ -207,7 +207,7 @@
           <div v-if="loadingBattleElves" class="loading">加载中...</div>
           <div v-else class="battle-elves-list">
             <div v-for="elf in battleElves" :key="elf.id" class="elf-card horizontal" :class="{ 'current': elf && elf.id === playerElf.id }">
-              <template v-if="elf && elf.status !== 2">
+              <template v-if="elf && elf.elfState !== 2">
                 <div class="elf-image">
                   <img :src="getElfImage(elf.elfId)" :alt="elf.elfName || `精灵 ${elf.elfId}`" />
                 </div>
@@ -226,10 +226,10 @@
                     <button 
                       @click="selectElfToSwitch(elf)" 
                       class="select-btn" 
-                      :disabled="!elf || elf.status === 2 || elf.status === 1"
-                      :class="{ 'disabled': !elf || elf.status === 2 || elf.status === 1 }"
+                      :disabled="!elf || elf.elfState === 2 || elf.elfState === 0"
+                      :class="{ 'disabled': !elf || elf.elfState === 2 || elf.elfState === 0 }"
                     >
-                      {{ !elf ? '未知' : (elf.status === 2 ? '已死亡' : elf.status === 1 ? '战斗中' : '选择') }}
+                      {{ !elf ? '未知' : (elf.elfState === 2 ? '已死亡' : elf.elfState === 0 ? '战斗中' : '选择') }}
                     </button>
                   </div>
                   <div v-else class="current-tag">当前出战</div>
@@ -272,7 +272,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { levelApi } from '../api/level'
 import { battleApi } from '../api/battle'
@@ -346,6 +346,8 @@ const showBattleStartPopup = ref(false)
 const showBattleEndPopup = ref(false)
 // BGM音频对象
 const battleBgm = ref(null)
+// 按钮禁用状态
+const isButtonsDisabled = ref(false)
 
 // 技能列表
 const skills = ref([])
@@ -399,6 +401,20 @@ const getElementType = (elementType) => {
       return '光系'
     default:
       return '未知'
+  }
+}
+
+// 获取训练人偶类型名称
+const getMannequinTypeName = (type) => {
+  switch (type) {
+    case 1:
+      return '火系训练人偶'
+    case 2:
+      return '水系训练人偶'
+    case 3:
+      return '草系训练人偶'
+    default:
+      return '训练人偶'
   }
 }
 
@@ -523,51 +539,19 @@ const triggerAttackAnimations = (battleLog, battleData) => {
     return
   }
   
-  // 收集当前回合的攻击记录（只处理最新的攻击记录）
+  // 收集当前回合的攻击记录（按后端返回的顺序）
   const attackLogs = []
-  
-  // 从后向前遍历，收集攻击记录
-  // 收集最新的玩家攻击和敌人攻击
-  let foundPlayerAttack = false
-  let foundEnemyAttack = false
   
   console.log('[DEBUG] 处理战斗日志:', battleLog)
   
-  for (let i = battleLog.length - 1; i >= 0; i--) {
+  // 按顺序遍历，收集所有攻击记录（保持后端返回的顺序）
+  for (let i = 0; i < battleLog.length; i++) {
     const log = battleLog[i]
     
     // 检查是否是攻击记录
     if (typeof log === 'string' && (log.includes('攻击了') || log.includes('使用技能') || log.includes('普通攻击') || log.includes('使用普通攻击'))) {
       console.log('[DEBUG] 发现攻击记录:', log)
-      // 检查是否是玩家攻击
-      if (log.includes('你的精灵')) {
-        if (!foundPlayerAttack) {
-          attackLogs.unshift(log) // 插入到数组开头，保持攻击顺序
-          foundPlayerAttack = true
-          console.log('[DEBUG] 添加玩家攻击记录')
-        }
-      } 
-      // 检查是否是敌人攻击
-      else if (log.includes('怪物') || log.includes('训练人偶') || log.includes('迪莫') || log.includes('焰阳火灵') || log.includes('惊涛水灵') || log.includes('魔草巫灵')) {
-        if (!foundEnemyAttack) {
-          attackLogs.push(log) // 敌人攻击在玩家攻击之后
-          foundEnemyAttack = true
-          console.log('[DEBUG] 添加敌人攻击记录')
-        }
-      }
-    }
-  }
-  
-  // 确保攻击记录按顺序排列：玩家攻击在前，敌人攻击在后
-  // 如果只有敌人攻击，确保它被添加到数组中
-  if (attackLogs.length === 0 && foundEnemyAttack) {
-    // 重新遍历找到第一个敌人攻击记录
-    for (let i = battleLog.length - 1; i >= 0; i--) {
-      const log = battleLog[i]
-      if (typeof log === 'string' && (log.includes('怪物') || log.includes('训练人偶') || log.includes('迪莫') || log.includes('焰阳火灵') || log.includes('惊涛水灵') || log.includes('魔草巫灵')) && (log.includes('攻击了') || log.includes('使用技能') || log.includes('普通攻击') || log.includes('使用普通攻击'))) {
-        attackLogs.push(log)
-        break
-      }
+      attackLogs.push(log) // 保持原始顺序
     }
   }
   
@@ -583,122 +567,166 @@ const triggerAttackAnimations = (battleLog, battleData) => {
   
   // 依次触发攻击动画
   console.log('[DEBUG] 攻击动画队列:', uniqueAttackLogs)
+  console.log('[DEBUG] 攻击动画队列长度:', uniqueAttackLogs.length)
   if (uniqueAttackLogs.length > 0) {
     let delay = 0
     
     for (const log of uniqueAttackLogs) {
       console.log('[DEBUG] 准备触发动画，延迟:', delay, '日志:', log)
-      setTimeout(() => {
-        // 判断是玩家还是敌人攻击
-        if (log.includes('你的精灵')) {
-          // 玩家攻击
-          attackingSide.value = 'player'
-          // 提取技能名称
-          let skillName = '普通攻击'
-          if (log.includes('使用技能')) {
-            // 匹配"使用技能 技能名称"格式
-            const match = log.match(/使用技能 (.+?)，/)
-            if (match && match[1]) {
-              skillName = match[1].trim()
-            }
-          }
-          currentSkill.value = skillName
-          
-          // 播放技能音频
-          if (playerElf.value.elfName === '宇智波佐助' && skillName === '豪火球之术') {
-            try {
-              const audio = new Audio('/src/assets/audio/sasuke/豪火球.mp3')
-              audio.play().catch(error => {
-                console.error('技能音频播放失败，需要用户交互:', error)
-              })
-            } catch (audioError) {
-              console.error('播放技能音频失败:', audioError)
-            }
-          } else if (playerElf.value.elfName === '照美冥' && skillName === '水龙弹之术') {
-            try {
-              const audio = new Audio('/src/assets/audio/sasuke/水龙弹.mp3')
-              audio.play().catch(error => {
-                console.error('技能音频播放失败，需要用户交互:', error)
-              })
-            } catch (audioError) {
-              console.error('播放技能音频失败:', audioError)
-            }
-          }
-        } else if (log.includes('怪物') || log.includes('训练人偶') || log.includes('迪莫') || log.includes('焰阳火灵') || log.includes('惊涛水灵') || log.includes('魔草巫灵')) {
-          // 敌人攻击
-          console.log('[DEBUG] 触发敌人攻击动画:', log)
-          attackingSide.value = 'enemy'
-          // 提取技能名称
-          let skillName = '普通攻击'
-          if (log.includes('使用技能')) {
-            // 匹配"使用技能 技能名称"格式
-            const match = log.match(/使用技能 (.+?)，/)
-            if (match && match[1]) {
-              skillName = match[1].trim()
-            }
-          }
-          currentSkill.value = skillName
-        }
-        
-        // 触发动画
-        attackAnimation.value = true
-        
-        // 动画持续1秒
-        setTimeout(() => {
-          attackAnimation.value = false
-          // 延迟重置攻击方，确保动画显示完整
-          setTimeout(() => {
-            attackingSide.value = null // 重置攻击方
-          }, 100)
-          
-          // 触发受伤动画
-          if (log.includes('你的精灵')) {
-            // 玩家攻击，敌人受伤
-            isEnemyHurt.value = true
-            setTimeout(() => {
-              isEnemyHurt.value = false
-              // 结算玩家攻击的UI变化
-              if (battleData) {
-                // 更新敌人状态
-                enemyHp.value = battleData.monsterHp ?? battleData.mannequinHp ?? enemyHp.value
-                enemyMp.value = battleData.monsterMp ?? battleData.mannequinMp ?? enemyMp.value
-                // 检查敌人是否战败
-                if (enemyHp.value <= 0) {
-                  // 停止BGM
-                  if (battleBgm.value) {
-                    battleBgm.value.pause()
-                    battleBgm.value = null
-                  }
-                }
-                // 更新玩家精灵的MP（如果使用了技能）
-                playerElf.value.mp = battleData.elfMp ?? battleData.playerElf?.mp ?? playerElf.value.mp
-              }
-            }, 500)
-          } else if (log.includes('怪物') || log.includes('训练人偶') || log.includes('迪莫') || log.includes('焰阳火灵') || log.includes('惊涛水灵') || log.includes('魔草巫灵')) {
-            // 敌人攻击，玩家受伤
-            isPlayerHurt.value = true
-            setTimeout(() => {
-              isPlayerHurt.value = false
-              // 结算敌人攻击的UI变化
-              if (battleData) {
-                playerElf.value.hp = battleData.playerElfHp ?? battleData.elfCurrentHp ?? playerElf.value.hp
-                playerElf.value.mp = battleData.elfMp ?? battleData.playerElf?.mp ?? playerElf.value.mp
-                // 检查玩家精灵是否战败
-                if (playerElf.value.hp <= 0) {
-                  // 停止BGM
-                  if (battleBgm.value) {
-                    battleBgm.value.pause()
-                    battleBgm.value = null
-                  }
-                }
-              }
-            }, 500)
-          }
-        }, 1000)
-      }, delay)
+      console.log('[DEBUG] 动画索引:', uniqueAttackLogs.indexOf(log), '/', uniqueAttackLogs.length)
       
-      // 每个攻击之间间隔1秒，减少等待时间
-      delay += 1000
+      // 使用立即执行的异步函数，确保每个动画独立执行
+      ;((currentLog, currentDelay) => {
+        setTimeout(async () => {
+          console.log('[DEBUG] === 开始触发动画 ===')
+          console.log('[DEBUG] 日志内容:', currentLog)
+          console.log('[DEBUG] attackingSide 当前值:', attackingSide.value)
+                
+          // 先重置所有动画状态，确保干净的状态
+          attackAnimation.value = false
+          attackingSide.value = null
+          currentSkill.value = ''
+          await nextTick() // 等待DOM更新
+          await new Promise(resolve => setTimeout(resolve, 50)) // 额外等待50ms确保DOM完全更新
+                
+          // 判断是玩家还是敌人攻击
+          if (currentLog.includes('你的精灵')) {
+            // 玩家攻击
+            console.log('[DEBUG] ✓ 匹配到玩家攻击')
+            console.log('[DEBUG] 设置 attackingSide = player')
+            attackingSide.value = 'player'
+            // 提取技能名称
+            let skillName = '普通攻击'
+            if (currentLog.includes('使用技能')) {
+              // 匹配“使用技能 技能名称”格式
+              const match = currentLog.match(/使用技能 (.+?)，/)
+              if (match && match[1]) {
+                skillName = match[1].trim()
+              }
+            }
+            currentSkill.value = skillName
+            console.log('[DEBUG] 玩家攻击，技能:', skillName)
+                                      
+            // 播放技能音频（只有玩家攻击时才播放）
+            if (playerElf.value.elfName === '宇智波佐助' && skillName === '豪火球之术') {
+              try {
+                const audio = new Audio('/src/assets/audio/sasuke/豪火球.mp3')
+                audio.play().catch(error => {
+                  console.error('技能音频播放失败，需要用户交互:', error)
+                })
+              } catch (audioError) {
+                console.error('播放技能音频失败:', audioError)
+              }
+            } else if (playerElf.value.elfName === '照美冥' && skillName === '水龙弹之术') {
+              try {
+                const audio = new Audio('/src/assets/audio/sasuke/水龙弹.mp3')
+                audio.play().catch(error => {
+                  console.error('技能音频播放失败，需要用户交互:', error)
+                })
+              } catch (audioError) {
+                console.error('播放技能音频失败:', audioError)
+              }
+            }
+          } else if (currentLog.includes('怪物') || currentLog.includes('训练人偶') || currentLog.includes('迪莫') || currentLog.includes('焰阳火灵') || currentLog.includes('惊涛水灵') || currentLog.includes('魔草巫灵')) {
+            // 敌人攻击（包括怪物和训练人偶）
+            console.log('[DEBUG] ✓ 匹配到敌人攻击')
+            console.log('[DEBUG] 触发敌人攻击动画:', currentLog)
+                  
+            // 区分训练人偶和怪物
+            if (currentLog.includes('训练人偶')) {
+              console.log('[DEBUG] 检测到训练人偶攻击')
+            } else {
+              console.log('[DEBUG] 检测到怪物攻击')
+            }
+                  
+            console.log('[DEBUG] 设置 attackingSide = enemy')
+            attackingSide.value = 'enemy'
+            // 提取技能名称
+            let skillName = '普通攻击'
+            if (currentLog.includes('使用技能')) {
+              // 匹配“使用技能 技能名称”格式
+              const match = currentLog.match(/使用技能 (.+?)，/)
+              if (match && match[1]) {
+                skillName = match[1].trim()
+              }
+            }
+            currentSkill.value = skillName
+            console.log('[DEBUG] 敌人攻击，技能:', skillName, 'attackingSide:', attackingSide.value)
+            // 注意：敌人攻击时不播放玩家的技能音频
+          } else {
+            console.log('[DEBUG] ✗ 未匹配到攻击方，日志:', currentLog)
+          }
+                
+          console.log('[DEBUG] 最终 attackingSide 值:', attackingSide.value)
+          console.log('[DEBUG] 最终 currentSkill 值:', currentSkill.value)
+                
+          // 等待Vue更新DOM后再触发动画
+          await nextTick()
+                
+          console.log('[DEBUG] 触发 attackAnimation = true')
+          // 触发动画
+          attackAnimation.value = true
+          
+          // 动画持续1秒
+          setTimeout(() => {
+            attackAnimation.value = false
+            // 延迟重置攻击方，确保动画显示完整
+            setTimeout(() => {
+              attackingSide.value = null // 重置攻击方
+            }, 100)
+            
+            // 触发受伤动画
+            if (currentLog.includes('你的精灵')) {
+              // 玩家攻击，敌人受伤
+              isEnemyHurt.value = true
+              setTimeout(() => {
+                isEnemyHurt.value = false
+                // 结算玩家攻击的UI变化
+                if (battleData) {
+                  // 更新敌人状态
+                  enemyHp.value = battleData.monsterHp ?? battleData.mannequinHp ?? enemyHp.value
+                  // 更新敌人MP（怪物使用技能后）
+                  enemyMp.value = battleData.monsterMp ?? battleData.mannequinMp ?? enemyMp.value
+                  // 检查敌人是否战败
+                  if (enemyHp.value <= 0) {
+                    // 停止BGM
+                    if (battleBgm.value) {
+                      battleBgm.value.pause()
+                      battleBgm.value = null
+                    }
+                  }
+                  // 更新玩家精灵的MP（如果使用了技能）
+                  playerElf.value.mp = battleData.elfMp ?? battleData.playerElf?.mp ?? playerElf.value.mp
+                }
+              }, 500)
+            } else if (currentLog.includes('怪物') || currentLog.includes('训练人偶') || currentLog.includes('迪莫') || currentLog.includes('焰阳火灵') || currentLog.includes('惊涛水灵') || currentLog.includes('魔草巫灵')) {
+              // 敌人攻击，玩家受伤
+              isPlayerHurt.value = true
+              setTimeout(() => {
+                isPlayerHurt.value = false
+                // 结算敌人攻击的UI变化
+                if (battleData) {
+                  playerElf.value.hp = battleData.playerElfHp ?? battleData.elfCurrentHp ?? playerElf.value.hp
+                  playerElf.value.mp = battleData.elfMp ?? battleData.playerElf?.mp ?? playerElf.value.mp
+                  // 更新敌人MP（怪物使用技能后）
+                  enemyMp.value = battleData.monsterMp ?? battleData.mannequinMp ?? enemyMp.value
+                  // 检查玩家精灵是否战败
+                  if (playerElf.value.hp <= 0) {
+                    // 停止BGM
+                    if (battleBgm.value) {
+                      battleBgm.value.pause()
+                      battleBgm.value = null
+                    }
+                  }
+                }
+              }, 500)
+            }
+          }, 1000)
+        }, currentDelay)
+      })(log, delay)
+      
+      // 每个攻击之间间隔1.3秒，确保动画完整播放（1秒动画 + 0.3秒间隔）
+      delay += 1300
     }
   }
 }
@@ -743,17 +771,164 @@ const enterBattle = async () => {
     const user = JSON.parse(userStr)
     const battleType = route.query.type
     const levelId = route.params.id
-    const mannequinId = route.query.mannequinId
-    const userElfId = route.query.userElfId
     
-    let response
-    if (battleType === 'train' && mannequinId) {
-      // 训练模式
-      response = await trainApi.startTrain(mannequinId)
-    } else {
-      // 关卡模式
-      response = await levelApi.enterLevel(levelId, userElfId)
+    // 训练模式：从URL参数中读取训练人偶属性
+    if (battleType === 'train') {
+      const mannequinAttack = parseInt(route.query.mannequinAttack) || 50
+      const mannequinDefense = parseInt(route.query.mannequinDefense) || 30
+      const mannequinHp = parseInt(route.query.mannequinHp) || 200
+      const mannequinMp = parseInt(route.query.mannequinMp) || 100
+      const mannequinSpeed = parseInt(route.query.mannequinSpeed) || 50
+      const mannequinType = parseInt(route.query.mannequinType) || 1
+      const mannequinIsAttack = parseInt(route.query.mannequinIsAttack) || 1
+      
+      // 调用后端初始化训练状态
+      const startTrainResponse = await trainApi.startTrain(
+        mannequinAttack,
+        mannequinDefense,
+        mannequinHp,
+        mannequinMp,
+        mannequinSpeed,
+        mannequinType,
+        mannequinIsAttack
+      )
+      
+      if (startTrainResponse.code !== 200) {
+        alert('开始训练失败: ' + startTrainResponse.msg)
+        router.push('/train')
+        return
+      }
+      
+      const data = startTrainResponse.data
+      
+      // 设置本地状态
+      playerElf.value = data.playerElf || {}
+      playerElf.value.elfName = data.playerElf?.elfName || ''
+      playerElf.value.elementType = data.playerElf?.elementType || 0
+      playerElf.value.hp = data.playerElfHp
+      playerElf.value.maxHp = data.playerElf?.maxHp || 0
+      playerElf.value.mp = data.elfMp
+      playerElf.value.maxMp = data.playerElf?.maxMp || 0
+      
+      // 设置训练人偶状态
+      enemyName.value = getMannequinTypeName(data.mannequin?.type || mannequinType)
+      enemyHp.value = data.mannequinHp
+      enemyMaxHp.value = data.mannequin?.hp || mannequinHp
+      enemyMp.value = data.mannequinMp
+      enemyMaxMp.value = data.mannequin?.mp || mannequinMp
+      enemyElementType.value = data.mannequin?.type || mannequinType
+      
+      // 初始化battleStore
+      battleStore.initBattle({
+        battleId: 'train_' + Date.now(),
+        currentRound: 1,
+        levelId: null,
+        status: 0,
+        elves: [{
+          elf_id: data.playerElf?.id,
+          current_hp: data.playerElfHp,
+          current_mp: data.elfMp,
+          elf_state: 0,
+          level: data.playerElf?.level,
+          maxHp: data.playerElf?.maxHp || 0,
+          maxMp: data.playerElf?.maxMp || 0,
+          elfName: data.playerElf?.elfName || '',
+          elementType: data.playerElf?.elementType || 0,
+          speed: data.playerElf?.speed || 0
+        }],
+        monsters: [{
+          monster_id: null,
+          current_hp: data.mannequinHp,
+          current_mp: data.mannequinMp,
+          is_alive: 1,
+          maxHp: data.mannequin?.hp || mannequinHp,
+          maxMp: data.mannequin?.mp || mannequinMp,
+          attack: data.mannequin?.attack || mannequinAttack,
+          defense: data.mannequin?.defense || mannequinDefense,
+          speed: data.mannequin?.speed || mannequinSpeed,
+          type: data.mannequin?.type || mannequinType,
+          isAttack: data.mannequin?.isAttack || mannequinIsAttack
+        }]
+      })
+      
+      // 处理战斗日志
+      if (data.roundLogs) {
+        battleLogs.value = data.roundLogs
+      } else {
+        battleLogs.value = [{
+          round: 1,
+          logs: data.trainLog || []
+        }]
+      }
+      
+      // 获取精灵技能
+      const elfDetailResponse = await userElfApi.getDetail(data.playerElf?.id)
+      if (elfDetailResponse.code === 200) {
+        const elfDetailData = elfDetailResponse.data
+        skills.value = elfDetailData.unlockedSkills || []
+      }
+      
+      // 加载药品列表
+      await loadPotions()
+      
+      // 显示战斗开始弹窗
+      showBattleStartPopup.value = true
+      
+      // 播放战斗开始语音
+      try {
+        const audio = new Audio('/src/assets/audio/battle/战斗开始.mp3')
+        audio.play().catch(error => {
+          console.error('战斗开始音频播放失败，需要用户交互:', error)
+        })
+      } catch (audioError) {
+        console.error('播放语音失败:', audioError)
+      }
+      
+      // 预加载BGM
+      try {
+        const bgmFiles = [
+          '/src/assets/audio/battle/青鸟.mp3',
+          '/src/assets/audio/battle/重燃季.mp3'
+        ]
+        bgmFiles.forEach(file => {
+          try {
+            const audio = new Audio(file)
+            audio.load()
+          } catch (error) {
+            console.error('预加载BGM失败:', error)
+          }
+        })
+      } catch (audioError) {
+        console.error('预加载BGM失败:', audioError)
+      }
+      
+      // 1.5秒后自动关闭弹窗
+      setTimeout(() => {
+        showBattleStartPopup.value = false
+        startCountdown()
+        
+        const bgmFiles = [
+          '/src/assets/audio/battle/青鸟.mp3',
+          '/src/assets/audio/battle/重燃季.mp3'
+        ]
+        const randomBgm = bgmFiles[Math.floor(Math.random() * bgmFiles.length)]
+        
+        try {
+          battleBgm.value = new Audio(randomBgm)
+          battleBgm.value.loop = true
+          battleBgm.value.play().catch(error => {
+            console.error('BGM自动播放失败，将在用户交互后播放:', error)
+          })
+        } catch (audioError) {
+          console.error('播放BGM失败:', audioError)
+        }
+      }, 1500)
+      
+      return
     }
+    
+    // 关卡模式（后端自动读取玩家的出战精灵列表）
+    const response = await levelApi.enterLevel(levelId)
     
     if (response.code === 200) {
       const data = response.data
@@ -790,7 +965,7 @@ const enterBattle = async () => {
       battleStore.initBattle(battleData)
       
       // 设置本地状态
-      playerElf.value = data.elf || data.userElf || {}
+      playerElf.value = data.elf || data.userElf || data.playerElf || {}
       // 添加精灵名字
       playerElf.value.elfName = data.elfName || (data.userElf?.elfName || '')
       // 添加精灵系别
@@ -798,16 +973,16 @@ const enterBattle = async () => {
       // 设置精灵血量
       playerElf.value.hp = data.playerElfHp || (data.elf?.hp || data.userElf?.hp || 0)
       // 设置精灵最大血量
-      playerElf.value.maxHp = data.userElf?.maxHp || (data.elf?.maxHp || 0)
+      playerElf.value.maxHp = data.playerElfMaxHp || data.userElf?.maxHp || (data.elf?.maxHp || 0)
       // 设置精灵蓝量
       playerElf.value.mp = data.elfMp || (data.elf?.mp || data.userElf?.mp || 0)
       // 设置精灵最大蓝量
-      playerElf.value.maxMp = data.userElf?.maxMp || (data.elf?.maxMp || 0)
+      playerElf.value.maxMp = data.playerElfMaxMp || data.userElf?.maxMp || (data.elf?.maxMp || 0)
       enemyName.value = data.monsterName || `训练人偶 ${data.mannequin?.type === 1 ? '火系' : data.mannequin?.type === 2 ? '水系' : '草系'}`
       enemyHp.value = data.monsterHp || (data.mannequinHp || 0)
-      enemyMaxHp.value = data.monsterMaxHp || (data.mannequinHp || 0)
+      enemyMaxHp.value = data.monsterMaxHp || data.mannequinMaxHp || (data.mannequinHp || 0)
       enemyMp.value = data.monsterMp || (data.mannequinMp || data.mannequin?.mp || 0)
-      enemyMaxMp.value = data.monsterMaxMp || (data.mannequin?.mp || 0)
+      enemyMaxMp.value = data.monsterMaxMp || data.mannequinMaxMp || (data.mannequin?.mp || 0)
       enemyElementType.value = data.monsterElementType || (data.mannequin?.type || 0)
       console.log('精灵系别:', data.elfElementType || data.userElf?.elementType || 0, '敌人系别:', data.monsterElementType || (data.mannequin?.type || 0))
       console.log('敌人名字:', enemyName.value)
@@ -961,6 +1136,9 @@ const attack = async () => {
       return
     }
     
+    // 禁用按钮
+    isButtonsDisabled.value = true
+    
     const userStr = localStorage.getItem('user')
     if (!userStr) return
     const user = JSON.parse(userStr)
@@ -975,6 +1153,8 @@ const attack = async () => {
     }
     if (response.code === 200) {
         const data = response.data
+        console.log('[DEBUG] 攻击响应完整数据:', data)
+        console.log('[DEBUG] playerElfId:', data.playerElfId, '当前精灵ID:', playerElf.value.id)
         
         // 立即更新MP值，确保UI及时反映MP消耗
         if (data.elfMp !== undefined) {
@@ -1103,46 +1283,141 @@ const attack = async () => {
               battleStore.elves[0].current_mp = data.playerElfMp
             }
           }
+          
+          // 检查精灵是否切换（精灵死亡自动切换）
+          if (data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
+            console.log('[DEBUG] 检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
+            // 精灵ID变了，说明发生了自动切换
+            const oldElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+            
+            // 重新获取新精灵的详细信息
+            const elfDetailResponse = await userElfApi.getDetail(data.playerElfId)
+            if (elfDetailResponse.code === 200) {
+              const elfData = elfDetailResponse.data
+              const elf = elfData.elf || elfData // 兼容两种数据结构
+              console.log('[DEBUG] 获取新精灵详情:', elfData)
+              console.log('[DEBUG] elf对象:', elf)
+              
+              // 更新playerElf（保持与enterBattle相同的数据结构）
+              playerElf.value.id = elf.id
+              playerElf.value.elfId = elf.elfId
+              // 优先使用返回数据中的elfName，如果没有则从elf对象中获取
+              playerElf.value.elfName = data.elfName || elf.elfName || ''
+              playerElf.value.elementType = data.elfElementType || elf.elementType || 0
+              playerElf.value.level = elf.level
+              playerElf.value.maxHp = elf.maxHp
+              playerElf.value.maxMp = elf.maxMp
+              playerElf.value.hp = data.playerElfHp !== undefined ? data.playerElfHp : (elf.hp || elf.maxHp)
+              playerElf.value.mp = data.elfMp !== undefined ? data.elfMp : (elf.mp || elf.maxMp)
+              
+              console.log('[DEBUG] playerElf更新后:', {
+                id: playerElf.value.id,
+                elfId: playerElf.value.elfId,
+                elfName: playerElf.value.elfName,
+                elementType: playerElf.value.elementType,
+                hp: playerElf.value.hp,
+                maxHp: playerElf.value.maxHp,
+                mp: playerElf.value.mp,
+                maxMp: playerElf.value.maxMp
+              })
+              
+              // 更新battleStore
+              battleStore.elves[0].elf_id = playerElf.value.id
+              battleStore.elves[0].elfId = playerElf.value.elfId
+              battleStore.elves[0].current_hp = playerElf.value.hp
+              battleStore.elves[0].current_mp = playerElf.value.mp
+              battleStore.elves[0].level = playerElf.value.level
+              battleStore.elves[0].maxHp = playerElf.value.maxHp
+              battleStore.elves[0].maxMp = playerElf.value.maxMp
+              battleStore.elves[0].elfName = playerElf.value.elfName
+              battleStore.elves[0].elementType = playerElf.value.elementType
+              
+              // 更新技能列表
+              skills.value = elfData.unlockedSkills || []
+              
+              const newElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+              console.log('[DEBUG] 精灵切换完成，新精灵:', newElfName, 'elfId:', playerElf.value.elfId)
+              
+              // 如果是训练模式且发生了精灵切换，显示弹窗提示
+              if (battleType === 'train' && data.elfSwitched) {
+                setTimeout(() => {
+                  window.confirm(`${oldElfName} 被击败了！\n\n${newElfName} 已自动登场继续战斗`)
+                }, 1500) // 延迟1.5秒，等待动画播放完成
+              }
+            }
+          }
         }
         
         // 处理战斗结果
-        setTimeout(async () => {
-          if (data.status === 1 || data.trainResult === '胜利') {
-            // 确保敌人HP显示为0
-            enemyHp.value = 0
-            if (battleStore.monsters.length > 0) {
-              battleStore.monsters[0].current_hp = 0
-            }
-            // 停止BGM
-            if (battleBgm.value) {
-              battleBgm.value.pause()
-              battleBgm.value = null
-            }
-            // 保存AI战报总结（训练模式）
-            if (data.aiReport) {
-              aiSummary.value = data.aiReport
-            }
-            // 显示胜负已分弹窗
-            showBattleEndPopup.value = true
-            // 播放结束战斗语音
-            try {
-              const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
-              audio.play().catch(error => {
-                console.error('结束战斗音频播放失败，需要用户交互:', error)
-              })
-            } catch (audioError) {
-              console.error('播放语音失败:', audioError)
-            }
-            // 1.5秒后自动关闭弹窗，然后显示胜利信息
-            setTimeout(() => {
-              showBattleEndPopup.value = false
+        if (data.status === 1 || data.trainResult === '胜利' || data.status === 2 || data.trainResult === '失败' || data.trainResult === '逃跑') {
+          // 立即停止BGM
+          if (battleBgm.value) {
+            battleBgm.value.pause()
+            battleBgm.value = null
+          }
+          
+          // 显示胜负已分弹窗
+          showBattleEndPopup.value = true
+          
+          // 播放结束战斗语音
+          try {
+            const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
+            audio.play().catch(error => {
+              console.error('结束战斗音频播放失败，需要用户交互:', error)
+            })
+          } catch (audioError) {
+            console.error('播放语音失败:', audioError)
+          }
+          
+          // 延迟显示战斗结果
+          setTimeout(async () => {
+            // 关闭胜负已分弹窗
+            showBattleEndPopup.value = false
+            
+            if (data.status === 1 || data.trainResult === '胜利') {
+              // 确保敌人HP显示为0
+              enemyHp.value = 0
+              if (battleStore.monsters.length > 0) {
+                battleStore.monsters[0].current_hp = 0
+              }
+              // 保存AI战报总结（训练模式）
+              if (data.aiReport) {
+                aiSummary.value = data.aiReport
+              }
               
+              // 显示战斗结果
               battleResult.value = '战斗胜利！'
               showResult.value = true
+              // 禁用所有按钮，防止重复点击
+              isButtonsDisabled.value = true
               // 清除倒计时
               if (countdownTimer.value) {
                 clearInterval(countdownTimer.value)
               }
+              
+              // 战斗胜利后自动领取奖励（仅PVE模式）
+              if (battleType !== 'train' && battleStore.battleId && battleStore.levelId) {
+                try {
+                  console.log('[DEBUG] 普通攻击胜利，自动领取奖励, battleId:', battleStore.battleId, 'levelId:', battleStore.levelId)
+                  const rewardResponse = await battleApi.claimReward(battleStore.levelId, battleStore.battleId)
+                  if (rewardResponse.code === 200) {
+                    console.log('[DEBUG] 奖励领取成功:', rewardResponse.data)
+                    battleRewards.value = [
+                      { type: 'exp', label: '经验', value: rewardResponse.data.actualExp || 0 },
+                      { type: 'gold', label: '金币', value: rewardResponse.data.actualGold || 0 }
+                    ]
+                    // 如果有升级提示
+                    if (rewardResponse.data.levelUp) {
+                      alert(`精灵升级到 ${rewardResponse.data.levelUp} 级！`)
+                    }
+                  } else {
+                    console.warn('[DEBUG] 奖励领取失败:', rewardResponse.msg)
+                  }
+                } catch (error) {
+                  console.error('[DEBUG] 领取奖励异常:', error)
+                }
+              }
+              
               // 设置战斗奖励
               battleRewards.value = []
               if (data.rewardGold) {
@@ -1187,39 +1462,24 @@ const attack = async () => {
               battleStore.status = 1 // 1=胜利
               // 清空战斗状态
               battleStore.clearBattleState()
-            }, 800) // 减少延迟到0.8秒，提升响应速度
-          } else if (data.status === 2 || data.trainResult === '失败' || data.trainResult === '逃跑') {
-            // 确保玩家精灵HP显示为0（如果战败）
-            if (data.status === 2 || data.trainResult === '失败') {
-              playerElf.value.hp = 0
-              if (battleStore.elves.length > 0) {
-                battleStore.elves[0].current_hp = 0
+            } else if (data.status === 2 || data.trainResult === '失败' || data.trainResult === '逃跑') {
+              // 确保玩家精灵HP显示为0（如果战败）
+              if (data.status === 2 || data.trainResult === '失败') {
+                playerElf.value.hp = 0
+                if (battleStore.elves.length > 0) {
+                  battleStore.elves[0].current_hp = 0
+                }
               }
-            }
-            // 保存AI战报总结（训练模式）
-            if (data.aiReport) {
-              aiSummary.value = data.aiReport
-            }
-            // 停止BGM
-            if (battleBgm.value) {
-              battleBgm.value.pause()
-              battleBgm.value = null
-            }
-            // 显示胜负已分弹窗
-            showBattleEndPopup.value = true
-            // 播放结束战斗语音
-            try {
-              const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
-              audio.play()
-            } catch (audioError) {
-              console.error('播放语音失败:', audioError)
-            }
-            // 1.5秒后自动关闭弹窗，然后显示战斗结果
-            setTimeout(() => {
-              showBattleEndPopup.value = false
+              // 保存AI战报总结（训练模式）
+              if (data.aiReport) {
+                aiSummary.value = data.aiReport
+              }
               
+              // 显示战斗结果
               battleResult.value = data.trainResult === '逃跑' ? '你逃跑了' : '战斗失败！'
               showResult.value = true
+              // 禁用所有按钮，防止重复点击
+              isButtonsDisabled.value = true
               // 清除倒计时
               if (countdownTimer.value) {
                 clearInterval(countdownTimer.value)
@@ -1228,39 +1488,58 @@ const attack = async () => {
               battleStore.status = 2 // 2=失败
               // 清空战斗状态
               battleStore.clearBattleState()
-            }, 800) // 减少延迟到0.8秒，提升响应速度
+            }
+          }, 1500) // 1.5秒后关闭弹窗并显示结果
+        } else {
+          // 战斗继续
+          // 训练模式：根据needMannequinTurn标志位决定是否需要调用executeMannequinTurn
+          if (battleType === 'train' && data.needMannequinTurn) {
+            // 玩家先手，需要调用executeMannequinTurn执行训练人偶反击
+            console.log('[DEBUG] 玩家先手，自动调用executeMannequinTurn')
+            await executeMonsterAction()
+          } else {
+            // 训练人偶先手或不需要反击，直接启用按钮
+            isButtonsDisabled.value = false
           }
-        }, 500) // 减少延迟到0.5秒，提升响应速度
-    } else {
-      console.error('攻击失败:', response.msg)
-      // 特别处理MP不足的错误
-      if (response.msg.includes('MP不足')) {
-        // 确保battleLogs数组存在且至少有一个回合对象
-        if (!battleLogs.value || battleLogs.value.length === 0) {
-          battleLogs.value = [{ round: 1, logs: [] }]
         }
-        // 确保当前回合对象存在
-        if (!battleLogs.value[battleLogs.value.length - 1]) {
-          battleLogs.value.push({ round: battleLogs.value.length + 1, logs: [] })
-        }
-        // 确保logs数组存在
-        if (!battleLogs.value[battleLogs.value.length - 1].logs) {
-          battleLogs.value[battleLogs.value.length - 1].logs = []
-        }
-        battleLogs.value[battleLogs.value.length - 1].logs.push('MP不足，无法使用技能')
-        alert('MP不足，无法使用技能')
       } else {
-        alert('攻击失败: ' + response.msg)
+        console.error('攻击失败:', response.msg)
+        // 特别处理MP不足的错误
+        if (response.msg.includes('MP不足')) {
+          // 确保 battleLogs数组存在且至少有一个回合对象
+          if (!battleLogs.value || battleLogs.value.length === 0) {
+            battleLogs.value = [{ round: 1, logs: [] }]
+          }
+          // 确保当前回合对象存在
+          if (!battleLogs.value[battleLogs.value.length - 1]) {
+            battleLogs.value.push({ round: battleLogs.value.length + 1, logs: [] })
+          }
+          // 确保logs数组存在
+          if (!battleLogs.value[battleLogs.value.length - 1].logs) {
+            battleLogs.value[battleLogs.value.length - 1].logs = []
+          }
+          battleLogs.value[battleLogs.value.length - 1].logs.push('MP不足，无法使用技能')
+          alert('MP不足，无法使用技能')
+        } else {
+          alert('攻击失败: ' + response.msg)
+        }
+        // 攻击失败时重新启用按钮
+        isButtonsDisabled.value = false
       }
-    }
   } catch (error) {
     console.error('攻击失败:', error)
     alert('攻击失败，请重试')
+    // 攻击异常时重新启用按钮
+    isButtonsDisabled.value = false
   } finally {
     // 重置倒计时
     if (!showResult.value) {
       resetCountdown()
     }
+    // 注意：不在这里重新启用按钮，因为:
+    // 1. 战斗继续时已经在上面启用了
+    // 2. 战斗结束时按钮应该保持禁用
+    // 3. 只有异常时才需要在catch中启用
   }
 }
 
@@ -1295,6 +1574,9 @@ const useSelectedSkill = async (skill) => {
       showSkills.value = false
       return
     }
+    
+    // 禁用按钮
+    isButtonsDisabled.value = true
     
     const userStr = localStorage.getItem('user')
     if (!userStr) return
@@ -1433,151 +1715,187 @@ const useSelectedSkill = async (skill) => {
         }
         
         // 处理战斗结果
-        setTimeout(async () => {
-          if (data.status === 1 || data.trainResult === '胜利') {
-            // 停止BGM
-            if (battleBgm.value) {
-              battleBgm.value.pause()
-              battleBgm.value = null
-            }
-            // 保存AI战报总结（训练模式）
-            if (data.aiReport) {
-              aiSummary.value = data.aiReport
-            }
-            // 准备音频
-            const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
-            // 音频加载完成后同时显示弹窗和播放音频
-            audio.oncanplaythrough = () => {
-              // 显示胜负已分弹窗
-              showBattleEndPopup.value = true
-              // 播放结束战斗语音
-              try {
-                audio.play()
-              } catch (audioError) {
-                console.error('播放语音失败:', audioError)
-              }
-            }
-            // 即使音频加载失败，也显示弹窗
-            audio.onerror = () => {
-              showBattleEndPopup.value = true
-            }
-            // 触发音频加载
-            audio.load()
-            // 1.5秒后自动关闭弹窗，然后显示胜利信息
-            setTimeout(() => {
-              showBattleEndPopup.value = false
-              
-              battleResult.value = '战斗胜利！'
-              showResult.value = true
-              // 清除倒计时
-              if (countdownTimer.value) {
-                clearInterval(countdownTimer.value)
-              }
-              // 设置战斗奖励
-              battleRewards.value = []
-              if (data.rewardGold) {
-                battleRewards.value.push({ type: 'gold', label: '金币', value: data.rewardGold })
-              }
-              if (data.rewardExp) {
-                battleRewards.value.push({ type: 'exp', label: '经验', value: data.rewardExp })
-              }
-              // 战斗胜利后更新用户信息
-              const userStr = localStorage.getItem('user')
-              if (userStr) {
-                userApi.getUserInfo().then(userInfoResponse => {
-                  if (userInfoResponse.code === 200) {
-                    // 更新本地存储的用户信息
-                    localStorage.setItem('user', JSON.stringify(userInfoResponse.data))
-                  }
-                })
-              }
-              
-              // 检查是否需要显示御三家选择
-              if (data.showStarterSelection) {
-                // 加载御三家精灵和用户已拥有的精灵
-                loadStarterElves().then(() => {
-                  loadOwnedElves().then(() => {
-                    showStarterSelection.value = true
-                  })
-                })
-              }
-              // 更新battleStore中的状态
-              battleStore.status = 1 // 1=胜利
-              // 清空战斗状态
-              battleStore.clearBattleState()
-            }, 1500)
-          } else if (data.status === 2 || data.trainResult === '失败' || data.trainResult === '逃跑') {
-            // 保存AI战报总结（训练模式）
-            if (data.aiReport) {
-              aiSummary.value = data.aiReport
-            }
-            // 停止BGM
-            if (battleBgm.value) {
-              battleBgm.value.pause()
-              battleBgm.value = null
-            }
-            // 准备音频
-            const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
-            // 音频加载完成后同时显示弹窗和播放音频
-            audio.oncanplaythrough = () => {
-              // 显示胜负已分弹窗
-              showBattleEndPopup.value = true
-              // 播放结束战斗语音
-              try {
-                audio.play()
-              } catch (audioError) {
-                console.error('播放语音失败:', audioError)
-              }
-            }
-            // 即使音频加载失败，也显示弹窗
-            audio.onerror = () => {
-              showBattleEndPopup.value = true
-            }
-            // 触发音频加载
-            audio.load()
-            // 1.5秒后自动关闭弹窗，然后显示战斗结果
-            setTimeout(() => {
-              showBattleEndPopup.value = false
-              
-              battleResult.value = data.trainResult === '逃跑' ? '你逃跑了' : '战斗失败！'
-              showResult.value = true
-              // 清除倒计时
-              if (countdownTimer.value) {
-                clearInterval(countdownTimer.value)
-              }
-              // 更新battleStore中的状态
-              battleStore.status = 2 // 2=失败
-              // 清空战斗状态
-              battleStore.clearBattleState()
-            }, 1500)
+        if (data.status === 1 || data.trainResult === '胜利') {
+          // 停止BGM
+          if (battleBgm.value) {
+            battleBgm.value.pause()
+            battleBgm.value = null
           }
-        }, 4000) // 延迟4秒，确保所有攻击和结算动画执行完成
-    } else {
-      console.error('技能使用失败:', response.msg)
-      // 特别处理MP不足的错误
-      if (response.msg.includes('MP不足')) {
-        // 确保battleLogs数组存在且至少有一个回合对象
-        if (!battleLogs.value || battleLogs.value.length === 0) {
-          battleLogs.value = [{ round: 1, logs: [] }]
+          
+          // 显示胜负已分弹窗
+          showBattleEndPopup.value = true
+          
+          // 播放结束战斗语音
+          try {
+            const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
+            audio.play().catch(error => {
+              console.error('结束战斗音频播放失败，需要用户交互:', error)
+            })
+          } catch (audioError) {
+            console.error('播放语音失败:', audioError)
+          }
+          
+          // 延迟显示战斗结果
+          setTimeout(async () => {
+            // 关闭胜负已分弹窗
+            showBattleEndPopup.value = false
+            
+            // 保存AI战报总结（训练模式）
+            if (data.aiReport) {
+              aiSummary.value = data.aiReport
+            }
+            
+            // 显示战斗结果
+            battleResult.value = '战斗胜利！'
+            showResult.value = true
+            // 禁用所有按钮，防止重复点击
+            isButtonsDisabled.value = true
+            // 清除倒计时
+            if (countdownTimer.value) {
+              clearInterval(countdownTimer.value)
+            }
+            
+            // 战斗胜利后自动领取奖励（仅PVE模式）
+            if (battleType !== 'train' && battleStore.battleId && battleStore.levelId) {
+              try {
+                console.log('[DEBUG] 技能胜利，自动领取奖励, battleId:', battleStore.battleId, 'levelId:', battleStore.levelId)
+                const rewardResponse = await battleApi.claimReward(battleStore.levelId, battleStore.battleId)
+                if (rewardResponse.code === 200) {
+                  console.log('[DEBUG] 奖励领取成功:', rewardResponse.data)
+                  battleRewards.value = [
+                    { type: 'exp', label: '经验', value: rewardResponse.data.actualExp || 0 },
+                    { type: 'gold', label: '金币', value: rewardResponse.data.actualGold || 0 }
+                  ]
+                  // 如果有升级提示
+                  if (rewardResponse.data.levelUp) {
+                    alert(`精灵升级到 ${rewardResponse.data.levelUp} 级！`)
+                  }
+                } else {
+                  console.warn('[DEBUG] 奖励领取失败:', rewardResponse.msg)
+                }
+              } catch (error) {
+                console.error('[DEBUG] 领取奖励异常:', error)
+              }
+            }
+            
+            // 设置战斗奖励
+            battleRewards.value = []
+            if (data.rewardGold) {
+              battleRewards.value.push({ type: 'gold', label: '金币', value: data.rewardGold })
+            }
+            if (data.rewardExp) {
+              battleRewards.value.push({ type: 'exp', label: '经验', value: data.rewardExp })
+            }
+            // 战斗胜利后更新用户信息
+            const userStr = localStorage.getItem('user')
+            if (userStr) {
+              userApi.getUserInfo().then(userInfoResponse => {
+                if (userInfoResponse.code === 200) {
+                  // 更新本地存储的用户信息
+                  localStorage.setItem('user', JSON.stringify(userInfoResponse.data))
+                }
+              })
+            }
+            
+            // 检查是否需要显示御三家选择
+            if (data.showStarterSelection) {
+              // 加载御三家精灵和用户已拥有的精灵
+              loadStarterElves().then(() => {
+                loadOwnedElves().then(() => {
+                  showStarterSelection.value = true
+                })
+              })
+            }
+            // 更新battleStore中的状态
+            battleStore.status = 1 // 1=胜利
+            // 清空战斗状态
+            battleStore.clearBattleState()
+          }, 1500) // 1.5秒后关闭弹窗并显示结果
+        } else if (data.status === 2 || data.trainResult === '失败' || data.trainResult === '逃跑') {
+          // 保存AI战报总结（训练模式）
+          if (data.aiReport) {
+            aiSummary.value = data.aiReport
+          }
+          // 停止BGM
+          if (battleBgm.value) {
+            battleBgm.value.pause()
+            battleBgm.value = null
+          }
+          
+          // 显示胜负已分弹窗
+          showBattleEndPopup.value = true
+          
+          // 播放结束战斗语音
+          try {
+            const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
+            audio.play().catch(error => {
+              console.error('结束战斗音频播放失败，需要用户交互:', error)
+            })
+          } catch (audioError) {
+            console.error('播放语音失败:', audioError)
+          }
+          
+          // 延迟显示战斗结果
+          setTimeout(() => {
+            // 关闭胜负已分弹窗
+            showBattleEndPopup.value = false
+            
+            // 显示战斗结果
+            battleResult.value = data.trainResult === '逃跑' ? '你逃跑了' : '战斗失败！'
+            showResult.value = true
+            // 禁用所有按钮，防止重复点击
+            isButtonsDisabled.value = true
+            // 清除倒计时
+            if (countdownTimer.value) {
+              clearInterval(countdownTimer.value)
+            }
+            // 更新battleStore中的状态
+            battleStore.status = 2 // 2=失败
+            // 清空战斗状态
+            battleStore.clearBattleState()
+          }, 1500) // 1.5秒后关闭弹窗并显示结果
+        } else {
+          // 战斗继续
+          // 训练模式：根据needMannequinTurn标志位决定是否需要调用executeMannequinTurn
+          if (battleType === 'train' && data.needMannequinTurn) {
+            // 玩家先手，需要调用executeMannequinTurn执行训练人偶反击
+            console.log('[DEBUG] 玩家先手，自动调用executeMannequinTurn')
+            await executeMonsterAction()
+          } else {
+            // 训练人偶先手或不需要反击，直接启用按钮
+            isButtonsDisabled.value = false
+          }
         }
-        // 确保当前回合对象存在
-        if (!battleLogs.value[battleLogs.value.length - 1]) {
-          battleLogs.value.push({ round: battleLogs.value.length + 1, logs: [] })
-        }
-        // 确保logs数组存在
-        if (!battleLogs.value[battleLogs.value.length - 1].logs) {
-          battleLogs.value[battleLogs.value.length - 1].logs = []
-        }
-        battleLogs.value[battleLogs.value.length - 1].logs.push('MP不足，无法使用技能')
-        alert('MP不足，无法使用技能')
       } else {
-        alert('技能使用失败: ' + response.msg)
+        console.error('技能使用失败:', response.msg)
+        // 特别处理MP不足的错误
+        if (response.msg.includes('MP不足')) {
+          // 确保 battleLogs数组存在且至少有一个回合对象
+          if (!battleLogs.value || battleLogs.value.length === 0) {
+            battleLogs.value = [{ round: 1, logs: [] }]
+          }
+          // 确保当前回合对象存在
+          if (!battleLogs.value[battleLogs.value.length - 1]) {
+            battleLogs.value.push({ round: battleLogs.value.length + 1, logs: [] })
+          }
+          // 确保logs数组存在
+          if (!battleLogs.value[battleLogs.value.length - 1].logs) {
+            battleLogs.value[battleLogs.value.length - 1].logs = []
+          }
+          battleLogs.value[battleLogs.value.length - 1].logs.push('MP不足，无法使用技能')
+          alert('MP不足，无法使用技能')
+        } else {
+          alert('技能使用失败: ' + response.msg)
+        }
+        // 技能使用失败时重新启用按钮
+        isButtonsDisabled.value = false
       }
-    }
     
     showSkills.value = false
   } catch (error) {
     console.error('使用技能失败:', error)
+    // 使用技能异常时重新启用按钮
+    isButtonsDisabled.value = false
   } finally {
     // 重置倒计时
     if (!showResult.value) {
@@ -1586,11 +1904,321 @@ const useSelectedSkill = async (skill) => {
   }
 }
 
+// 执行怪物行动
+const executeMonsterAction = async () => {
+  try {
+    const battleType = route.query.type
+    
+    // 根据战斗类型调用相应的API
+    let response
+    if (battleType === 'train') {
+      response = await trainApi.executeMannequinTurn()
+    } else {
+      response = await battleApi.executeMonsterTurn()
+    }
+    
+    if (response.code === 200) {
+      const data = response.data
+      console.log('[DEBUG] 怪物行动响应:', data)
+      
+      // 先更新怪物状态（MP消耗）
+      if (data.monsterMp !== undefined) {
+        enemyMp.value = data.monsterMp
+        if (battleStore.monsters.length > 0) {
+          battleStore.monsters[0].current_mp = data.monsterMp
+        }
+      }
+      
+      // 先更新玩家状态（HP扣减）- 必须在动画之前更新
+      if (data.playerElfHp !== undefined) {
+        playerElf.value.hp = data.playerElfHp
+        if (battleStore.elves.length > 0) {
+          battleStore.elves[0].current_hp = data.playerElfHp
+        }
+      }
+      if (data.playerElfMp !== undefined) {
+        playerElf.value.mp = data.playerElfMp
+        if (battleStore.elves.length > 0) {
+          battleStore.elves[0].current_mp = data.playerElfMp
+        }
+      }
+      
+      // 处理战斗日志和动画
+      if (data.roundLogs) {
+        battleLogs.value = data.roundLogs
+        if (data.roundLogs.length > 0) {
+          battleStore.currentRound = data.roundLogs[data.roundLogs.length - 1].round
+        }
+        data.roundLogs.forEach(round => {
+          extractEnemyDialog(round.logs)
+        })
+        
+        const latestRound = data.roundLogs[data.roundLogs.length - 1]
+        if (latestRound) {
+          // 训练模式：只触发训练人偶的攻击动画（不重复触发玩家动画）
+          if (battleType === 'train') {
+            // 找到训练人偶的日志
+            const mannequinLogs = latestRound.logs.filter(log => 
+              log.includes('训练人偶') || log.includes('怪物')
+            )
+            if (mannequinLogs.length > 0) {
+              // 只触发训练人偶的动画
+              triggerAttackAnimations(mannequinLogs, data)
+            }
+          } else {
+            // PVE模式：触发所有动画
+            triggerAttackAnimations(latestRound.logs, data)
+          }
+        }
+      }
+      
+      // 检查精灵是否死亡（在动画播放后弹出切换提示）
+      if (data.playerElfHp !== undefined && data.playerElfHp <= 0) {
+        console.log('[DEBUG] 当前精灵已死亡，HP:', data.playerElfHp)
+        
+        // 检查是否需要切换精灵
+        if (data.needSwitch && data.nextElfId) {
+          // 显示精灵死亡弹窗（只有确定按钮）
+          const deadElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+          
+          // 使用setTimeout确保在动画播放完成后显示弹窗
+          setTimeout(async () => {
+            // 使用自定义弹窗，只有确定按钮
+            const confirmed = window.confirm(`${deadElfName} 被击败了！\n\n点击下方按钮切换下一只精灵继续战斗`)
+            
+            if (confirmed) {
+              // 用户确认切换，自动切换到下一只精灵
+              await switchToNextElf(data.nextElfId, data.nextElfHp, data.nextElfMp)
+            }
+          }, 2500) // 延迟2.5秒，等待受击动画播放完成
+        }
+      }
+      
+      // 检查精灵是否切换（精灵死亡自动切换）
+      if (data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
+        console.log('[DEBUG] 怪物行动后检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
+        
+        const elfDetailResponse = await userElfApi.getDetail(data.playerElfId)
+        if (elfDetailResponse.code === 200) {
+          const elfData = elfDetailResponse.data
+          const elf = elfData.elf || elfData
+          
+          playerElf.value.id = elf.id
+          playerElf.value.elfId = elf.elfId
+          // 优先使用返回数据中的elfName，如果没有则从elf对象中获取
+          playerElf.value.elfName = data.elfName || elf.elfName || ''
+          playerElf.value.elementType = data.elfElementType || elf.elementType || 0
+          playerElf.value.level = elf.level
+          playerElf.value.maxHp = elf.maxHp
+          playerElf.value.maxMp = elf.maxMp
+          playerElf.value.hp = data.playerElfHp !== undefined ? data.playerElfHp : (elf.hp || elf.maxHp)
+          playerElf.value.mp = data.elfMp !== undefined ? data.elfMp : (elf.mp || elf.maxMp)
+          
+          battleStore.elves[0].elf_id = playerElf.value.id
+          battleStore.elves[0].elfId = playerElf.value.elfId
+          battleStore.elves[0].current_hp = playerElf.value.hp
+          battleStore.elves[0].current_mp = playerElf.value.mp
+          battleStore.elves[0].level = playerElf.value.level
+          battleStore.elves[0].maxHp = playerElf.value.maxHp
+          battleStore.elves[0].maxMp = playerElf.value.maxMp
+          battleStore.elves[0].elfName = playerElf.value.elfName
+          battleStore.elves[0].elementType = playerElf.value.elementType
+          
+          skills.value = elfData.unlockedSkills || []
+        }
+      }
+      
+      // 检查战斗是否结束
+      if (data.status === 1 || data.status === 2) {
+        // 停止BGM
+        if (battleBgm.value) {
+          battleBgm.value.pause()
+          battleBgm.value = null
+        }
+        
+        // 显示胜负已分弹窗
+        showBattleEndPopup.value = true
+        
+        // 播放结束战斗语音
+        try {
+          const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
+          audio.play().catch(error => {
+            console.error('结束战斗音频播放失败，需要用户交互:', error)
+          })
+        } catch (audioError) {
+          console.error('播放语音失败:', audioError)
+        }
+        
+        // 1.5秒后自动关闭弹窗，然后显示战斗结果
+        setTimeout(async () => {
+          console.log('[DEBUG] === 进入战斗结束setTimeout ===')
+          console.log('[DEBUG] data.status:', data.status)
+          console.log('[DEBUG] showBattleEndPopup.value:', showBattleEndPopup.value)
+          
+          showBattleEndPopup.value = false
+          
+          if (data.status === 1) {
+            battleResult.value = '战斗胜利！'
+            
+            // 战斗胜利后自动领取奖励（仅PVE模式）
+            const battleType = route.query.type
+            console.log('[DEBUG] 战斗胜利, battleType:', battleType, 'battleId:', battleStore.battleId, 'levelId:', battleStore.levelId)
+            console.log('[DEBUG] 条件判断:', battleType !== 'train', '&&', battleStore.battleId, '&&', battleStore.levelId)
+            
+            if (battleType !== 'train' && battleStore.battleId && battleStore.levelId) {
+              try {
+                console.log('[DEBUG] 自动领取战斗奖励, battleId:', battleStore.battleId, 'levelId:', battleStore.levelId)
+                const rewardResponse = await battleApi.claimReward(battleStore.levelId, battleStore.battleId)
+                if (rewardResponse.code === 200) {
+                  console.log('[DEBUG] 奖励领取成功:', rewardResponse.data)
+                  battleRewards.value = [
+                    { type: 'exp', label: '经验', value: rewardResponse.data.actualExp || 0 },
+                    { type: 'gold', label: '金币', value: rewardResponse.data.actualGold || 0 }
+                  ]
+                  // 如果有升级提示
+                  if (rewardResponse.data.levelUp) {
+                    alert(`精灵升级到 ${rewardResponse.data.levelUp} 级！`)
+                  }
+                } else {
+                  console.warn('[DEBUG] 奖励领取失败:', rewardResponse.msg)
+                }
+              } catch (error) {
+                console.error('[DEBUG] 领取奖励异常:', error)
+              }
+            }
+          } else {
+            battleResult.value = '战斗失败！'
+          }
+          showResult.value = true
+          // 禁用所有按钮，防止重复点击
+          isButtonsDisabled.value = true
+          if (countdownTimer.value) {
+            clearInterval(countdownTimer.value)
+          }
+          battleStore.status = data.status
+          battleStore.clearBattleState()
+        }, 1500)
+      }
+    } else {
+      console.error('怪物行动失败:', response.msg)
+      alert('怪物行动失败: ' + response.msg)
+    }
+  } catch (error) {
+    console.error('怪物行动失败:', error)
+    alert('怪物行动失败，请重试')
+  } finally {
+    // 重新启用按钮
+    isButtonsDisabled.value = false
+    // 重置倒计时
+    if (!showResult.value) {
+      resetCountdown()
+    }
+  }
+}
+
+// 切换到下一只精灵
+const switchToNextElf = async (nextElfId, nextElfHp, nextElfMp) => {
+  try {
+    console.log('[DEBUG] 切换到下一只精灵，ID:', nextElfId, 'HP:', nextElfHp, 'MP:', nextElfMp)
+    
+    const battleType = route.query.type
+    
+    // 调用后端switchElf接口，真正完成切换
+    let response
+    if (battleType === 'train') {
+      response = await trainApi.switchElf(nextElfId)
+    } else {
+      response = await battleApi.switchElf(nextElfId)
+    }
+    
+    if (response.code === 200) {
+      const data = response.data
+      
+      const newElfName = data.elfName || `精灵 ${data.elf?.elfId}`
+      
+      // 更新playerElf（确保HP和MP不为空）
+      playerElf.value.id = data.elf.id
+      playerElf.value.elfId = data.elf.elfId
+      playerElf.value.elfName = data.elfName
+      playerElf.value.elementType = data.elfElementType
+      playerElf.value.level = data.elf.level
+      playerElf.value.maxHp = data.elf.maxHp
+      playerElf.value.maxMp = data.elf.maxMp
+      // 优先使用battle_record_elf中的HP/MP，如果为空则使用maxHp/maxMp
+      playerElf.value.hp = data.elf.hp !== null && data.elf.hp !== undefined ? data.elf.hp : data.elf.maxHp
+      playerElf.value.mp = data.elf.mp !== null && data.elf.mp !== undefined ? data.elf.mp : data.elf.maxMp
+      playerElf.value.attack = data.elf.attack
+      playerElf.value.defense = data.elf.defense
+      playerElf.value.speed = data.elf.speed
+      
+      console.log('[DEBUG] 新精灵数据:', {
+        name: newElfName,
+        hp: playerElf.value.hp,
+        maxHp: playerElf.value.maxHp,
+        mp: playerElf.value.mp,
+        maxMp: playerElf.value.maxMp
+      })
+      
+      // 更新battleStore
+      if (battleStore.elves.length > 0) {
+        battleStore.elves[0].elf_id = playerElf.value.id
+        battleStore.elves[0].elfId = playerElf.value.elfId
+        battleStore.elves[0].current_hp = playerElf.value.hp
+        battleStore.elves[0].current_mp = playerElf.value.mp
+        battleStore.elves[0].level = playerElf.value.level
+        battleStore.elves[0].maxHp = playerElf.value.maxHp
+        battleStore.elves[0].maxMp = playerElf.value.maxMp
+        battleStore.elves[0].elfName = playerElf.value.elfName
+        battleStore.elves[0].elementType = playerElf.value.elementType
+      }
+      
+      // 等待Vue更新DOM后再执行后续操作
+      await nextTick()
+      
+      console.log('[DEBUG] DOM更新完成，当前显示HP:', playerElf.value.hp)
+      
+      // 更新技能列表
+      const elfDetailResponse = await userElfApi.getDetail(playerElf.value.id)
+      if (elfDetailResponse.code === 200) {
+        const detailData = elfDetailResponse.data
+        skills.value = detailData.unlockedSkills || []
+      }
+      
+      // 添加战斗日志
+      if (!battleLogs.value || battleLogs.value.length === 0) {
+        battleLogs.value = [{ round: 1, logs: [] }]
+      }
+      battleLogs.value[battleLogs.value.length - 1].logs.push(`${newElfName} 登场！`)
+      
+      // 显示新精灵登场弹窗
+      setTimeout(() => {
+        alert(`${newElfName} 登场！\n\nHP: ${playerElf.value.hp}/${playerElf.value.maxHp}\nMP: ${playerElf.value.mp}/${playerElf.value.maxMp}`)
+      }, 100)
+    } else {
+      console.error('切换精灵失败:', response.msg)
+      alert('切换精灵失败: ' + response.msg)
+    }
+  } catch (error) {
+    console.error('切换精灵失败:', error)
+    alert('切换精灵失败，请重试')
+  }
+}
+
 // 加载出战精灵列表
 const loadBattleElves = async () => {
   try {
     loadingBattleElves.value = true
-    const response = await userElfApi.getBattleElves()
+    const battleType = route.query.type
+    
+    let response
+    if (battleType === 'train') {
+      // 训练模式使用专门的API，从train_record_elf查询实时HP/MP
+      response = await trainApi.getBattleElves()
+    } else {
+      // PVE战斗使用新的API，从battle_record_elf查询
+      response = await battleApi.getBattleElves()
+    }
+    
     if (response.code === 200) {
       battleElves.value = response.data
     }
@@ -1629,11 +2257,38 @@ const selectElfToSwitch = async (elf) => {
     }
     if (response.code === 200) {
       const data = response.data
-      playerElf.value = data.elf
-      // 添加精灵名字
+      
+      // 更新playerElf（确保HP和MP不为空）
+      playerElf.value.id = data.elf.id
+      playerElf.value.elfId = data.elf.elfId
       playerElf.value.elfName = data.elfName
-      // 添加精灵系别
       playerElf.value.elementType = data.elfElementType
+      playerElf.value.level = data.elf.level
+      playerElf.value.maxHp = data.elf.maxHp
+      playerElf.value.maxMp = data.elf.maxMp
+      // 优先使用battle_record_elf中的HP/MP，如果为空则使用maxHp/maxMp
+      playerElf.value.hp = data.elf.hp !== null && data.elf.hp !== undefined ? data.elf.hp : data.elf.maxHp
+      playerElf.value.mp = data.elf.mp !== null && data.elf.mp !== undefined ? data.elf.mp : data.elf.maxMp
+      playerElf.value.attack = data.elf.attack
+      playerElf.value.defense = data.elf.defense
+      playerElf.value.speed = data.elf.speed
+      
+      // 更新battleStore
+      if (battleStore.elves.length > 0) {
+        battleStore.elves[0].elf_id = playerElf.value.id
+        battleStore.elves[0].elfId = playerElf.value.elfId
+        battleStore.elves[0].current_hp = playerElf.value.hp
+        battleStore.elves[0].current_mp = playerElf.value.mp
+        battleStore.elves[0].level = playerElf.value.level
+        battleStore.elves[0].maxHp = playerElf.value.maxHp
+        battleStore.elves[0].maxMp = playerElf.value.maxMp
+        battleStore.elves[0].elfName = playerElf.value.elfName
+        battleStore.elves[0].elementType = playerElf.value.elementType
+      }
+      
+      // 等待Vue更新DOM后再执行后续操作
+      await nextTick()
+      
       // 更新技能列表
       const elfDetailResponse = await userElfApi.getDetail(playerElf.value.id)
       if (elfDetailResponse.code === 200) {
@@ -1664,6 +2319,19 @@ const flee = async () => {
     if (showResult.value) {
       alert('战斗已经结束，无法再次逃跑')
       return
+    }
+    
+    // 立即禁用所有按钮，防止重复点击
+    isButtonsDisabled.value = true
+    
+    // 立即显示胜负已分字幕，不等待API返回
+    showBattleEndPopup.value = true
+    // 播放结束战斗语音
+    try {
+      const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
+      audio.play()
+    } catch (audioError) {
+      console.error('播放语音失败:', audioError)
     }
     
     const userStr = localStorage.getItem('user')
@@ -1702,21 +2370,14 @@ const flee = async () => {
         battleBgm.value.pause()
         battleBgm.value = null
       }
-      // 显示胜负已分弹窗
-      showBattleEndPopup.value = true
-      // 播放结束战斗语音
-      try {
-        const audio = new Audio('/src/assets/audio/battle/结束战斗.mp3')
-        audio.play()
-      } catch (audioError) {
-        console.error('播放语音失败:', audioError)
-      }
       // 1.5秒后自动关闭弹窗，然后显示战斗结果
       setTimeout(() => {
         showBattleEndPopup.value = false
         
         battleResult.value = '你逃跑了'
         showResult.value = true
+        // 禁用所有按钮，防止重复点击
+        isButtonsDisabled.value = true
         // 清除倒计时
         if (countdownTimer.value) {
           clearInterval(countdownTimer.value)
@@ -1724,10 +2385,16 @@ const flee = async () => {
       }, 1500)
     } else {
       console.error('逃跑失败:', response.msg)
+      // 逃跑失败时关闭弹窗并恢复按钮
+      showBattleEndPopup.value = false
+      isButtonsDisabled.value = false
       alert('逃跑失败: ' + response.msg)
     }
   } catch (error) {
     console.error('逃跑失败:', error)
+    // 逃跑异常时关闭弹窗并恢复按钮
+    showBattleEndPopup.value = false
+    isButtonsDisabled.value = false
     alert('逃跑失败，请重试')
   }
 }

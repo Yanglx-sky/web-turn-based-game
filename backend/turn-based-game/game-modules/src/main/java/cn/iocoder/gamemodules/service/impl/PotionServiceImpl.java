@@ -1,9 +1,13 @@
 package cn.iocoder.gamemodules.service.impl;
 
 import cn.iocoder.gamecommon.result.Result;
+import cn.iocoder.gamemodules.entity.BattleRecord;
+import cn.iocoder.gamemodules.entity.BattleRecordElf;
 import cn.iocoder.gamemodules.entity.PotionConfig;
 import cn.iocoder.gamemodules.entity.UserElf;
 import cn.iocoder.gamemodules.entity.UserPotion;
+import cn.iocoder.gamemodules.mapper.BattleRecordElfMapper;
+import cn.iocoder.gamemodules.mapper.BattleRecordMapper;
 import cn.iocoder.gamemodules.mapper.PotionConfigMapper;
 import cn.iocoder.gamemodules.mapper.UserElfMapper;
 import cn.iocoder.gamemodules.mapper.UserPotionMapper;
@@ -29,6 +33,12 @@ public class PotionServiceImpl implements PotionService {
 
     @Autowired
     private UserElfMapper userElfMapper;
+    
+    @Autowired
+    private BattleRecordMapper battleRecordMapper;
+    
+    @Autowired
+    private BattleRecordElfMapper battleRecordElfMapper;
 
     @Override
     public Result<List<PotionConfig>> getAllPotions() {
@@ -86,11 +96,15 @@ public class PotionServiceImpl implements PotionService {
             return Result.error("精灵不存在或不属于该用户");
         }
 
+        System.out.println("[DEBUG] 使用药品前 - HP: " + userElf.getHp() + "/" + userElf.getMaxHp() + ", MP: " + userElf.getMp() + "/" + userElf.getMaxMp());
+
         // 检查药品是否存在
         PotionConfig potion = potionConfigMapper.selectById(potionId);
         if (potion == null) {
             return Result.error("药品不存在");
         }
+
+        System.out.println("[DEBUG] 药品信息 - 名称: " + potion.getName() + ", 类型: " + potion.getType() + ", 恢复值: " + potion.getHealValue());
 
         // 检查用户是否拥有该药品
         QueryWrapper<UserPotion> userPotionWrapper = new QueryWrapper<>();
@@ -101,43 +115,123 @@ public class PotionServiceImpl implements PotionService {
             return Result.error("您没有该药品");
         }
 
-        // 使用药品，根据药品类型恢复生命值或魔法值
-        int healValue = potion.getHealValue();
-        if (potion.getType() == 1) {
-            // 血瓶，恢复生命值
-            userElf.setHp(userElf.getHp() + healValue);
-        } else if (potion.getType() == 2) {
-            // 蓝瓶，恢复魔法值
-            userElf.setMp(userElf.getMp() + healValue);
-        }
-
-        // 确保生命值和魔法值不超过最大值
-        if (userElf.getHp() > userElf.getMaxHp()) {
-            userElf.setHp(userElf.getMaxHp());
-        }
-        if (userElf.getMp() > userElf.getMaxMp()) {
-            userElf.setMp(userElf.getMaxMp());
-        }
-
-        // 更新精灵信息
-        userElfMapper.updateById(userElf);
-
-        // 减少药品数量
-        userPotion.setCount(userPotion.getCount() - 1);
-        userPotion.setUpdateTime(LocalDateTime.now());
-        if (userPotion.getCount() <= 0) {
-            // 如果药品数量为0，删除该记录
-            userPotionMapper.deleteById(userPotion.getId());
+        // 检查是否有进行中的战斗
+        BattleRecord currentBattle = battleRecordMapper.selectCurrentBattleByUserId(userId);
+        
+        if (currentBattle != null && currentBattle.getStatus() == 0) {
+            // 战斗中：以 battle_record_elf 为准
+            QueryWrapper<BattleRecordElf> battleElfWrapper = new QueryWrapper<>();
+            battleElfWrapper.eq("battle_id", currentBattle.getBattleId());
+            List<BattleRecordElf> battleElves = battleRecordElfMapper.selectList(battleElfWrapper);
+            
+            BattleRecordElf battleElf = null;
+            for (BattleRecordElf be : battleElves) {
+                if (be.getElfId().equals(elfId)) {
+                    battleElf = be;
+                    break;
+                }
+            }
+            
+            if (battleElf == null) {
+                return Result.error("战斗记录中未找到该精灵");
+            }
+            
+            System.out.println("[DEBUG] 战斗记录中 - HP: " + battleElf.getCurrentHp() + ", MP: " + battleElf.getCurrentMp());
+            
+            // 根据药品类型恢复对应的属性
+            int healValue = potion.getHealValue();
+            if (potion.getType() == 1) {
+                // 血瓶，恢复生命值
+                int oldHp = battleElf.getCurrentHp();
+                battleElf.setCurrentHp(Math.min(battleElf.getCurrentHp() + healValue, userElf.getMaxHp()));
+                System.out.println("[DEBUG] 血瓶 - HP从 " + oldHp + " 增加到 " + battleElf.getCurrentHp());
+            } else if (potion.getType() == 2) {
+                // 蓝瓶，恢复魔法值
+                int oldMp = battleElf.getCurrentMp();
+                battleElf.setCurrentMp(Math.min(battleElf.getCurrentMp() + healValue, userElf.getMaxMp()));
+                System.out.println("[DEBUG] 蓝瓶 - MP从 " + oldMp + " 增加到 " + battleElf.getCurrentMp());
+            }
+            
+            battleElf.setUpdateTime(LocalDateTime.now());
+            battleRecordElfMapper.updateById(battleElf);
+            
+            System.out.println("[DEBUG] 战斗记录更新后 - HP: " + battleElf.getCurrentHp() + ", MP: " + battleElf.getCurrentMp());
+            
+            // 同步更新 user_elf 表（保持数据一致性）
+            if (potion.getType() == 1) {
+                userElf.setHp(battleElf.getCurrentHp());
+            } else if (potion.getType() == 2) {
+                userElf.setMp(battleElf.getCurrentMp());
+            }
+            userElfMapper.updateById(userElf);
+            
+            // 构建返回结果，使用战斗记录中的数据
+            Map<String, Object> result = new HashMap<>();
+            Map<String, Object> elfData = new HashMap<>();
+            elfData.put("id", userElf.getId());
+            elfData.put("elfId", userElf.getElfId());
+            elfData.put("userId", userElf.getUserId());
+            elfData.put("level", userElf.getLevel());
+            elfData.put("exp", userElf.getExp());
+            elfData.put("hp", battleElf.getCurrentHp());
+            elfData.put("maxHp", userElf.getMaxHp());
+            elfData.put("mp", battleElf.getCurrentMp());
+            elfData.put("maxMp", userElf.getMaxMp());
+            elfData.put("attack", userElf.getAttack());
+            elfData.put("defense", userElf.getDefense());
+            elfData.put("speed", userElf.getSpeed());
+            elfData.put("isFight", userElf.getIsFight());
+            elfData.put("fightOrder", userElf.getFightOrder());
+            elfData.put("status", userElf.getStatus());
+            
+            result.put("elf", elfData);
+            result.put("potion", potion);
+            result.put("msg", "使用药品成功");
+            
+            // 减少药品数量
+            userPotion.setCount(userPotion.getCount() - 1);
+            userPotion.setUpdateTime(LocalDateTime.now());
+            if (userPotion.getCount() <= 0) {
+                userPotionMapper.deleteById(userPotion.getId());
+            } else {
+                userPotionMapper.updateById(userPotion);
+            }
+            
+            return Result.success(result);
         } else {
-            // 否则更新药品数量
-            userPotionMapper.updateById(userPotion);
+            // 非战斗状态：直接更新 user_elf
+            int healValue = potion.getHealValue();
+            if (potion.getType() == 1) {
+                // 血瓶，恢复生命值
+                int oldHp = userElf.getHp();
+                userElf.setHp(Math.min(userElf.getHp() + healValue, userElf.getMaxHp()));
+                System.out.println("[DEBUG] 血瓶 - HP从 " + oldHp + " 增加到 " + userElf.getHp());
+            } else if (potion.getType() == 2) {
+                // 蓝瓶，恢复魔法值
+                int oldMp = userElf.getMp();
+                userElf.setMp(Math.min(userElf.getMp() + healValue, userElf.getMaxMp()));
+                System.out.println("[DEBUG] 蓝瓶 - MP从 " + oldMp + " 增加到 " + userElf.getMp());
+            }
+            
+            userElfMapper.updateById(userElf);
+            
+            System.out.println("[DEBUG] 使用药品后 - HP: " + userElf.getHp() + "/" + userElf.getMaxHp() + ", MP: " + userElf.getMp() + "/" + userElf.getMaxMp());
+            
+            // 减少药品数量
+            userPotion.setCount(userPotion.getCount() - 1);
+            userPotion.setUpdateTime(LocalDateTime.now());
+            if (userPotion.getCount() <= 0) {
+                userPotionMapper.deleteById(userPotion.getId());
+            } else {
+                userPotionMapper.updateById(userPotion);
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("elf", userElf);
+            result.put("potion", potion);
+            result.put("msg", "使用药品成功");
+            return Result.success(result);
         }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("elf", userElf);
-        result.put("potion", potion);
-        result.put("msg", "使用药品成功");
-        return Result.success(result);
     }
 
     @Override

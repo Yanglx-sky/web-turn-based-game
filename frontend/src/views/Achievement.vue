@@ -143,20 +143,29 @@ const loadUserAchievements = async () => {
   try {
     const response = await achievementApi.getUserAchievements()
     
+    console.log('=== 成就调试信息 ===')
+    console.log('后端返回的原始数据:', response)
+    
     if (response && response.code === 200) {
+      console.log('用户成就数据:', response.data)
+      
       // 将用户成就数据转换为以achievementId为键的对象
       const userAchievementsMap = {}
       if (response.data) {
         response.data.forEach(achievement => {
+          console.log('单个成就:', achievement)
           userAchievementsMap[achievement.achievementId] = {
             ...achievement
           }
         })
       }
       
+      console.log('成就配置:', achievementConfigs.value)
+      
       // 为每个成就配置创建或更新成就记录
       const allAchievements = achievementConfigs.value.map(config => {
         const userAchievement = userAchievementsMap[config.id]
+        console.log(`配置ID ${config.id} 对应的用户成就:`, userAchievement)
         if (userAchievement) {
           return userAchievement
         } else {
@@ -169,6 +178,9 @@ const loadUserAchievements = async () => {
           }
         }
       })
+      
+      console.log('最终成就列表:', allAchievements)
+      console.log('=== 调试结束 ===')
       
       // 检查成就状态变化
       checkAchievementStatus([...achievements.value], allAchievements)

@@ -40,12 +40,12 @@
         class="item-card"
       >
         <div class="item-image">
-          <img 
-            :src="getItemImage(item)" 
-            :alt="item.name"
-          />
-          <div v-if="item.elfId" class="bound-tag">已绑定</div>
-        </div>
+            <img 
+              :src="getItemImage(item)" 
+              :alt="item.name"
+            />
+            <div v-if="item.isWorn" class="bound-tag">已绑定</div>
+          </div>
         <div class="item-info">
           <h3>{{ item.name }}</h3>
           <div class="item-stats">

@@ -44,6 +44,10 @@
             <input type="number" v-model.number="mannequinForm.mp" min="10" required>
           </div>
           <div class="form-group">
+            <label>速度</label>
+            <input type="number" v-model.number="mannequinForm.speed" min="1" required>
+          </div>
+          <div class="form-group">
             <label>系别</label>
             <select v-model.number="mannequinForm.type" required>
               <option value="1">火系</option>
@@ -135,6 +139,7 @@ const mannequinForm = ref({
   defense: 30,
   hp: 200,
   mp: 100,
+  speed: 50,
   type: 1,
   isAttack: 1
 })
@@ -160,36 +165,19 @@ const createMannequin = async () => {
     if (!userStr) return
     const user = JSON.parse(userStr)
     
-    const response = await trainApi.createMannequin(
-      mannequinForm.value.attack,
-      mannequinForm.value.defense,
-      mannequinForm.value.hp,
-      mannequinForm.value.mp,
-      mannequinForm.value.type,
-      mannequinForm.value.isAttack
-    )
+    // 直接将训练人偶属性传递到Battle页面，不经过后端保存
+    const params = new URLSearchParams({
+      type: 'train',
+      mannequinAttack: mannequinForm.value.attack,
+      mannequinDefense: mannequinForm.value.defense,
+      mannequinHp: mannequinForm.value.hp,
+      mannequinMp: mannequinForm.value.mp,
+      mannequinSpeed: mannequinForm.value.speed,
+      mannequinType: mannequinForm.value.type,
+      mannequinIsAttack: mannequinForm.value.isAttack
+    }).toString()
     
-    if (response.code === 200) {
-      const mannequinId = response.data.mannequinId
-      startTrain(mannequinId)
-    } else {
-      alert('创建训练人偶失败: ' + response.msg)
-    }
-  } catch (error) {
-    console.error('创建训练人偶失败:', error)
-    alert('创建训练人偶失败，请重试')
-  }
-}
-
-// 开始训练
-const startTrain = async (mannequinId) => {
-  try {
-    const userStr = localStorage.getItem('user')
-    if (!userStr) return
-    const user = JSON.parse(userStr)
-    
-    // 跳转到战斗页面，传递训练人偶ID
-    router.push(`/battle?type=train&mannequinId=${mannequinId}`)
+    router.push(`/battle?${params}`)
   } catch (error) {
     console.error('开始训练失败:', error)
     alert('开始训练失败，请重试')

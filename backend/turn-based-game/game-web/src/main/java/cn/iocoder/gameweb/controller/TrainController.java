@@ -4,6 +4,7 @@ import cn.iocoder.gamecommon.result.Result;
 import cn.iocoder.gamecommon.annotation.Loggable;
 import cn.iocoder.gamecommon.util.JwtUtil;
 import cn.iocoder.gamemodules.service.TrainService;
+import cn.iocoder.gamemodules.service.impl.TrainServiceImpl;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -62,9 +64,10 @@ public class TrainController {
             Integer defense = parseInteger(params.get("defense"));
             Integer hp = parseInteger(params.get("hp"));
             Integer mp = parseInteger(params.get("mp"));
+            Integer speed = parseInteger(params.get("speed"));
             Integer type = parseInteger(params.get("type"));
             Integer isAttack = parseInteger(params.get("isAttack"));
-            return trainService.createMannequin(userId, attack, defense, hp, mp, type, isAttack);
+            return trainService.createMannequin(userId, attack, defense, hp, mp, speed, type, isAttack);
         } catch (Exception e) {
             e.printStackTrace();
             return Result.error("获取用户信息失败：" + e.getMessage());
@@ -74,7 +77,7 @@ public class TrainController {
     @PostMapping("/start")
     @Operation(summary = "开始训练", description = "开始单人训练")
     public Result<Map<String, Object>> startTrain(HttpServletRequest request,
-            @RequestBody Map<String, Object> params) {
+            @RequestBody(required = false) Map<String, Object> params) {
         try {
             // 从请求头中获取token
             String token = request.getHeader("Authorization");
@@ -83,24 +86,47 @@ public class TrainController {
             }
             // 从token中获取userId
             Long userId = jwtUtil.getUserIdFromToken(token);
-            // 从请求体中获取参数
-            Object mannequinIdObj = params.get("mannequinId");
-            if (mannequinIdObj == null) {
-                return Result.error("参数错误：mannequinId不能为空");
-            }
-            Long mannequinId;
-            if (mannequinIdObj instanceof Number) {
-                mannequinId = ((Number) mannequinIdObj).longValue();
-            } else if (mannequinIdObj instanceof String) {
-                try {
-                    mannequinId = Long.parseLong((String) mannequinIdObj);
-                } catch (NumberFormatException e) {
-                    return Result.error("参数错误：mannequinId格式不正确");
-                }
+            
+            // 检查是否是直接传递训练人偶属性
+            Object attackObj = params != null ? params.get("attack") : null;
+            Object defenseObj = params != null ? params.get("defense") : null;
+            Object hpObj = params != null ? params.get("hp") : null;
+            Object mpObj = params != null ? params.get("mp") : null;
+            Object speedObj = params != null ? params.get("speed") : null;
+            Object typeObj = params != null ? params.get("type") : null;
+            Object isAttackObj = params != null ? params.get("isAttack") : null;
+            
+            if (attackObj != null && defenseObj != null && hpObj != null && mpObj != null && typeObj != null) {
+                // 直接传递训练人偶属性
+                Integer attack = parseInteger(attackObj);
+                Integer defense = parseInteger(defenseObj);
+                Integer hp = parseInteger(hpObj);
+                Integer mp = parseInteger(mpObj);
+                Integer speed = parseInteger(speedObj);
+                Integer type = parseInteger(typeObj);
+                Integer isAttack = parseInteger(isAttackObj != null ? isAttackObj : 1);
+                
+                return ((TrainServiceImpl) trainService).startTrainWithMannequinParams(userId, attack, defense, hp, mp, speed, type, isAttack);
             } else {
-                return Result.error("参数错误：mannequinId类型不正确");
+                // 从数据库读取训练人偶
+                Object mannequinIdObj = params != null ? params.get("mannequinId") : null;
+                if (mannequinIdObj == null) {
+                    return Result.error("参数错误：mannequinId或训练人偶属性不能为空");
+                }
+                Long mannequinId;
+                if (mannequinIdObj instanceof Number) {
+                    mannequinId = ((Number) mannequinIdObj).longValue();
+                } else if (mannequinIdObj instanceof String) {
+                    try {
+                        mannequinId = Long.parseLong((String) mannequinIdObj);
+                    } catch (NumberFormatException e) {
+                        return Result.error("参数错误：mannequinId格式不正确");
+                    }
+                } else {
+                    return Result.error("参数错误：mannequinId类型不正确");
+                }
+                return trainService.startTrain(userId, mannequinId);
             }
-            return trainService.startTrain(userId, mannequinId);
         } catch (Exception e) {
             return Result.error("获取用户信息失败：" + e.getMessage());
         }
@@ -155,6 +181,23 @@ public class TrainController {
             return trainService.useSkill(userId, skillId);
         } catch (Exception e) {
             return Result.error("获取用户信息失败：" + e.getMessage());
+        }
+    }
+
+    @PostMapping("/monster_turn")
+    @Operation(summary = "执行人偶行动", description = "训练中执行训练人偶行动")
+    public Result<Map<String, Object>> executeMannequinTurn(HttpServletRequest request) {
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return trainService.executeMannequinTurn(userId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
         }
     }
 
@@ -239,6 +282,23 @@ public class TrainController {
             // 从token中获取userId
             Long userId = jwtUtil.getUserIdFromToken(token);
             return trainService.getTrainRecords(userId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
+        }
+    }
+
+    @GetMapping("/battle_elves")
+    @Operation(summary = "获取训练中的出战精灵", description = "获取训练模式下的出战精灵列表")
+    public Result<List<Map<String, Object>>> getBattleElves(HttpServletRequest request) {
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return trainService.getBattleElves(userId);
         } catch (Exception e) {
             return Result.error("获取用户信息失败");
         }

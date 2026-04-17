@@ -8,6 +8,7 @@ import cn.iocoder.gamemodules.service.ShopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/equips")
 @Tag(name = "装备管理", description = "装备查询、购买、穿戴、卸下相关接口")
 @Loggable
+@Slf4j
 public class EquipController {
 
     @Autowired
@@ -82,7 +84,8 @@ public class EquipController {
             Long userId = jwtUtil.getUserIdFromToken(token);
             return shopService.buyItem(userId, equipId);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
 
@@ -108,7 +111,8 @@ public class EquipController {
             Long userId = jwtUtil.getUserIdFromToken(token);
             return equipService.equipWeapon(userId, elfId, weaponId);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
 
@@ -119,7 +123,7 @@ public class EquipController {
     @Operation(summary = "装备防具", description = "为指定精灵装备防具")
     public Result<?> equipArmor(HttpServletRequest request,
             @Parameter(name = "elfId", description = "精灵ID", required = true) @RequestParam Long elfId,
-            @Parameter(name = "userBagId", description = "背包物品ID", required = true) @RequestParam Long userBagId) {
+            @Parameter(name = "armorId", description = "防具ID", required = true) @RequestParam Long armorId) {
         try {
             // 从请求头中获取token
             String token = request.getHeader("Authorization");
@@ -132,9 +136,10 @@ public class EquipController {
             }
             // 从token中获取userId
             Long userId = jwtUtil.getUserIdFromToken(token);
-            return equipService.equipArmor(userId, elfId, userBagId);
+            return equipService.equipArmor(userId, elfId, armorId);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
 
@@ -159,7 +164,8 @@ public class EquipController {
             Long userId = jwtUtil.getUserIdFromToken(token);
             return equipService.unequipWeapon(userId, elfId);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
 
@@ -184,7 +190,8 @@ public class EquipController {
             Long userId = jwtUtil.getUserIdFromToken(token);
             return equipService.unequipArmor(userId, elfId);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
     
@@ -209,7 +216,8 @@ public class EquipController {
             Long userId = jwtUtil.getUserIdFromToken(token);
             return shopService.getUserEquipsByType(userId, type);
         } catch (Exception e) {
-            return Result.error("获取用户信息失败");
+            log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
+            return Result.error("获取用户信息失败: " + e.getMessage());
         }
     }
 }

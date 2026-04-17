@@ -1,7 +1,9 @@
 package cn.iocoder.gamemodules.service.impl;
 
 import cn.iocoder.gamemodules.entity.FriendRelation;
+import cn.iocoder.gamemodules.entity.User;
 import cn.iocoder.gamemodules.mapper.FriendRelationMapper;
+import cn.iocoder.gamemodules.mapper.UserMapper;
 import cn.iocoder.gamecommon.result.Result;
 import cn.iocoder.gamemodules.service.FriendService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -10,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 好友服务实现类
@@ -20,6 +24,9 @@ public class FriendServiceImpl implements FriendService {
 
     @Autowired
     private FriendRelationMapper friendRelationMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Override
     @Transactional
@@ -140,21 +147,64 @@ public class FriendServiceImpl implements FriendService {
     }
 
     @Override
-    public Result<List<FriendRelation>> getFriendList(Long userId) {
+    public Result<List<Map<String, Object>>> getFriendList(Long userId) {
         if (userId == null) {
             return Result.error("用户ID不能为空");
         }
         List<FriendRelation> friends = friendRelationMapper.selectUserFriends(userId);
-        return Result.success(friends);
+        
+        // 为每个好友添加nickname
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (FriendRelation friend : friends) {
+            Map<String, Object> friendMap = new HashMap<>();
+            friendMap.put("friendId", friend.getFriendId());
+            friendMap.put("remark", friend.getRemark());
+            friendMap.put("status", friend.getStatus());
+            friendMap.put("createTime", friend.getCreateTime());
+            
+            // 查询好友的nickname
+            User user = userMapper.selectById(friend.getFriendId());
+            if (user != null) {
+                friendMap.put("nickname", user.getNickname());
+            } else {
+                friendMap.put("nickname", "未知用户");
+            }
+            
+            result.add(friendMap);
+        }
+        
+        return Result.success(result);
     }
 
     @Override
-    public Result<List<FriendRelation>> getPendingRequests(Long userId) {
+    public Result<List<Map<String, Object>>> getPendingRequests(Long userId) {
         if (userId == null) {
             return Result.error("用户ID不能为空");
         }
         List<FriendRelation> requests = friendRelationMapper.selectPendingRequests(userId);
-        return Result.success(requests);
+        
+        // 为每个申请添加nickname
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (FriendRelation request : requests) {
+            Map<String, Object> requestMap = new HashMap<>();
+            requestMap.put("userId", request.getUserId());
+            requestMap.put("friendId", request.getFriendId());
+            requestMap.put("remark", request.getRemark());
+            requestMap.put("status", request.getStatus());
+            requestMap.put("createTime", request.getCreateTime());
+            
+            // 查询申请人的nickname
+            User user = userMapper.selectById(request.getUserId());
+            if (user != null) {
+                requestMap.put("nickname", user.getNickname());
+            } else {
+                requestMap.put("nickname", "未知用户");
+            }
+            
+            result.add(requestMap);
+        }
+        
+        return Result.success(result);
     }
 
     @Override

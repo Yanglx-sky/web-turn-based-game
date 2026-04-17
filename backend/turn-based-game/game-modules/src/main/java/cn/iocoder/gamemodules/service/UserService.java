@@ -17,4 +17,5 @@ public interface UserService extends IService<User> {
     Result<Long> addGold(Long userId, Long amount);
     Result<Long> getUserAsset(Long userId);
     Result<List<Map<String, Object>>> getUserLevelStars(Long userId);
+    Result<Map<String, Object>> searchUserByPhone(String phone);
 }

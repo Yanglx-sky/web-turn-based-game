@@ -41,6 +41,16 @@ export const battleApi = {
     return api.post('/api/battle/action', { type: 'skill', skillId })
   },
   
+  // 执行怪物行动
+  executeMonsterTurn: () => {
+    return api.post('/api/battle/action', { type: 'monster_turn' })
+  },
+  
+  // 获取战斗中的精灵列表
+  getBattleElves: () => {
+    return api.get('/api/battle/battle-elves')
+  },
+  
   // 切换精灵
   switchElf: (elfId) => {
     return api.post('/api/battle/action', { type: 'switch', elfId })
@@ -69,5 +79,15 @@ export const battleApi = {
   // 玩家离线
   playerOffline: () => {
     return api.put('/api/battle/status', { status: 'offline' })
+  },
+  
+  // 领取战斗奖励
+  claimReward: (levelId, battleId) => {
+    return api.post('/api/battle/reward', null, {
+      params: {
+        levelId,
+        battleId
+      }
+    })
   }
 }

@@ -18,6 +18,7 @@ public class TrainMannequin {
     private Integer mp;
     private Integer type;
     private Integer isAttack;
+    private Integer speed;  // 速度,用于判断先后手
     private Date createTime;
     private Date updateTime;
 }

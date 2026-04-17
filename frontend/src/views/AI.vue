@@ -303,6 +303,7 @@ const sendMessage = async () => {
     // 读取响应流
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let buffer = ''
     
     while (true) {
       const { done, value } = await reader.read()
@@ -311,11 +312,29 @@ const sendMessage = async () => {
       }
       
       const chunk = decoder.decode(value, { stream: true })
-      if (chunk === '[DONE]') {
-        break
-      }
+      buffer += chunk
       
-      streamingContent.value += chunk
+      // 按行处理SSE数据
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // 保留不完整的行
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        
+        // 跳过空行
+        if (!trimmedLine) continue
+        
+        // 检查是否结束
+        if (trimmedLine === '[DONE]') {
+          break
+        }
+        
+        // 解析data: 行
+        if (trimmedLine.startsWith('data: ')) {
+          const content = trimmedLine.substring(6) // 去掉 "data: " 前缀
+          streamingContent.value += content
+        }
+      }
     }
     
     isStreaming.value = false

@@ -11,8 +11,9 @@ import java.util.Map;
 public interface BattleService {
     /**
      * 开始战斗，生成战斗记录
+     * 自动读取玩家配置的出战精灵列表（按fight_order排序）
      */
-    Result<Map<String, Object>> startBattle(Long userId, Long userElfId, Integer levelId);
+    Result<Map<String, Object>> startBattle(Long userId, Integer levelId);
 
     /**
      * 玩家退出/断线，更新战斗状态
@@ -53,6 +54,16 @@ public interface BattleService {
      * 使用技能
      */
     Result<Map<String, Object>> useSkill(Long userId, Integer skillId);
+    
+    /**
+     * 执行怪物行动（由前端在玩家行动后调用）
+     */
+    Result<Map<String, Object>> executeMonsterTurn(Long userId);
+    
+    /**
+     * 获取战斗中的精灵列表（从battle_record_elf查询）
+     */
+    Result<List<Map<String, Object>>> getBattleElves(Long userId);
     
     /**
      * 切换精灵

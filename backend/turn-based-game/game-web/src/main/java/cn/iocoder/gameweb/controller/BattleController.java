@@ -49,12 +49,12 @@ public class BattleController {
 
     /**
      * 开始战斗
+     * 自动使用玩家配置的出战精灵列表（按fight_order排序）
      */
     @PostMapping
-    @Operation(summary = "开始战斗", description = "开始一场新的战斗")
+    @Operation(summary = "开始战斗", description = "开始一场新的战斗，自动使用玩家配置的出战精灵列表")
     public Result<?> startBattle(
             HttpServletRequest request,
-            @Parameter(description = "用户精灵ID", required = true) @RequestParam Long userElfId,
             @Parameter(description = "关卡ID", required = true) @RequestParam Integer levelId) {
         try {
             // 从token中获取userId
@@ -69,7 +69,7 @@ public class BattleController {
             Long userId = jwtUtil.getUserIdFromToken(token);
 
             // 开始战斗
-            return battleService.startBattle(userId, userElfId, levelId);
+            return battleService.startBattle(userId, levelId);
         } catch (Exception e) {
             return Result.error("获取用户信息失败");
         }
@@ -201,6 +201,9 @@ public class BattleController {
                     }
                     // 处理使用技能
                     return battleService.useSkill(userId, skillId);
+                case "monster_turn":
+                    // 执行怪物行动
+                    return battleService.executeMonsterTurn(userId);
                 case "switch":
                     // 获取精灵ID
                     if (!params.containsKey("elfId")) {
@@ -292,6 +295,27 @@ public class BattleController {
         } catch (Exception e) {
             e.printStackTrace();
             return Result.error("获取战斗策略推荐失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取战斗中的精灵列表（从battle_record_elf查询）
+     */
+    @GetMapping("/battle-elves")
+    @Operation(summary = "获取战斗中的精灵列表", description = "从battle_record_elf查询战斗中的精灵状态，用于切换精灵")
+    public Result<List<Map<String, Object>>> getBattleElves(HttpServletRequest request) {
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.getBattleElves(userId);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.error("获取战斗精灵列表失败: " + e.getMessage());
         }
     }
     

@@ -40,7 +40,7 @@ export const equipApi = {
     return api.put('/api/equips/armor', null, {
       params: {
         elfId,
-        userBagId: armorId
+        armorId
       }
     })
   },

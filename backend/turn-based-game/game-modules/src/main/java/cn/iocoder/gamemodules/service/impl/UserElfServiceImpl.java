@@ -10,7 +10,6 @@ import cn.iocoder.gamemodules.mapper.ElfSkillMapper;
 import cn.iocoder.gamemodules.mapper.SkillMapper;
 import cn.iocoder.gamemodules.mapper.UserElfMapper;
 import cn.iocoder.gamemodules.service.UserElfService;
-import cn.iocoder.gamemodules.service.AchievementService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,9 +31,6 @@ public class UserElfServiceImpl extends ServiceImpl<UserElfMapper, UserElf> impl
     
     @Autowired
     private ElfMapper elfMapper;
-
-    @Autowired
-    private AchievementService achievementService;
 
     @Override
     public Result<List<Map<String, Object>>> getUserElfList(Long userId) {
@@ -309,9 +305,6 @@ public class UserElfServiceImpl extends ServiceImpl<UserElfMapper, UserElf> impl
         if (!success) {
             return Result.error("创建精灵失败");
         }
-        
-        // 更新成就进度：收集精灵数量
-        achievementService.updateAchievementProgress(userId, "collect_elf", 1);
         
         return Result.success(userElf);
     }

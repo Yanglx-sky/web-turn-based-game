@@ -12,6 +12,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,8 @@ public class TrainServiceImpl implements TrainService {
     private TrainRecordMapper trainRecordMapper;
     @Autowired
     private TrainMannequinSkillMapper trainMannequinSkillMapper;
+    @Autowired
+    private TrainRecordElfMapper trainRecordElfMapper;
     @Autowired
     private UserElfMapper userElfMapper;
     @Autowired
@@ -52,13 +55,15 @@ public class TrainServiceImpl implements TrainService {
         BattleUtils.BattleLogManager battleLogManager = new BattleUtils.BattleLogManager();
         TrainMannequin currentMannequin;
         UserElf currentPlayerElf;
+        List<TrainRecordElf> trainRecordElves = new ArrayList<>(); // 所有出战精灵的记录
         int playerElfHp;
         int mannequinHp;
         int mannequinMp;
+        boolean elfSwitched; // 标记是否发生了精灵切换
     }
 
     @Override
-    public Result<Map<String, Object>> createMannequin(Long userId, Integer attack, Integer defense, Integer hp, Integer mp, Integer type, Integer isAttack) {
+    public Result<Map<String, Object>> createMannequin(Long userId, Integer attack, Integer defense, Integer hp, Integer mp, Integer speed, Integer type, Integer isAttack) {
         // 创建训练人偶
         TrainMannequin mannequin = new TrainMannequin();
         mannequin.setUserId(userId);
@@ -66,6 +71,7 @@ public class TrainServiceImpl implements TrainService {
         mannequin.setDefense(defense);
         mannequin.setHp(hp);
         mannequin.setMp(mp);
+        mannequin.setSpeed(speed);
         mannequin.setType(type);
         mannequin.setIsAttack(isAttack);
         trainMannequinMapper.insert(mannequin);
@@ -108,24 +114,59 @@ public class TrainServiceImpl implements TrainService {
             return Result.error("获取出战精灵失败");
         }
 
-        // 使用第一个精灵作为训练精灵
-        Map<String, Object> elfMap = battleElvesResult.getData().get(0);
-        Long elfId = ((Number) elfMap.get("id")).longValue();
-        trainState.currentPlayerElf = userElfMapper.selectById(elfId);
+        // 为每个出战精灵创建train_record_elf记录并插入数据库
+        List<TrainRecordElf> trainRecordElves = new ArrayList<>();
+        TrainRecordElf firstElfRecord = null;
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        
+        for (int i = 0; i < battleElvesResult.getData().size(); i++) {
+            Map<String, Object> elfMap = battleElvesResult.getData().get(i);
+            Long elfId = ((Number) elfMap.get("id")).longValue();
+            UserElf userElf = userElfMapper.selectById(elfId);
+            
+            if (userElf == null) continue;
+            
+            // 创建训练记录
+            TrainRecordElf trainRecordElf = new TrainRecordElf();
+            trainRecordElf.setElfId(elfId);
+            trainRecordElf.setMannequinId(mannequinId); // 使用真实的mannequinId
+            trainRecordElf.setCurrentHp(userElf.getMaxHp());
+            trainRecordElf.setCurrentMp(userElf.getMaxMp());
+            trainRecordElf.setElfState(i == 0 ? 0 : 1); // 第一个精灵为战斗中，其他为可上场
+            trainRecordElf.setCreateTime(now);
+            trainRecordElf.setUpdateTime(now);
+            
+            // 插入数据库
+            trainRecordElfMapper.insert(trainRecordElf);
+            
+            trainRecordElves.add(trainRecordElf);
+            
+            // 第一个精灵作为当前战斗精灵
+            if (i == 0) {
+                firstElfRecord = trainRecordElf;
+                trainState.currentPlayerElf = userElf;
+            }
+        }
+        
         if (trainState.currentPlayerElf == null) {
             return Result.error("精灵不存在");
         }
+        
+        // 保存所有精灵记录到状态中
+        trainState.trainRecordElves = trainRecordElves;
 
         // 初始化生命值和魔法值（精灵进入训练时满血满蓝）
-        trainState.playerElfHp = trainState.currentPlayerElf.getMaxHp();
-        trainState.currentPlayerElf.setHp(trainState.currentPlayerElf.getMaxHp());
-        trainState.currentPlayerElf.setMp(trainState.currentPlayerElf.getMaxMp());
+        trainState.playerElfHp = firstElfRecord.getCurrentHp();
+        trainState.currentPlayerElf.setHp(firstElfRecord.getCurrentHp());
+        trainState.currentPlayerElf.setMp(firstElfRecord.getCurrentMp());
         trainState.mannequinHp = trainState.currentMannequin.getHp();
         trainState.mannequinMp = trainState.currentMannequin.getMp();
 
         // 记录训练开始
         String startLog = "训练开始！";
-        String elfLog = "你的精灵: " + elfMap.get("elfName") + " (HP: " + trainState.playerElfHp + ")";
+        Elf firstElf = elfMapper.selectById(trainState.currentPlayerElf.getElfId());
+        String elfName = firstElf != null ? firstElf.getElfName() : "未知精灵";
+        String elfLog = "你的精灵: " + elfName + " (HP: " + trainState.playerElfHp + ")";
         String mannequinLog = "训练人偶: " + getMannequinTypeName(trainState.currentMannequin.getType()) + " (HP: " + trainState.mannequinHp + ")";
         trainState.trainLog.add(startLog);
         trainState.trainLog.add(elfLog);
@@ -140,7 +181,140 @@ public class TrainServiceImpl implements TrainService {
         Map<String, Object> res = new HashMap<>();
         res.put("trainLog", trainState.trainLog);
         res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
-        res.put("playerElf", elfMap);
+        
+        Map<String, Object> firstElfMap = new HashMap<>();
+        firstElfMap.put("id", trainState.currentPlayerElf.getId());
+        firstElfMap.put("elfName", elfName);
+        firstElfMap.put("hp", trainState.playerElfHp);
+        firstElfMap.put("maxHp", trainState.currentPlayerElf.getMaxHp());
+        firstElfMap.put("mp", trainState.currentPlayerElf.getMp());
+        firstElfMap.put("maxMp", trainState.currentPlayerElf.getMaxMp());
+        if (firstElf != null) {
+            firstElfMap.put("elementType", firstElf.getElementType());
+        }
+        
+        res.put("playerElf", firstElfMap);
+        res.put("mannequin", trainState.currentMannequin);
+        res.put("playerElfHp", trainState.playerElfHp);
+        res.put("elfMp", trainState.currentPlayerElf.getMp());
+        res.put("mannequinHp", trainState.mannequinHp);
+        res.put("mannequinMp", trainState.mannequinMp);
+        return Result.success(res);
+    }
+
+    /**
+     * 开始训练（直接传递训练人偶属性，不从数据库读取）
+     */
+    public Result<Map<String, Object>> startTrainWithMannequinParams(Long userId, Integer attack, Integer defense, Integer hp, Integer mp, Integer speed, Integer type, Integer isAttack) {
+        // 重置训练状态
+        TrainState trainState = new TrainState();
+        trainState.trainEnded = false;
+        trainState.trainWon = false;
+        trainState.trainLog.clear();
+        trainState.battleLogManager.reset();
+
+        // 创建训练人偶对象并保存到数据库
+        TrainMannequin mannequin = new TrainMannequin();
+        mannequin.setUserId(userId);
+        mannequin.setAttack(attack);
+        mannequin.setDefense(defense);
+        mannequin.setHp(hp);
+        mannequin.setMp(mp);
+        mannequin.setSpeed(speed);
+        mannequin.setType(type);
+        mannequin.setIsAttack(isAttack);
+        mannequin.setCreateTime(new java.util.Date());
+        mannequin.setUpdateTime(new java.util.Date());
+        
+        // 插入数据库
+        trainMannequinMapper.insert(mannequin);
+        
+        // 为训练人偶添加对应系别的技能
+        QueryWrapper<Skill> skillWrapper = new QueryWrapper<>();
+        skillWrapper.eq("element_type", type);
+        List<Skill> skills = skillMapper.selectList(skillWrapper);
+        for (Skill skill : skills) {
+            TrainMannequinSkill mannequinSkill = new TrainMannequinSkill();
+            mannequinSkill.setMannequinId(mannequin.getId());
+            mannequinSkill.setSkillId(skill.getId());
+            trainMannequinSkillMapper.insert(mannequinSkill);
+        }
+        
+        trainState.currentMannequin = mannequin;
+
+        // 获取用户的出战精灵
+        Result<List<Map<String, Object>>> battleElvesResult = userElfService.getBattleElves(userId);
+        if (battleElvesResult.getCode() != 200 || battleElvesResult.getData() == null || battleElvesResult.getData().isEmpty()) {
+            return Result.error("获取出战精灵失败");
+        }
+
+        // 为每个出战精灵创建train_record_elf记录并插入数据库
+        List<TrainRecordElf> trainRecordElves = new ArrayList<>();
+        TrainRecordElf firstElfRecord = null;
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        
+        for (int i = 0; i < battleElvesResult.getData().size(); i++) {
+            Map<String, Object> elfMap = battleElvesResult.getData().get(i);
+            Long elfId = ((Number) elfMap.get("id")).longValue();
+            UserElf userElf = userElfMapper.selectById(elfId);
+            
+            if (userElf == null) continue;
+            
+            // 创建训练记录
+            TrainRecordElf trainRecordElf = new TrainRecordElf();
+            trainRecordElf.setElfId(elfId);
+            trainRecordElf.setMannequinId(mannequin.getId()); // 使用真实的mannequinId
+            trainRecordElf.setCurrentHp(userElf.getMaxHp());
+            trainRecordElf.setCurrentMp(userElf.getMaxMp());
+            trainRecordElf.setElfState(i == 0 ? 0 : 1); // 第一个精灵为战斗中，其他为可上场
+            trainRecordElf.setCreateTime(now);
+            trainRecordElf.setUpdateTime(now);
+            
+            // 插入数据库
+            trainRecordElfMapper.insert(trainRecordElf);
+            
+            trainRecordElves.add(trainRecordElf);
+            
+            // 第一个精灵作为当前战斗精灵
+            if (i == 0) {
+                firstElfRecord = trainRecordElf;
+                trainState.currentPlayerElf = userElf;
+            }
+        }
+        
+        if (trainState.currentPlayerElf == null) {
+            return Result.error("精灵不存在");
+        }
+        
+        // 保存所有精灵记录到状态中
+        trainState.trainRecordElves = trainRecordElves;
+
+        // 初始化生命值和魔法值（精灵进入训练时满血满蓝）
+        trainState.playerElfHp = firstElfRecord.getCurrentHp();
+        trainState.currentPlayerElf.setHp(firstElfRecord.getCurrentHp());
+        trainState.currentPlayerElf.setMp(firstElfRecord.getCurrentMp());
+        trainState.mannequinHp = hp;
+        trainState.mannequinMp = mp;
+
+        // 记录训练开始
+        String startLog = "训练开始！";
+        Map<String, Object> firstElfMap = battleElvesResult.getData().get(0);
+        String elfLog = "你的精灵: " + firstElfMap.get("elfName") + " (HP: " + trainState.playerElfHp + ")";
+        String mannequinLog = "训练人偶: " + getMannequinTypeName(type) + " (HP: " + trainState.mannequinHp + ")";
+        trainState.trainLog.add(startLog);
+        trainState.trainLog.add(elfLog);
+        trainState.trainLog.add(mannequinLog);
+        trainState.battleLogManager.addLog(startLog);
+        trainState.battleLogManager.addLog(elfLog);
+        trainState.battleLogManager.addLog(mannequinLog);
+
+        // 存储训练状态
+        userTrainStates.put(userId, trainState);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("trainLog", trainState.trainLog);
+        res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
+        res.put("playerElf", firstElfMap);
         res.put("mannequin", trainState.currentMannequin);
         res.put("playerElfHp", trainState.playerElfHp);
         res.put("elfMp", trainState.currentPlayerElf.getMp());
@@ -156,64 +330,154 @@ public class TrainServiceImpl implements TrainService {
             return Result.error("未进入训练或训练已结束");
         }
 
+        // 检查当前精灵是否已死亡，如果是则自动切换
+        if (trainState.playerElfHp <= 0) {
+            String elfName = getElfName(trainState.currentPlayerElf);
+            trainState.trainLog.add("新回合开始！");
+            trainState.battleLogManager.addLog("新回合开始！");
+            
+            boolean hasNextElf = checkAndPrepareNextElf(userId, trainState);
+            
+            if (!hasNextElf) {
+                trainState.trainEnded = true;
+                trainState.trainWon = false;
+                String loseLog = "训练失败！你的所有出战精灵都被击败了！";
+                trainState.trainLog.add(loseLog);
+                trainState.battleLogManager.addLog(loseLog);
+                return trainSettlement(userId);
+            }
+            
+            String newElfName = getElfName(trainState.currentPlayerElf);
+            trainState.trainLog.add(newElfName + " 登场！");
+            trainState.battleLogManager.addLog(newElfName + " 登场！");
+            
+            // 标记发生了精灵切换，用于前端显示弹窗
+            trainState.elfSwitched = true;
+        }
+
         // 开始新回合
         trainState.battleLogManager.startNewRound();
 
-        // 计算系别克制
-        int playerElement = BattleUtils.getElfElementType(trainState.currentPlayerElf, elfMapper);
-        int mannequinElement = trainState.currentMannequin.getType();
+        // 比较速度决定先后手
+        int playerSpeed = trainState.currentPlayerElf.getSpeed() != null ? trainState.currentPlayerElf.getSpeed() : 0;
+        int mannequinSpeed = trainState.currentMannequin.getSpeed() != null ? trainState.currentMannequin.getSpeed() : 0;
+        boolean playerFirst = BattleUtils.isPlayerFirst(playerSpeed, mannequinSpeed);
         
-        // 1. 玩家行动：普通攻击
-        int damage = BattleUtils.calculateNormalDamage(trainState.currentPlayerElf.getAttack(), trainState.currentMannequin.getDefense());
-        double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
-        int finalDamage = (int) (damage * multiplier);
-        
-        trainState.mannequinHp -= finalDamage;
-        String attackLog = BattleUtils.generateAttackLog(
-                trainState.currentPlayerElf.getElfId().toString(), 
-                "attack", 
-                null, 
-                finalDamage);
-        
-        if (multiplier > 1) {
-            attackLog += "，效果拔群";
-        } else if (multiplier < 1) {
-            attackLog += "，效果不佳";
-        }
-        
-        trainState.trainLog.add(attackLog);
-        trainState.battleLogManager.addLog(attackLog);
-
-        // 检查训练人偶是否被击败
-        if (trainState.mannequinHp <= 0) {
-            trainState.mannequinHp = 0;
-            trainState.trainEnded = true;
-            trainState.trainWon = true;
-            String winLog = "训练人偶被击败，训练胜利！";
-            trainState.trainLog.add(winLog);
-            trainState.battleLogManager.addLog(winLog);
+        if (playerFirst) {
+            // 玩家先手：玩家攻击
+            int damage = trainState.currentPlayerElf.getNormalDamage() != null ? trainState.currentPlayerElf.getNormalDamage() : 1;
             
-            return trainSettlement(userId);
-        }
-
-        // 训练人偶反击（如果设置为主动攻击）
-        if (trainState.currentMannequin.getIsAttack() == 1) {
-            executeMannequinAction(trainState, playerElement, mannequinElement);
+            trainState.mannequinHp -= damage;
+            String attackLog = BattleUtils.generateAttackLog(
+                    getElfName(trainState.currentPlayerElf), 
+                    "attack", 
+                    null, 
+                    damage);
             
-            // 检查玩家精灵是否被击败
-            if (trainState.playerElfHp <= 0) {
-                trainState.playerElfHp = 0;
+            trainState.trainLog.add(attackLog);
+            trainState.battleLogManager.addLog(attackLog);
+
+            // 检查训练人偶是否被击败
+            if (trainState.mannequinHp <= 0) {
+                trainState.mannequinHp = 0;
                 trainState.trainEnded = true;
-                trainState.trainWon = false;
-                String loseLog = "你的精灵被击败，训练失败！";
-                trainState.trainLog.add(loseLog);
-                trainState.battleLogManager.addLog(loseLog);
+                trainState.trainWon = true;
+                String winLog = "训练人偶被击败，训练胜利！";
+                trainState.trainLog.add(winLog);
+                trainState.battleLogManager.addLog(winLog);
+                
+                // 更新人偶HP到数据库
+                trainState.currentMannequin.setHp(0);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
+                
+                return trainSettlement(userId);
+            }
+        } else {
+            // 训练人偶先手：先执行训练人偶行动（如果设置为主动攻击）
+            System.out.println("[DEBUG] 训练人偶先手-普通攻击, playerFirst=" + playerFirst + ", isAttack=" + trainState.currentMannequin.getIsAttack());
+            if (trainState.currentMannequin.getIsAttack() == 1) {
+                executeMannequinAction(trainState);
+                
+                // 更新人偶MP到数据库
+                trainState.currentMannequin.setMp(trainState.mannequinMp);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
+                
+                // 检查玩家精灵是否被击败
+                if (trainState.playerElfHp <= 0) {
+                    trainState.playerElfHp = 0;
+                    
+                    String elfName = getElfName(trainState.currentPlayerElf);
+                    trainState.trainLog.add("你的精灵" + elfName + "被击败了！");
+                    trainState.battleLogManager.addLog("你的精灵" + elfName + "被击败了！");
+                    
+                    // 检查是否还有可用的精灵
+                    boolean hasNextElf = checkAndPrepareNextElf(userId, trainState);
+                    
+                    if (!hasNextElf) {
+                        // 没有可用精灵，训练失败
+                        trainState.trainEnded = true;
+                        trainState.trainWon = false;
+                        String loseLog = "训练失败！你的所有出战精灵都被击败了！";
+                        trainState.trainLog.add(loseLog);
+                        trainState.battleLogManager.addLog(loseLog);
+                        
+                        return trainSettlement(userId);
+                    }
+                }
+            }
+            
+            // 玩家仍然执行攻击（即使训练人偶先手）
+            int damage = trainState.currentPlayerElf.getNormalDamage() != null ? trainState.currentPlayerElf.getNormalDamage() : 1;
+            
+            trainState.mannequinHp -= damage;
+            String attackLog = BattleUtils.generateAttackLog(
+                    getElfName(trainState.currentPlayerElf), 
+                    "attack", 
+                    null, 
+                    damage);
+            
+            System.out.println("[DEBUG] 训练人偶先手-玩家攻击日志: " + attackLog);
+            trainState.trainLog.add(attackLog);
+            trainState.battleLogManager.addLog(attackLog);
+
+            // 检查训练人偶是否被击败
+            if (trainState.mannequinHp <= 0) {
+                trainState.mannequinHp = 0;
+                trainState.trainEnded = true;
+                trainState.trainWon = true;
+                String winLog = "训练人偶被击败，训练胜利！";
+                trainState.trainLog.add(winLog);
+                trainState.battleLogManager.addLog(winLog);
+                
+                // 更新人偶HP到数据库
+                trainState.currentMannequin.setHp(0);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
                 
                 return trainSettlement(userId);
             }
         }
 
+        // 不再自动执行训练人偶反击，等待前端调用executeMannequinTurn（仅当玩家先手时）
+        
+        // 更新trainRecordElf中的HP到数据库
+        TrainRecordElf currentRecord = findTrainRecordElf(trainState, trainState.currentPlayerElf.getId());
+        if (currentRecord != null) {
+            currentRecord.setCurrentHp(trainState.playerElfHp);
+            currentRecord.setUpdateTime(LocalDateTime.now());
+            trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+        }
+        
+        // 更新人偶HP到数据库
+        trainState.currentMannequin.setHp(trainState.mannequinHp);
+        trainState.currentMannequin.setUpdateTime(new java.util.Date());
+        trainMannequinMapper.updateById(trainState.currentMannequin);
+        
         Map<String, Object> res = buildTrainResult(trainState);
+        // 添加标志位，告诉前端是否需要调用executeMannequinTurn
+        res.put("needMannequinTurn", playerFirst && trainState.currentMannequin.getIsAttack() == 1);
         return Result.success(res);
     }
 
@@ -223,77 +487,266 @@ public class TrainServiceImpl implements TrainService {
         if (trainState == null || trainState.trainEnded) {
             return Result.error("未进入训练或训练已结束");
         }
-
+    
+        // 检查当前精灵是否已死亡，如果是则自动切换
+        if (trainState.playerElfHp <= 0) {
+            String elfName = getElfName(trainState.currentPlayerElf);
+            trainState.trainLog.add("新回合开始！");
+            trainState.battleLogManager.addLog("新回合开始！");
+                
+            boolean hasNextElf = checkAndPrepareNextElf(userId, trainState);
+                
+            if (!hasNextElf) {
+                trainState.trainEnded = true;
+                trainState.trainWon = false;
+                String loseLog = "训练失败！你的所有出战精灵都被击败了！";
+                trainState.trainLog.add(loseLog);
+                trainState.battleLogManager.addLog(loseLog);
+                return trainSettlement(userId);
+            }
+                
+            String newElfName = getElfName(trainState.currentPlayerElf);
+            trainState.trainLog.add(newElfName + " 登场！");
+            trainState.battleLogManager.addLog(newElfName + " 登场！");
+                
+            // 标记发生了精灵切换，用于前端显示弹窗
+            trainState.elfSwitched = true;
+        }
+    
         // 开始新回合
         trainState.battleLogManager.startNewRound();
-
+    
         // 检查技能是否存在
         Skill skill = skillMapper.selectById(skillId);
         if (skill == null) {
             return Result.error("技能不存在");
         }
-
-        // 检查MP是否足够
+    
+        // 检查 MP是否足够
         if (trainState.currentPlayerElf.getMp() < skill.getCostMp()) {
             return Result.error("MP不足，无法使用技能");
         }
-
+    
+        // 比较速度决定先后手
+        int playerSpeed = trainState.currentPlayerElf.getSpeed() != null ? trainState.currentPlayerElf.getSpeed() : 0;
+        int mannequinSpeed = trainState.currentMannequin.getSpeed() != null ? trainState.currentMannequin.getSpeed() : 0;
+        boolean playerFirst = BattleUtils.isPlayerFirst(playerSpeed, mannequinSpeed);
+            
         // 计算系别克制
         int playerElement = BattleUtils.getElfElementType(trainState.currentPlayerElf, elfMapper);
         int mannequinElement = trainState.currentMannequin.getType();
-        
-        // 消耗MP
-        trainState.currentPlayerElf.setMp(trainState.currentPlayerElf.getMp() - skill.getCostMp());
-        
-        // 玩家精灵使用技能
-        int damage = BattleUtils.calculateSkillDamage(skill, trainState.currentPlayerElf.getAttack(), 
-                trainState.currentMannequin.getDefense(), playerElement, mannequinElement);
-        double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
-        int finalDamage = (int) (damage * multiplier);
-        
-        trainState.mannequinHp -= finalDamage;
-        String skillLog = BattleUtils.generateAttackLog(
-                trainState.currentPlayerElf.getElfId().toString(), 
-                "skill", 
-                skill.getSkillName(), 
-                finalDamage);
-        
-        if (multiplier > 1) {
-            skillLog += "，效果拔群";
-        } else if (multiplier < 1) {
-            skillLog += "，效果不佳";
-        }
-        
-        trainState.trainLog.add(skillLog);
-        trainState.battleLogManager.addLog(skillLog);
-
-        // 检查训练人偶是否被击败
-        if (trainState.mannequinHp <= 0) {
-            trainState.mannequinHp = 0;
-            trainState.trainEnded = true;
-            trainState.trainWon = true;
-            String winLog = "训练人偶被击败，训练胜利！";
-            trainState.trainLog.add(winLog);
-            trainState.battleLogManager.addLog(winLog);
             
-            return trainSettlement(userId);
+        // 消耗MP并更新trainRecordElf
+        trainState.currentPlayerElf.setMp(trainState.currentPlayerElf.getMp() - skill.getCostMp());
+        TrainRecordElf currentRecord = findTrainRecordElf(trainState, trainState.currentPlayerElf.getId());
+        if (currentRecord != null) {
+            currentRecord.setCurrentMp(trainState.currentPlayerElf.getMp());
+            currentRecord.setCurrentHp(trainState.playerElfHp);  // 同时更新HP
+            currentRecord.setUpdateTime(LocalDateTime.now());
+            trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+        }
+            
+        if (playerFirst) {
+            // 玩家先手：玩家使用技能
+            int damage = BattleUtils.calculateSkillDamage(skill, trainState.currentPlayerElf.getAttack(), 
+                    trainState.currentMannequin.getDefense(), playerElement, mannequinElement);
+            double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
+            int finalDamage = (int) (damage * multiplier);
+                
+            trainState.mannequinHp -= finalDamage;
+            String skillLog = BattleUtils.generateAttackLog(
+                    getElfName(trainState.currentPlayerElf), 
+                    "skill", 
+                    skill.getSkillName(), 
+                    finalDamage);
+                
+            if (multiplier > 1) {
+                skillLog += "，效果拔群";
+            } else if (multiplier < 1) {
+                skillLog += "，效果不佳";
+            }
+                
+            trainState.trainLog.add(skillLog);
+            trainState.battleLogManager.addLog(skillLog);
+    
+            // 检查训练人偶是否被击败
+            if (trainState.mannequinHp <= 0) {
+                trainState.mannequinHp = 0;
+                trainState.trainEnded = true;
+                trainState.trainWon = true;
+                String winLog = "训练人偶被击败，训练胜利！";
+                trainState.trainLog.add(winLog);
+                trainState.battleLogManager.addLog(winLog);
+                    
+                // 更新trainRecordElf中的HP到数据库（复用前面的currentRecord变量）
+                if (currentRecord != null) {
+                    currentRecord.setCurrentHp(trainState.playerElfHp);
+                    currentRecord.setUpdateTime(LocalDateTime.now());
+                    trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+                }
+                    
+                // 更新人偶HP到数据库
+                trainState.currentMannequin.setHp(0);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
+                    
+                return trainSettlement(userId);
+            }
+        } else {
+            // 训练人偶先手：先执行训练人偶行动（如果设置为主动攻击）
+            if (trainState.currentMannequin.getIsAttack() == 1) {
+                executeMannequinAction(trainState);
+                    
+                // 更新人偶MP到数据库
+                trainState.currentMannequin.setMp(trainState.mannequinMp);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
+                    
+                // 检查玩家精灵是否被击败
+                if (trainState.playerElfHp <= 0) {
+                    trainState.playerElfHp = 0;
+                        
+                    String elfName = getElfName(trainState.currentPlayerElf);
+                    trainState.trainLog.add("你的精灵" + elfName + "被击败了！");
+                    trainState.battleLogManager.addLog("你的精灵" + elfName + "被击败了！");
+                        
+                    // 检查是否还有可用的精灵
+                    boolean hasNextElf = checkAndPrepareNextElf(userId, trainState);
+                        
+                    if (!hasNextElf) {
+                        // 没有可用精灵，训练失败
+                        trainState.trainEnded = true;
+                        trainState.trainWon = false;
+                        String loseLog = "训练失败！你的所有出战精灵都被击败了！";
+                        trainState.trainLog.add(loseLog);
+                        trainState.battleLogManager.addLog(loseLog);
+                            
+                        return trainSettlement(userId);
+                    }
+                }
+            }
+                
+            // 玩家仍然使用技能（即使训练人偶先手）
+            int damage = BattleUtils.calculateSkillDamage(skill, trainState.currentPlayerElf.getAttack(), 
+                    trainState.currentMannequin.getDefense(), playerElement, mannequinElement);
+            double multiplier = BattleUtils.calculateElementMultiplier(playerElement, mannequinElement);
+            int finalDamage = (int) (damage * multiplier);
+                
+            trainState.mannequinHp -= finalDamage;
+            String skillLog = BattleUtils.generateAttackLog(
+                    getElfName(trainState.currentPlayerElf), 
+                    "skill", 
+                    skill.getSkillName(), 
+                    finalDamage);
+                
+            if (multiplier > 1) {
+                skillLog += "，效果拔群";
+            } else if (multiplier < 1) {
+                skillLog += "，效果不佳";
+            }
+                
+            trainState.trainLog.add(skillLog);
+            trainState.battleLogManager.addLog(skillLog);
+    
+            // 检查训练人偶是否被击败
+            if (trainState.mannequinHp <= 0) {
+                trainState.mannequinHp = 0;
+                trainState.trainEnded = true;
+                trainState.trainWon = true;
+                String winLog = "训练人偶被击败，训练胜利！";
+                trainState.trainLog.add(winLog);
+                trainState.battleLogManager.addLog(winLog);
+                    
+                // 更新trainRecordElf中的HP到数据库（复用前面的currentRecord变量）
+                if (currentRecord != null) {
+                    currentRecord.setCurrentHp(trainState.playerElfHp);
+                    currentRecord.setUpdateTime(LocalDateTime.now());
+                    trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+                }
+                    
+                // 更新人偶HP到数据库
+                trainState.currentMannequin.setHp(0);
+                trainState.currentMannequin.setUpdateTime(new java.util.Date());
+                trainMannequinMapper.updateById(trainState.currentMannequin);
+                    
+                return trainSettlement(userId);
+            }
+        }
+    
+        // 不再自动执行训练人偶反击，等待前端调用executeMannequinTurn（仅当玩家先手时）
+            
+        // 更新人偶HP到数据库
+        trainState.currentMannequin.setHp(trainState.mannequinHp);
+        trainState.currentMannequin.setUpdateTime(new java.util.Date());
+        trainMannequinMapper.updateById(trainState.currentMannequin);
+            
+        Map<String, Object> res = buildTrainResult(trainState);
+        // 添加标志位，告诉前端是否需要调用executeMannequinTurn
+        res.put("needMannequinTurn", playerFirst && trainState.currentMannequin.getIsAttack() == 1);
+        return Result.success(res);
+    }
+
+    @Override
+    public Result<Map<String, Object>> executeMannequinTurn(Long userId) {
+        TrainState trainState = userTrainStates.get(userId);
+        if (trainState == null || trainState.trainEnded) {
+            return Result.error("未进入训练或训练已结束");
         }
 
-        // 训练人偶反击（如果设置为主动攻击）
+        // 训练人偶行动（如果设置为主动攻击）
         if (trainState.currentMannequin.getIsAttack() == 1) {
-            executeMannequinAction(trainState, playerElement, mannequinElement);
+            executeMannequinAction(trainState);
+            
+            // 更新人偶MP到数据库
+            trainState.currentMannequin.setMp(trainState.mannequinMp);
+            trainState.currentMannequin.setUpdateTime(new java.util.Date());
+            trainMannequinMapper.updateById(trainState.currentMannequin);
+            
+            // 更新trainRecordElf中的HP和MP到数据库
+            TrainRecordElf currentRecord = findTrainRecordElf(trainState, trainState.currentPlayerElf.getId());
+            if (currentRecord != null) {
+                currentRecord.setCurrentHp(Math.max(0, trainState.playerElfHp));
+                currentRecord.setCurrentMp(trainState.currentPlayerElf.getMp());
+                
+                // 如果HP<=0，设置elfState为2（死亡）
+                if (currentRecord.getCurrentHp() <= 0) {
+                    currentRecord.setElfState(2);
+                    currentRecord.setCurrentMp(0);
+                }
+                currentRecord.setUpdateTime(LocalDateTime.now());
+                trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+            }
             
             // 检查玩家精灵是否被击败
             if (trainState.playerElfHp <= 0) {
                 trainState.playerElfHp = 0;
-                trainState.trainEnded = true;
-                trainState.trainWon = false;
-                String loseLog = "你的精灵被击败，训练失败！";
-                trainState.trainLog.add(loseLog);
-                trainState.battleLogManager.addLog(loseLog);
                 
-                return trainSettlement(userId);
+                String elfName = getElfName(trainState.currentPlayerElf);
+                trainState.trainLog.add("你的精灵" + elfName + "被击败了！");
+                trainState.battleLogManager.addLog("你的精灵" + elfName + "被击败了！");
+                
+                // 检查是否还有可用的精灵
+                boolean hasNextElf = checkAndPrepareNextElf(userId, trainState);
+                
+                if (!hasNextElf) {
+                    // 没有可用精灵，训练失败
+                    trainState.trainEnded = true;
+                    trainState.trainWon = false;
+                    String loseLog = "训练失败！你的所有出战精灵都被击败了！";
+                    trainState.trainLog.add(loseLog);
+                    trainState.battleLogManager.addLog(loseLog);
+                    
+                    return trainSettlement(userId);
+                }
+                
+                // 有可用精灵，但不立即切换，等待下一回合
+                trainState.trainLog.add("回合结束！");
+                trainState.battleLogManager.addLog("回合结束！");
             }
+        } else {
+            // 如果人偶不主动攻击，直接返回
+            trainState.trainLog.add("训练人偶没有反击");
+            trainState.battleLogManager.addLog("训练人偶没有反击");
         }
 
         Map<String, Object> res = buildTrainResult(trainState);
@@ -328,63 +781,90 @@ public class TrainServiceImpl implements TrainService {
             return Result.error("未进入训练或训练已结束");
         }
 
-        // 获取用户的出战精灵
-        Result<List<Map<String, Object>>> battleElvesResult = userElfService.getBattleElves(userId);
-        if (battleElvesResult.getCode() != 200 || battleElvesResult.getData() == null || battleElvesResult.getData().isEmpty()) {
+        List<TrainRecordElf> trainRecordElves = trainState.trainRecordElves;
+        if (trainRecordElves == null || trainRecordElves.isEmpty()) {
             return Result.error("获取出战精灵失败");
         }
 
-        List<Map<String, Object>> battleElves = battleElvesResult.getData();
-        Map<String, Object> targetElfMap = null;
-
-        // 查找目标精灵
-        for (Map<String, Object> elfMap : battleElves) {
-            if (elfMap.get("id").equals(elfId)) {
-                targetElfMap = elfMap;
-                // 检查精灵是否已死亡
-                int hp = ((Number) elfMap.get("hp")).intValue();
-                if (hp <= 0) {
-                    return Result.error("精灵已死亡，无法切换");
-                }
-                break;
+        // 获取当前战斗中的精灵
+        Long currentElfId = trainState.currentPlayerElf.getId();
+        TrainRecordElf currentRecord = null;
+        TrainRecordElf targetRecord = null;
+        
+        for (TrainRecordElf elfRecord : trainRecordElves) {
+            if (elfRecord.getElfId().equals(currentElfId)) {
+                currentRecord = elfRecord;
+            }
+            if (elfRecord.getElfId().equals(elfId)) {
+                targetRecord = elfRecord;
             }
         }
 
-        if (targetElfMap == null) {
-            return Result.error("精灵不存在或未设置为出战");
+        if (targetRecord == null) {
+            return Result.error("该精灵不在出战列表中");
         }
 
-        // 从Map中提取UserElf信息（保留实际状态）
-        UserElf newElf = new UserElf();
-        newElf.setId(((Number) targetElfMap.get("id")).longValue());
-        newElf.setUserId(((Number) targetElfMap.get("userId")).longValue());
-        newElf.setElfId(((Number) targetElfMap.get("elfId")).intValue());
-        newElf.setLevel(((Number) targetElfMap.get("level")).intValue());
-        newElf.setExp(((Number) targetElfMap.get("exp")).longValue());
-        newElf.setExpNeed(((Number) targetElfMap.get("expNeed")).longValue());
-        newElf.setMaxHp(((Number) targetElfMap.get("maxHp")).intValue());
-        newElf.setMaxMp(((Number) targetElfMap.get("maxMp")).intValue());
-        newElf.setHp(((Number) targetElfMap.get("hp")).intValue()); // 保留实际HP
-        newElf.setMp(((Number) targetElfMap.get("mp")).intValue()); // 保留实际MP
-        newElf.setAttack(((Number) targetElfMap.get("attack")).intValue());
-        newElf.setDefense(((Number) targetElfMap.get("defense")).intValue());
-        newElf.setNormalDamage(((Number) targetElfMap.get("normalDamage")).intValue());
-        newElf.setSpeed(((Number) targetElfMap.get("speed")).intValue());
-        newElf.setIsFight(((Number) targetElfMap.get("isFight")).intValue());
-        newElf.setFightOrder(((Number) targetElfMap.get("fightOrder")).intValue());
+        // 验证目标精灵是否存活且可上场（elfState=1）
+        if (targetRecord.getCurrentHp() == null || targetRecord.getCurrentHp() <= 0
+            || targetRecord.getElfState() == null || targetRecord.getElfState() != 1) {
+            return Result.error("该精灵已死亡或不可上场，无法切换");
+        }
+
+        // 不能切换到当前精灵
+        if (currentElfId.equals(elfId)) {
+            return Result.error("已经在战斗中");
+        }
+
+        // 查询用户的精灵信息
+        UserElf targetUserElf = userElfMapper.selectById(elfId);
+        if (targetUserElf == null || !targetUserElf.getUserId().equals(userId)) {
+            return Result.error("精灵不存在或不属于当前用户");
+        }
+
+        // 查询精灵模板信息
+        Elf targetElfTemplate = elfMapper.selectById(targetUserElf.getElfId());
+        if (targetElfTemplate == null) {
+            return Result.error("精灵信息不存在");
+        }
+
+        // 更新原精灵状态为可上场（如果原精灵已死亡，则不修改其状态）
+        if (currentRecord != null && currentRecord.getElfState() != null && currentRecord.getElfState() != 2) {
+            currentRecord.setElfState(1);
+            currentRecord.setUpdateTime(LocalDateTime.now());
+            trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+        }
+
+        // 更新目标精灵状态为战斗中
+        targetRecord.setElfState(0);
+        targetRecord.setUpdateTime(LocalDateTime.now());
+        trainRecordElfMapper.updateById(targetRecord);  // 持久化到数据库
 
         // 切换到新精灵
-        trainState.currentPlayerElf = newElf;
-        trainState.playerElfHp = newElf.getHp();
+        trainState.currentPlayerElf = targetUserElf;
+        trainState.playerElfHp = targetRecord.getCurrentHp();
+        // 同步更新MP值，确保使用train_record_elf中的MP而不是user_elf中的旧值
+        trainState.currentPlayerElf.setMp(targetRecord.getCurrentMp());
         
-        // 添加战斗日志
-        String elfName = (String) targetElfMap.get("elfName");
-        trainState.trainLog.add("切换精灵：" + (elfName != null ? elfName : "精灵 " + newElf.getElfId()) + "，等级: " + newElf.getLevel());
-
+        // 构建返回结果
         Map<String, Object> res = buildTrainResult(trainState);
-        res.put("elf", newElf);
-        res.put("elfName", elfName);
-        res.put("elfElementType", BattleUtils.getElfElementType(newElf, elfMapper));
+        
+        Map<String, Object> elfData = new HashMap<>();
+        elfData.put("id", targetUserElf.getId());
+        elfData.put("elfId", targetUserElf.getElfId());
+        elfData.put("hp", targetRecord.getCurrentHp());
+        elfData.put("maxHp", targetUserElf.getMaxHp());
+        elfData.put("mp", targetRecord.getCurrentMp());
+        elfData.put("maxMp", targetUserElf.getMaxMp());
+        elfData.put("level", targetUserElf.getLevel());
+        elfData.put("attack", targetUserElf.getAttack());
+        elfData.put("defense", targetUserElf.getDefense());
+        elfData.put("normalDamage", targetUserElf.getNormalDamage());
+        elfData.put("speed", targetUserElf.getSpeed());
+        elfData.put("elementType", targetElfTemplate.getElementType());
+        
+        res.put("elf", elfData);
+        res.put("elfName", targetElfTemplate.getElfName());
+        res.put("elfElementType", targetElfTemplate.getElementType());
         res.put("msg", "精灵切换成功");
 
         return Result.success(res);
@@ -497,77 +977,171 @@ public class TrainServiceImpl implements TrainService {
 
     /**
      * 执行训练人偶的行动（技能或普通攻击）
+     * 参照BattleUtils.executeMonsterAction实现
      */
-    private void executeMannequinAction(TrainState trainState, int playerElement, int mannequinElement) {
+    private void executeMannequinAction(TrainState trainState) {
         QueryWrapper<TrainMannequinSkill> skillWrapper = new QueryWrapper<>();
         skillWrapper.eq("mannequin_id", trainState.currentMannequin.getId());
         List<TrainMannequinSkill> mannequinSkills = trainMannequinSkillMapper.selectList(skillWrapper);
         
-        String actionLog;
+        int damage = 0;
+        String attackType = "普通攻击";
+        boolean skillUsed = false;
         
-        if (!mannequinSkills.isEmpty()) {
+        // 如果有技能且MP足够，优先使用技能
+        if (mannequinSkills != null && !mannequinSkills.isEmpty() && trainState.mannequinMp > 0) {
             // 随机选择一个技能
             TrainMannequinSkill mannequinSkill = mannequinSkills.get((int) (Math.random() * mannequinSkills.size()));
             Skill mannequinSkillInfo = skillMapper.selectById(mannequinSkill.getSkillId());
             
             if (mannequinSkillInfo != null && trainState.mannequinMp >= mannequinSkillInfo.getCostMp()) {
-                // 使用技能
+                // 使用技能，扣除MP
                 trainState.mannequinMp -= mannequinSkillInfo.getCostMp();
                 
-                int damage = BattleUtils.calculateSkillDamage(mannequinSkillInfo, 
+                // 计算技能伤害（包含系别克制）
+                int playerElement = BattleUtils.getElfElementType(trainState.currentPlayerElf, elfMapper);
+                int mannequinElement = trainState.currentMannequin.getType();
+                
+                damage = BattleUtils.calculateSkillDamage(mannequinSkillInfo, 
                         trainState.currentMannequin.getAttack(), 
                         trainState.currentPlayerElf.getDefense(), 
                         mannequinElement, playerElement);
-                double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                int finalDamage = (int) (damage * multiplier);
                 
-                trainState.playerElfHp -= finalDamage;
+                attackType = "技能 " + mannequinSkillInfo.getSkillName();
+                skillUsed = true;
                 
-                actionLog = BattleUtils.generateEnemyAttackLog("训练人偶", finalDamage);
-                actionLog = "训练人偶使用技能 " + mannequinSkillInfo.getSkillName() + "，造成 " + finalDamage + " 点伤害";
-                
-                if (multiplier > 1) {
-                    actionLog += "，效果拔群";
-                } else if (multiplier < 1) {
-                    actionLog += "，效果不佳";
-                }
-            } else {
-                // MP不足或无技能，使用普通攻击
-                int damage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), 
-                        trainState.currentPlayerElf.getDefense());
-                double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-                int finalDamage = (int) (damage * multiplier);
-                
-                trainState.playerElfHp -= finalDamage;
-                
-                actionLog = "训练人偶MP不足，使用普通攻击，造成 " + finalDamage + " 点伤害";
-                
-                if (multiplier > 1) {
-                    actionLog += "，效果拔群";
-                } else if (multiplier < 1) {
-                    actionLog += "，效果不佳";
-                }
-            }
-        } else {
-            // 无技能，使用普通攻击
-            int damage = BattleUtils.calculateNormalDamage(trainState.currentMannequin.getAttack(), 
-                    trainState.currentPlayerElf.getDefense());
-            double multiplier = BattleUtils.calculateElementMultiplier(mannequinElement, playerElement);
-            int finalDamage = (int) (damage * multiplier);
-            
-            trainState.playerElfHp -= finalDamage;
-            
-            actionLog = BattleUtils.generateEnemyAttackLog("训练人偶", finalDamage);
-            
-            if (multiplier > 1) {
-                actionLog += "，效果拔群";
-            } else if (multiplier < 1) {
-                actionLog += "，效果不佳";
+                System.out.println("[DEBUG] 训练人偶使用技能 - 技能ID:" + mannequinSkillInfo.getId() + 
+                                  ", 技能名:" + mannequinSkillInfo.getSkillName() + 
+                                  ", MP消耗:" + mannequinSkillInfo.getCostMp() + 
+                                  ", 剩余MP:" + trainState.mannequinMp +
+                                  ", 造成伤害:" + damage +
+                                  ", 人偶系别:" + mannequinElement);
             }
         }
         
+        // 如果没有使用技能，则使用普通攻击（真实伤害）
+        if (!skillUsed) {
+            // 训练人偶使用attack字段作为普通攻击伤害（真实伤害）
+            Integer attackDamage = trainState.currentMannequin.getAttack();
+            damage = attackDamage != null ? attackDamage : 1;
+            attackType = "普通攻击";
+            
+            System.out.println("[DEBUG] 训练人偶使用普通攻击 - 真实伤害:" + damage);
+        }
+        
+        // 扣除玩家HP
+        trainState.playerElfHp = Math.max(0, trainState.playerElfHp - damage);
+        
+        // 生成日志（参照怪物的日志格式）
+        String mannequinName = getMannequinTypeName(trainState.currentMannequin.getType());
+        String actionLog = BattleUtils.generateEnemyAttackLogWithDetail(mannequinName, attackType, damage);
+        
         trainState.trainLog.add(actionLog);
         trainState.battleLogManager.addLog(actionLog);
+    }
+
+    /**
+     * 获取精灵名称
+     */
+    private String getElfName(UserElf userElf) {
+        if (userElf == null) {
+            return "未知精灵";
+        }
+        Elf elf = elfMapper.selectById(userElf.getElfId());
+        return elf != null ? elf.getElfName() : "精灵 " + userElf.getElfId();
+    }
+
+    /**
+     * 查找精灵的train_record_elf记录
+     */
+    private TrainRecordElf findTrainRecordElf(TrainState trainState, Long elfId) {
+        if (trainState.trainRecordElves == null) return null;
+        for (TrainRecordElf record : trainState.trainRecordElves) {
+            if (record.getElfId().equals(elfId)) {
+                return record;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 检查并准备下一个可用精灵（基于trainRecordElves）
+     * @return true=有可用精灵并已切换，false=没有可用精灵
+     */
+    private boolean checkAndPrepareNextElf(Long userId, TrainState trainState) {
+        List<TrainRecordElf> trainRecordElves = trainState.trainRecordElves;
+        if (trainRecordElves == null || trainRecordElves.isEmpty()) {
+            return false;
+        }
+        
+        Long currentElfId = trainState.currentPlayerElf.getId();
+        
+        // 查找下一个HP>0且elfState=1的精灵
+        TrainRecordElf nextElfRecord = null;
+        boolean foundCurrent = false;
+        
+        for (TrainRecordElf elfRecord : trainRecordElves) {
+            if (elfRecord.getElfId().equals(currentElfId)) {
+                foundCurrent = true;
+                continue;
+            }
+            if (foundCurrent && elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                nextElfRecord = elfRecord;
+                break;
+            }
+        }
+        
+        // 如果没找到，从头开始找
+        if (nextElfRecord == null) {
+            for (TrainRecordElf elfRecord : trainRecordElves) {
+                if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                    && !elfRecord.getElfId().equals(currentElfId)
+                    && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                    nextElfRecord = elfRecord;
+                    break;
+                }
+            }
+        }
+        
+        if (nextElfRecord == null) {
+            return false;
+        }
+        
+        // 查询新精灵的详细信息
+        UserElf newElf = userElfMapper.selectById(nextElfRecord.getElfId());
+        if (newElf == null) {
+            return false;
+        }
+        
+        // 标记当前精灵为死亡（如果还未标记）
+        TrainRecordElf currentRecord = null;
+        for (TrainRecordElf elfRecord : trainRecordElves) {
+            if (elfRecord.getElfId().equals(currentElfId)) {
+                currentRecord = elfRecord;
+                break;
+            }
+        }
+        if (currentRecord != null && currentRecord.getElfState() != null && currentRecord.getElfState() != 2) {
+            currentRecord.setElfState(2);
+            currentRecord.setCurrentHp(0);
+            currentRecord.setCurrentMp(0);
+            currentRecord.setUpdateTime(LocalDateTime.now());
+            trainRecordElfMapper.updateById(currentRecord);  // 持久化到数据库
+        }
+        
+        // 将下一个精灵标记为战斗中
+        nextElfRecord.setElfState(0);
+        nextElfRecord.setUpdateTime(LocalDateTime.now());
+        trainRecordElfMapper.updateById(nextElfRecord);  // 持久化到数据库
+        
+        // 切换到新精灵
+        trainState.currentPlayerElf = newElf;
+        trainState.playerElfHp = nextElfRecord.getCurrentHp();
+        // 同步更新MP值，确保使用train_record_elf中的MP而不是user_elf中的旧值
+        trainState.currentPlayerElf.setMp(nextElfRecord.getCurrentMp());
+        
+        return true;
     }
 
     /**
@@ -581,7 +1155,107 @@ public class TrainServiceImpl implements TrainService {
         res.put("elfMp", trainState.currentPlayerElf.getMp());
         res.put("mannequinHp", trainState.mannequinHp);
         res.put("mannequinMp", trainState.mannequinMp);
+        
+        // 添加训练人偶的完整信息，包括type（系别）
+        if (trainState.currentMannequin != null) {
+            res.put("mannequin", trainState.currentMannequin);
+            res.put("mannequinMaxHp", trainState.currentMannequin.getHp());
+            res.put("mannequinMaxMp", trainState.currentMannequin.getMp());
+        }
+        
+        // 添加精灵信息
+        if (trainState.currentPlayerElf != null) {
+            res.put("playerElf", trainState.currentPlayerElf);
+            res.put("playerElfId", trainState.currentPlayerElf.getId());  // 添加playerElfId用于前端检测精灵切换
+            res.put("playerElfMaxHp", trainState.currentPlayerElf.getMaxHp());
+            res.put("playerElfMaxMp", trainState.currentPlayerElf.getMaxMp());
+            
+            // 查询精灵模板获取名字和系别
+            Elf elf = elfMapper.selectById(trainState.currentPlayerElf.getElfId());
+            if (elf != null) {
+                res.put("elfName", elf.getElfName());
+                res.put("elfElementType", elf.getElementType());
+            }
+        }
+        
+        // 添加needSwitch标记（精灵死亡时需要切换）
+        if (trainState.playerElfHp <= 0 && trainState.trainRecordElves != null) {
+            // 查找下一个可用的精灵
+            Long currentElfId = trainState.currentPlayerElf != null ? trainState.currentPlayerElf.getId() : null;
+            for (TrainRecordElf elfRecord : trainState.trainRecordElves) {
+                if (currentElfId != null && elfRecord.getElfId().equals(currentElfId)) continue;
+                if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                    && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                    res.put("needSwitch", true);
+                    res.put("nextElfId", elfRecord.getElfId());
+                    res.put("nextElfHp", elfRecord.getCurrentHp());
+                    res.put("nextElfMp", elfRecord.getCurrentMp());
+                    break;
+                }
+            }
+        }
+        
+        // 添加elfSwitched标记（告诉前端刚刚发生了精灵切换，需要显示弹窗）
+        if (trainState.elfSwitched) {
+            res.put("elfSwitched", true);
+            // 重置标志
+            trainState.elfSwitched = false;
+        }
+        
         return res;
+    }
+
+    @Override
+    public Result<List<Map<String, Object>>> getBattleElves(Long userId) {
+        TrainState trainState = userTrainStates.get(userId);
+        if (trainState == null) {
+            return Result.error("未进入训练");
+        }
+
+        List<TrainRecordElf> trainRecordElves = trainState.trainRecordElves;
+        if (trainRecordElves == null || trainRecordElves.isEmpty()) {
+            return Result.error("精灵信息不存在");
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (TrainRecordElf battleElf : trainRecordElves) {
+            // 过滤掉已死亡的精灵
+            if (battleElf.getCurrentHp() == null || battleElf.getCurrentHp() <= 0
+                || battleElf.getElfState() != null && battleElf.getElfState() == 2) {
+                continue;
+            }
+
+            UserElf userElf = userElfMapper.selectById(battleElf.getElfId());
+            if (userElf == null) continue;
+
+            Elf elf = elfMapper.selectById(userElf.getElfId());
+            if (elf == null) continue;
+
+            Map<String, Object> elfMap = new HashMap<>();
+            elfMap.put("id", userElf.getId());
+            elfMap.put("userId", userElf.getUserId());
+            elfMap.put("elfId", userElf.getElfId());
+            elfMap.put("level", userElf.getLevel());
+            elfMap.put("exp", userElf.getExp());
+            elfMap.put("expNeed", userElf.getExpNeed());
+            elfMap.put("maxHp", userElf.getMaxHp());
+            elfMap.put("maxMp", userElf.getMaxMp());
+            elfMap.put("hp", battleElf.getCurrentHp());
+            elfMap.put("mp", battleElf.getCurrentMp());
+            elfMap.put("attack", userElf.getAttack());
+            elfMap.put("defense", userElf.getDefense());
+            elfMap.put("normalDamage", userElf.getNormalDamage());
+            elfMap.put("speed", userElf.getSpeed());
+            elfMap.put("isFight", userElf.getIsFight());
+            elfMap.put("fightOrder", userElf.getFightOrder());
+            elfMap.put("elfState", battleElf.getElfState());
+            elfMap.put("elfName", elf.getElfName());
+            elfMap.put("elementType", elf.getElementType());
+
+            result.add(elfMap);
+        }
+
+        return Result.success(result);
     }
 
     private String getMannequinTypeName(Integer type) {

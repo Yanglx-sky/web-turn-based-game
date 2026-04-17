@@ -2,8 +2,10 @@ package cn.iocoder.gamemodules.service.impl;
 
 import cn.iocoder.gamemodules.entity.ChatChannel;
 import cn.iocoder.gamemodules.entity.ChatContent;
+import cn.iocoder.gamemodules.entity.User;
 import cn.iocoder.gamemodules.mapper.ChatChannelMapper;
 import cn.iocoder.gamemodules.mapper.ChatContentMapper;
+import cn.iocoder.gamemodules.mapper.UserMapper;
 import cn.iocoder.gamecommon.result.Result;
 import cn.iocoder.gamemodules.service.ChatService;
 import cn.iocoder.gamemodules.service.FriendService;
@@ -28,6 +30,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private FriendService friendService;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Override
     public Result<List<ChatChannel>> getChannelList() {
@@ -153,11 +158,36 @@ public class ChatServiceImpl implements ChatService {
             messages = chatContentMapper.selectChannelMessagesByCursor(channelId, lastId, pageSize);
         }
 
+        // 为每条消息添加senderNickname
+        List<Map<String, Object>> messageList = new java.util.ArrayList<>();
+        for (ChatContent msg : messages) {
+            Map<String, Object> msgMap = new HashMap<>();
+            msgMap.put("id", msg.getId());
+            msgMap.put("msgUuid", msg.getMsgUuid());
+            msgMap.put("msgType", msg.getMsgType());
+            msgMap.put("channelId", msg.getChannelId());
+            msgMap.put("senderId", msg.getSenderId());
+            msgMap.put("receiverId", msg.getReceiverId());
+            msgMap.put("content", msg.getContent());
+            msgMap.put("sendTime", msg.getSendTime());
+            msgMap.put("isDeleted", msg.getIsDeleted());
+            
+            // 查询发送者的nickname
+            User user = userMapper.selectById(msg.getSenderId());
+            if (user != null) {
+                msgMap.put("senderNickname", user.getNickname());
+            } else {
+                msgMap.put("senderNickname", "未知用户");
+            }
+            
+            messageList.add(msgMap);
+        }
+
         // 构建返回结果
         Map<String, Object> result = new HashMap<>();
-        result.put("list", messages);
+        result.put("list", messageList);
         result.put("pageSize", pageSize);
-        if (!messages.isEmpty()) {
+        if (!messageList.isEmpty()) {
             result.put("lastId", messages.get(messages.size() - 1).getId());
             result.put("hasMore", messages.size() >= pageSize);
         } else {
