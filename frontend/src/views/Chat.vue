@@ -196,6 +196,8 @@ const pendingRequests = ref([])
 // WebSocket
 let ws = null
 let heartbeatTimer = null
+let friendsRefreshTimer = null // 好友列表定时刷新定时器
+let messagePollingTimer = null // 消息轮询定时器
 
 // 当前用户ID
 const currentUserId = computed(() => {
@@ -227,10 +229,32 @@ onMounted(async () => {
   await loadFriends()
   await loadPendingRequests()
   initWebSocket()
+  
+  // 定时刷新好友列表（每10秒）
+  friendsRefreshTimer = setInterval(async () => {
+    await loadFriends()
+  }, 10000)
+  
+  // 定时轮询消息（每3秒）
+  messagePollingTimer = setInterval(async () => {
+    if (currentChannel.value || currentFriend.value) {
+      await pollNewMessages()
+    }
+  }, 3000)
 })
 
 onUnmounted(() => {
   closeWebSocket()
+  // 清除好友列表刷新定时器
+  if (friendsRefreshTimer) {
+    clearInterval(friendsRefreshTimer)
+    friendsRefreshTimer = null
+  }
+  // 清除消息轮询定时器
+  if (messagePollingTimer) {
+    clearInterval(messagePollingTimer)
+    messagePollingTimer = null
+  }
 })
 
 // 加载频道列表
@@ -428,6 +452,54 @@ const loadMoreMessages = () => {
   loadMessages()
 }
 
+// 轮询新消息（通过axios）
+const pollNewMessages = async () => {
+  try {
+    let response
+    if (currentChannel.value) {
+      // 获取频道最新消息
+      response = await chatApi.getChannelMessages(
+        currentChannel.value.id,
+        null, // 不传lastId，获取最新消息
+        10 // 获取最近10条
+      )
+    } else if (currentFriend.value) {
+      // 获取私聊最新消息
+      response = await chatApi.getPrivateMessages(
+        currentFriend.value.friendId,
+        null, // 不传lastId，获取最新消息
+        10 // 获取最近10条
+      )
+    }
+    
+    if (response && response.code === 200) {
+      const data = response.data
+      const newMessages = (data.list || []).reverse() // 反转为正序
+      
+      if (newMessages.length > 0) {
+        // 获取当前消息列表的最后一条消息ID
+        const lastMessageId = messages.value.length > 0 
+          ? messages.value[messages.value.length - 1].id 
+          : 0
+        
+        // 过滤出比当前最新消息更新的消息
+        const unseenMessages = newMessages.filter(msg => msg.id > lastMessageId)
+        
+        if (unseenMessages.length > 0) {
+          console.log('[轮询] 发现', unseenMessages.length, '条新消息')
+          // 追加新消息
+          messages.value.push(...unseenMessages)
+          // 滚动到底部
+          scrollToBottom()
+        }
+      }
+    }
+  } catch (error) {
+    // 静默失败，不显示错误（避免频繁弹窗）
+    console.error('[轮询] 获取新消息失败:', error)
+  }
+}
+
 // 发送消息
 const sendMessage = async () => {
   const content = inputMessage.value.trim()
@@ -529,11 +601,14 @@ const stopHeartbeat = () => {
 
 // 处理WebSocket消息
 const handleWebSocketMessage = (data) => {
+  console.log('[WebSocket] 收到消息:', data.type, data)
+  
   switch (data.type) {
     case 'channel_message':
       // 频道新消息
       if (currentChannel.value && 
           data.data.message.channelId === currentChannel.value.id) {
+        console.log('[WebSocket] 添加频道消息到列表')
         messages.value.push(data.data.message)
         scrollToBottom()
       }
@@ -543,16 +618,22 @@ const handleWebSocketMessage = (data) => {
       if (currentFriend.value && 
           (data.data.message.senderId === currentFriend.value.friendId ||
            data.data.message.receiverId === currentFriend.value.friendId)) {
+        console.log('[WebSocket] 添加私聊消息到列表')
         messages.value.push(data.data.message)
         scrollToBottom()
       } else {
         // 增加未读数
         const senderId = data.data.message.senderId
         unreadCounts.value[senderId] = (unreadCounts.value[senderId] || 0) + 1
+        console.log('[WebSocket] 增加未读数, senderId:', senderId)
+        
+        // 刷新好友列表，确保显示所有好友
+        loadFriends()
       }
       break
     case 'private_message_sent':
       // 自己发送的私聊消息确认
+      console.log('[WebSocket] 自己发送的消息确认')
       messages.value.push(data.data.message)
       scrollToBottom()
       break
@@ -560,7 +641,7 @@ const handleWebSocketMessage = (data) => {
       // 心跳响应
       break
     case 'error':
-      console.error('WebSocket错误:', data.message)
+      console.error('[WebSocket] 错误:', data.message)
       break
   }
 }

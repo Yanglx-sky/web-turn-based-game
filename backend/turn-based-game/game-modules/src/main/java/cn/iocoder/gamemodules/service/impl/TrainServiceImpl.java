@@ -363,6 +363,8 @@ public class TrainServiceImpl implements TrainService {
         int mannequinSpeed = trainState.currentMannequin.getSpeed() != null ? trainState.currentMannequin.getSpeed() : 0;
         boolean playerFirst = BattleUtils.isPlayerFirst(playerSpeed, mannequinSpeed);
         
+        System.out.println("[DEBUG] 普通攻击-速度比较 - 玩家速度: " + playerSpeed + ", 训练人偶速度: " + mannequinSpeed + ", 玩家先手: " + playerFirst);
+        
         if (playerFirst) {
             // 玩家先手：玩家攻击
             int damage = trainState.currentPlayerElf.getNormalDamage() != null ? trainState.currentPlayerElf.getNormalDamage() : 1;
@@ -425,6 +427,9 @@ public class TrainServiceImpl implements TrainService {
                         
                         return trainSettlement(userId);
                     }
+                    
+                    // 标记发生了精灵切换，用于前端显示弹窗
+                    trainState.elfSwitched = true;
                 }
             }
             
@@ -623,6 +628,9 @@ public class TrainServiceImpl implements TrainService {
                             
                         return trainSettlement(userId);
                     }
+                    
+                    // 标记发生了精灵切换，用于前端显示弹窗
+                    trainState.elfSwitched = true;
                 }
             }
                 
@@ -738,6 +746,9 @@ public class TrainServiceImpl implements TrainService {
                     
                     return trainSettlement(userId);
                 }
+                
+                // 标记发生了精灵切换，用于前端显示弹窗
+                trainState.elfSwitched = true;
                 
                 // 有可用精灵，但不立即切换，等待下一回合
                 trainState.trainLog.add("回合结束！");

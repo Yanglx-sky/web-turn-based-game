@@ -1955,16 +1955,11 @@ const executeMonsterAction = async () => {
         
         const latestRound = data.roundLogs[data.roundLogs.length - 1]
         if (latestRound) {
-          // 训练模式：只触发训练人偶的攻击动画（不重复触发玩家动画）
+          // 训练模式：触发所有攻击动画（包括训练人偶和玩家）
           if (battleType === 'train') {
-            // 找到训练人偶的日志
-            const mannequinLogs = latestRound.logs.filter(log => 
-              log.includes('训练人偶') || log.includes('怪物')
-            )
-            if (mannequinLogs.length > 0) {
-              // 只触发训练人偶的动画
-              triggerAttackAnimations(mannequinLogs, data)
-            }
+            console.log('[DEBUG] 训练人偶行动-触发所有攻击动画:', latestRound.logs)
+            // 触发所有动画，保持日志顺序
+            triggerAttackAnimations(latestRound.logs, data)
           } else {
             // PVE模式：触发所有动画
             triggerAttackAnimations(latestRound.logs, data)
@@ -1998,6 +1993,8 @@ const executeMonsterAction = async () => {
       if (data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
         console.log('[DEBUG] 怪物行动后检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
         
+        const oldElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+        
         const elfDetailResponse = await userElfApi.getDetail(data.playerElfId)
         if (elfDetailResponse.code === 200) {
           const elfData = elfDetailResponse.data
@@ -2025,6 +2022,15 @@ const executeMonsterAction = async () => {
           battleStore.elves[0].elementType = playerElf.value.elementType
           
           skills.value = elfData.unlockedSkills || []
+          
+          const newElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+          
+          // 如果是训练模式且发生了精灵切换，显示弹窗提示
+          if (battleType === 'train' && data.elfSwitched) {
+            setTimeout(() => {
+              window.confirm(`${oldElfName} 被击败了！\n\n${newElfName} 已自动登场继续战斗`)
+            }, 1500) // 延迟1.5秒，等待动画播放完成
+          }
         }
       }
       
