@@ -12,6 +12,7 @@ import cn.iocoder.gamemodules.mapper.UserElfMapper;
 import cn.iocoder.gamemodules.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
@@ -67,7 +69,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname(nickname);
         user.setPhone(phone);
         user.setEmail(email);
-        user.setCurrentLevel(1);
+        user.setCurrentLevel(0); // 新用户未通过任何关卡，第1关默认解锁
         user.setStatus(1);
         user.setCreateTime(LocalDateTime.now());
         user.setUpdateTime(LocalDateTime.now());
@@ -168,12 +170,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             return Result.error("用户不存在");
         }
         
-        user.setCurrentLevel(levelId);
-        user.setUpdateTime(LocalDateTime.now());
-        boolean success = updateById(user);
-        if (!success) {
-            return Result.error("更新关卡失败");
+        // 只有当新关卡ID大于当前关卡ID时才更新（取最大值）
+        Integer currentLevel = user.getCurrentLevel();
+        if (currentLevel == null || levelId > currentLevel) {
+            user.setCurrentLevel(levelId);
+            user.setUpdateTime(LocalDateTime.now());
+            boolean success = updateById(user);
+            if (!success) {
+                return Result.error("更新关卡失败");
+            }
+        } else {
+            // 不更新，但返回当前用户信息
+            log.debug("用户{}当前关卡{} >= 新关卡{}，不更新", userId, currentLevel, levelId);
         }
+        
         return Result.success(user);
     }
 

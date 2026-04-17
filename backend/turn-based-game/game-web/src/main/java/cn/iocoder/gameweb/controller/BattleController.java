@@ -396,6 +396,21 @@ public class BattleController {
     }
     
     /**
+     * 获取AI战报总结
+     */
+    @GetMapping("/ai/summary")
+    @Operation(summary = "获取AI战报总结", description = "战斗结束后获取AI生成的战报总结")
+    public Result<?> getBattleSummary(HttpServletRequest request) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.getBattleSummary(userId);
+        } catch (Exception e) {
+            return Result.error("获取AI战报总结失败: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 从请求头获取token
      */
     private String getToken(HttpServletRequest request) {

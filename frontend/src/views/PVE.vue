@@ -117,7 +117,7 @@ const logout = () => {
 const levels = ref([])
 const loading = ref(true)
 const error = ref('')
-const userCurrentLevel = ref(1) // 用户当前解锁的关卡
+const userCurrentLevel = ref(1) // 用户当前解锁的关卡（= 已通过关卡 + 1）
 const userLevelStars = ref({}) // 用户关卡星级和评分
 
 // 出战精灵配置弹窗相关
@@ -150,7 +150,8 @@ const fetchLevels = async () => {
     if (userStr) {
       const user = JSON.parse(userStr)
       if (user.currentLevel !== undefined && user.currentLevel !== null) {
-        userCurrentLevel.value = user.currentLevel
+        // currentLevel是已通过的关卡，解锁关卡 = currentLevel + 1
+        userCurrentLevel.value = user.currentLevel + 1
       }
       
       // 获取用户关卡星级和评分

@@ -100,6 +100,13 @@ public interface BattleService {
     Result<Map<String, Object>> getDailyRewardInfo(Long userId);
     
     /**
+     * 获取AI战报总结
+     * @param userId 用户ID
+     * @return AI生成的战报总结
+     */
+    Result<Map<String, Object>> getBattleSummary(Long userId);
+    
+    /**
      * 校验出招冷却时间
      * @param userId 用户ID
      * @return true=可以出招，false=冷却中

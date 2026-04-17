@@ -267,6 +267,16 @@
           </div>
         </div>
       </div>
+      
+      <!-- 精灵死亡切换确认弹窗（只有确定按钮） -->
+      <div v-if="showElfDeathDialog" class="modal-overlay">
+        <div class="modal-content elf-death-dialog">
+          <p class="elf-death-message">{{ elfDeathMessage }}</p>
+          <div class="modal-buttons">
+            <button @click="confirmElfDeath" class="confirm-btn">确定</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -344,6 +354,10 @@ const currentRound = computed(() => battleStore.currentRound)
 const showBattleStartPopup = ref(false)
 // 胜负已分弹窗
 const showBattleEndPopup = ref(false)
+// 精灵死亡切换确认弹窗
+const showElfDeathDialog = ref(false)
+const elfDeathMessage = ref('')
+const elfDeathCallback = ref(null)
 // BGM音频对象
 const battleBgm = ref(null)
 // 按钮禁用状态
@@ -1284,9 +1298,9 @@ const attack = async () => {
             }
           }
           
-          // 检查精灵是否切换（精灵死亡自动切换）
-          if (data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
-            console.log('[DEBUG] 检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
+          // 检查精灵是否切换（仅训练模式）
+          if (battleType === 'train' && data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
+            console.log('[DEBUG] 训练模式-检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
             // 精灵ID变了，说明发生了自动切换
             const oldElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
             
@@ -1339,10 +1353,43 @@ const attack = async () => {
               console.log('[DEBUG] 精灵切换完成，新精灵:', newElfName, 'elfId:', playerElf.value.elfId)
               
               // 如果是训练模式且发生了精灵切换，显示弹窗提示
-              if (battleType === 'train' && data.elfSwitched) {
+              if (data.elfSwitched) {
                 setTimeout(() => {
-                  window.confirm(`${oldElfName} 被击败了！\n\n${newElfName} 已自动登场继续战斗`)
+                  showElfDeathSwitchDialog(
+                    `${oldElfName} 被击败了！\n\n${newElfName} 已自动登场继续战斗`,
+                    async () => {
+                      // 训练模式自动切换，无需额外操作
+                    }
+                  )
                 }, 1500) // 延迟1.5秒，等待动画播放完成
+              }
+            }
+          }
+          
+          // 检查精灵是否死亡（PVE模式）
+          if (battleType !== 'train') {
+            console.log('[DEBUG] attack函数-检查精灵死亡 - playerElfHp:', data.playerElfHp, 'needSwitch:', data.needSwitch, 'nextElfId:', data.nextElfId)
+            if (data.playerElfHp !== undefined && data.playerElfHp <= 0) {
+              console.log('[DEBUG] attack函数-当前精灵已死亡，HP:', data.playerElfHp)
+              
+              // 检查是否需要切换精灵
+              if (data.needSwitch && data.nextElfId) {
+                console.log('[DEBUG] attack函数-需要切换精灵，下一只精灵ID:', data.nextElfId)
+                const deadElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+                
+                // 使用setTimeout确保在动画播放完成后显示弹窗
+                setTimeout(async () => {
+                  console.log('[DEBUG] attack函数-显示精灵死亡弹窗')
+                  showElfDeathSwitchDialog(
+                    `${deadElfName} 被击败了！\n\n点击下方按钮切换下一只精灵继续战斗`,
+                    async () => {
+                      console.log('[DEBUG] attack函数-用户确认切换精灵')
+                      await switchToNextElf(data.nextElfId, data.nextElfHp, data.nextElfMp)
+                    }
+                  )
+                }, 2500) // 延迟2.5秒，等待受击动画播放完成
+              } else {
+                console.log('[DEBUG] attack函数-精灵死亡但不需要切换（可能没有其他可用精灵）')
               }
             }
           }
@@ -1712,6 +1759,34 @@ const useSelectedSkill = async (skill) => {
               battleStore.elves[0].current_hp = data.playerElfHp
             }
           }
+          
+          // 检查精灵是否死亡（PVE模式）
+          if (battleType !== 'train') {
+            console.log('[DEBUG] useSelectedSkill函数-检查精灵死亡 - playerElfHp:', data.playerElfHp, 'needSwitch:', data.needSwitch, 'nextElfId:', data.nextElfId)
+            if (data.playerElfHp !== undefined && data.playerElfHp <= 0) {
+              console.log('[DEBUG] useSelectedSkill函数-当前精灵已死亡，HP:', data.playerElfHp)
+              
+              // 检查是否需要切换精灵
+              if (data.needSwitch && data.nextElfId) {
+                console.log('[DEBUG] useSelectedSkill函数-需要切换精灵，下一只精灵ID:', data.nextElfId)
+                const deadElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
+                
+                // 使用setTimeout确保在动画播放完成后显示弹窗
+                setTimeout(async () => {
+                  console.log('[DEBUG] useSelectedSkill函数-显示精灵死亡弹窗')
+                  showElfDeathSwitchDialog(
+                    `${deadElfName} 被击败了！\n\n点击下方按钮切换下一只精灵继续战斗`,
+                    async () => {
+                      console.log('[DEBUG] useSelectedSkill函数-用户确认切换精灵')
+                      await switchToNextElf(data.nextElfId, data.nextElfHp, data.nextElfMp)
+                    }
+                  )
+                }, 2500) // 延迟2.5秒，等待受击动画播放完成
+              } else {
+                console.log('[DEBUG] useSelectedSkill函数-精灵死亡但不需要切换（可能没有其他可用精灵）')
+              }
+            }
+          }
         }
         
         // 处理战斗结果
@@ -1968,69 +2043,31 @@ const executeMonsterAction = async () => {
       }
       
       // 检查精灵是否死亡（在动画播放后弹出切换提示）
+      console.log('[DEBUG] 检查精灵死亡 - playerElfHp:', data.playerElfHp, 'needSwitch:', data.needSwitch, 'nextElfId:', data.nextElfId)
       if (data.playerElfHp !== undefined && data.playerElfHp <= 0) {
         console.log('[DEBUG] 当前精灵已死亡，HP:', data.playerElfHp)
         
         // 检查是否需要切换精灵
         if (data.needSwitch && data.nextElfId) {
+          console.log('[DEBUG] 需要切换精灵，下一只精灵ID:', data.nextElfId)
           // 显示精灵死亡弹窗（只有确定按钮）
           const deadElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
           
           // 使用setTimeout确保在动画播放完成后显示弹窗
           setTimeout(async () => {
             // 使用自定义弹窗，只有确定按钮
-            const confirmed = window.confirm(`${deadElfName} 被击败了！\n\n点击下方按钮切换下一只精灵继续战斗`)
-            
-            if (confirmed) {
-              // 用户确认切换，自动切换到下一只精灵
-              await switchToNextElf(data.nextElfId, data.nextElfHp, data.nextElfMp)
-            }
+            console.log('[DEBUG] 显示精灵死亡弹窗')
+            showElfDeathSwitchDialog(
+              `${deadElfName} 被击败了！\n\n点击下方按钮切换下一只精灵继续战斗`,
+              async () => {
+                // 用户确认切换，自动切换到下一只精灵
+                console.log('[DEBUG] 用户确认切换精灵')
+                await switchToNextElf(data.nextElfId, data.nextElfHp, data.nextElfMp)
+              }
+            )
           }, 2500) // 延迟2.5秒，等待受击动画播放完成
-        }
-      }
-      
-      // 检查精灵是否切换（精灵死亡自动切换）
-      if (data.playerElfId !== undefined && playerElf.value.id !== data.playerElfId) {
-        console.log('[DEBUG] 怪物行动后检测到精灵切换，旧ID:', playerElf.value.id, '新ID:', data.playerElfId)
-        
-        const oldElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
-        
-        const elfDetailResponse = await userElfApi.getDetail(data.playerElfId)
-        if (elfDetailResponse.code === 200) {
-          const elfData = elfDetailResponse.data
-          const elf = elfData.elf || elfData
-          
-          playerElf.value.id = elf.id
-          playerElf.value.elfId = elf.elfId
-          // 优先使用返回数据中的elfName，如果没有则从elf对象中获取
-          playerElf.value.elfName = data.elfName || elf.elfName || ''
-          playerElf.value.elementType = data.elfElementType || elf.elementType || 0
-          playerElf.value.level = elf.level
-          playerElf.value.maxHp = elf.maxHp
-          playerElf.value.maxMp = elf.maxMp
-          playerElf.value.hp = data.playerElfHp !== undefined ? data.playerElfHp : (elf.hp || elf.maxHp)
-          playerElf.value.mp = data.elfMp !== undefined ? data.elfMp : (elf.mp || elf.maxMp)
-          
-          battleStore.elves[0].elf_id = playerElf.value.id
-          battleStore.elves[0].elfId = playerElf.value.elfId
-          battleStore.elves[0].current_hp = playerElf.value.hp
-          battleStore.elves[0].current_mp = playerElf.value.mp
-          battleStore.elves[0].level = playerElf.value.level
-          battleStore.elves[0].maxHp = playerElf.value.maxHp
-          battleStore.elves[0].maxMp = playerElf.value.maxMp
-          battleStore.elves[0].elfName = playerElf.value.elfName
-          battleStore.elves[0].elementType = playerElf.value.elementType
-          
-          skills.value = elfData.unlockedSkills || []
-          
-          const newElfName = playerElf.value.elfName || `精灵 ${playerElf.value.elfId}`
-          
-          // 如果是训练模式且发生了精灵切换，显示弹窗提示
-          if (battleType === 'train' && data.elfSwitched) {
-            setTimeout(() => {
-              window.confirm(`${oldElfName} 被击败了！\n\n${newElfName} 已自动登场继续战斗`)
-            }, 1500) // 延迟1.5秒，等待动画播放完成
-          }
+        } else {
+          console.log('[DEBUG] 精灵死亡但不需要切换（可能没有其他可用精灵）')
         }
       }
       
@@ -2244,6 +2281,22 @@ const switchElf = async () => {
 // 关闭精灵切换弹窗
 const closeSwitchElf = () => {
   showSwitchElf.value = false
+}
+
+// 显示精灵死亡切换弹窗
+const showElfDeathSwitchDialog = (message, callback) => {
+  elfDeathMessage.value = message
+  elfDeathCallback.value = callback
+  showElfDeathDialog.value = true
+}
+
+// 确认精灵死亡切换
+const confirmElfDeath = async () => {
+  showElfDeathDialog.value = false
+  if (elfDeathCallback.value) {
+    await elfDeathCallback.value()
+    elfDeathCallback.value = null
+  }
 }
 
 // 选择要切换的精灵
@@ -3171,6 +3224,38 @@ h1 {
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(255, 140, 0, 0.4);
   text-align: center;
+}
+
+/* 精灵死亡切换弹窗样式 */
+.elf-death-dialog {
+  max-width: 500px;
+  padding: 40px;
+}
+
+.elf-death-message {
+  font-size: 18px;
+  line-height: 1.8;
+  color: #333;
+  margin: 20px 0 30px 0;
+  white-space: pre-line;
+}
+
+.elf-death-dialog .confirm-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 40px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.elf-death-dialog .confirm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
 .potion-list {

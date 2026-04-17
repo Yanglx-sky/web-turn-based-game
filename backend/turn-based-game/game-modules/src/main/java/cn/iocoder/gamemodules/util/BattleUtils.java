@@ -85,12 +85,14 @@ public class BattleUtils {
             }
             
             // 检查MP是否足够
+            System.out.println("[DEBUG] 技能MP检查 - 当前MP: " + userElfRecord.getCurrentMp() + ", 技能消耗: " + skill.getCostMp());
             if (userElfRecord.getCurrentMp() < skill.getCostMp()) {
                 throw new RuntimeException("MP不足，无法使用技能");
             }
             
             // 扣除MP
             userElfRecord.setCurrentMp(userElfRecord.getCurrentMp() - skill.getCostMp());
+            System.out.println("[DEBUG] MP扣除成功 - 剩余MP: " + userElfRecord.getCurrentMp());
             
             // 计算基础伤害
             damage = calculateSkillDamage(skill, userElf.getAttack(), monster.getDefense(), 
@@ -285,9 +287,10 @@ public class BattleUtils {
         // 注意：经验发放统一在claimReward中处理，这里不再发放经验
         // 原因：claimReward会给所有出战精灵发放经验，而不是只给当前精灵
         
-        // 解锁下一关：更新用户的current_level为当前关卡ID+1
+        // 更新用户已通过的关卡（取最大值）
+        // current_level表示已通过的最高关卡，解锁关卡 = current_level + 1
         if (level != null && level.getId() != null) {
-            userService.updateUserLevel(userId, level.getId() + 1);
+            userService.updateUserLevel(userId, level.getId());
         }
         
         // 注意：不要在这里清理战斗状态！
