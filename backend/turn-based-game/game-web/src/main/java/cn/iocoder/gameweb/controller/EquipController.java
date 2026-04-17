@@ -212,9 +212,17 @@ public class EquipController {
             if (token.startsWith("Bearer ")) {
                 token = token.substring(7);
             }
+            // 验证Token格式
+            if (token.isEmpty() || !token.contains(".")) {
+                log.warn("Token格式错误: token为空或缺少点号分隔符");
+                return Result.error("登录已过期，请重新登录");
+            }
             // 从token中获取userId
             Long userId = jwtUtil.getUserIdFromToken(token);
             return shopService.getUserEquipsByType(userId, type);
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            log.warn("Token格式异常: {}", e.getMessage());
+            return Result.error("登录已过期，请重新登录");
         } catch (Exception e) {
             log.error("装备武器失败 - 获取用户信息异常: {}", e.getMessage(), e);
             return Result.error("获取用户信息失败: " + e.getMessage());

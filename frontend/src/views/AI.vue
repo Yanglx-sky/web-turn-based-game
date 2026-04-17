@@ -111,9 +111,10 @@ const getAICallCount = async () => {
           }
         })
     if (response.ok) {
-      const count = await response.json()
-      aiCallCount.value = count
-      console.log('AI调用次数:', count)
+      const result = await response.json()
+      // 后端返回格式: {code: 200, msg: "操作成功", data: 18}
+      aiCallCount.value = result.data || 0
+      console.log('AI调用次数:', aiCallCount.value)
     }
   } catch (error) {
     console.error('获取AI调用次数失败:', error)
@@ -143,7 +144,7 @@ const initSession = async () => {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': token
       },
-      body: `userId=${user.id}&title=新对话&scene=common`
+      body: `title=新对话&scene=common`
     })
     
     console.log('响应状态:', response.status)
@@ -404,13 +405,23 @@ const getTrainingSummary = async () => {
         'Authorization': token
       }
     })
-    const summary = await response.text()
     
-    chatMessages.value.push({
-      role: 'ai',
-      content: summary,
-      time: new Date().toLocaleTimeString()
-    })
+    if (response.ok) {
+      const result = await response.json()
+      // 后端返回格式: {code: 200, msg: "操作成功", data: "总结内容"}
+      const summary = result.data || '获取训练总结失败'
+      
+      chatMessages.value.push({
+        role: 'ai',
+        content: summary,
+        time: new Date().toLocaleTimeString()
+      })
+      
+      // 更新AI调用次数
+      await getAICallCount()
+    } else {
+      throw new Error('获取训练总结失败')
+    }
   } catch (error) {
     console.error('获取训练总结失败:', error)
     chatMessages.value.push({

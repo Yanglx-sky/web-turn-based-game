@@ -35,5 +35,15 @@ export const trainApi = {
   // 获取训练记录
   getTrainRecords: () => api.get(`/api/train/records`),
   // 获取训练中的出战精灵
-  getBattleElves: () => api.get(`/api/train/battle_elves`)
+  getBattleElves: () => api.get(`/api/train/battle_elves`),
+  // 获取训练日志
+  getTrainLogs: (trainId) => api.get(`/api/train/logs`, {
+    params: { trainId }
+  }),
+  // 训练使用药品
+  usePotion: (elfId, potionId) => api.post(`/api/train/use_potion`, null, {
+    params: { elfId, potionId }
+  }),
+  // 训练玩家离线
+  playerOffline: () => api.put(`/api/train/offline`)
 }

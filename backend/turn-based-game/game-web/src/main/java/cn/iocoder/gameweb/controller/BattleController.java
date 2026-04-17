@@ -411,6 +411,23 @@ public class BattleController {
     }
     
     /**
+     * 获取战斗日志
+     */
+    @GetMapping("/logs")
+    @Operation(summary = "获取战斗日志", description = "获取指定战斗的所有日志记录")
+    public Result<?> getBattleLogs(
+            HttpServletRequest request,
+            @Parameter(description = "战斗ID", required = true) @RequestParam String battleId) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return battleService.getBattleLogs(battleId);
+        } catch (Exception e) {
+            return Result.error("获取战斗日志失败: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 从请求头获取token
      */
     private String getToken(HttpServletRequest request) {

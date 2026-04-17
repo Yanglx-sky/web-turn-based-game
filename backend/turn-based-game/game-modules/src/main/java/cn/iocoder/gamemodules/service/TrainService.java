@@ -16,4 +16,7 @@ public interface TrainService {
     Result<Map<String, Object>> trainSettlement(Long userId);
     Result<Map<String, Object>> getTrainRecords(Long userId);
     Result<List<Map<String, Object>>> getBattleElves(Long userId);
+    Result<List<Map<String, Object>>> getTrainLogs(String trainId);
+    Result<Map<String, Object>> usePotion(Long userId, Long elfId, Long potionId);
+    Result<Map<String, Object>> playerOffline(Long userId);
 }

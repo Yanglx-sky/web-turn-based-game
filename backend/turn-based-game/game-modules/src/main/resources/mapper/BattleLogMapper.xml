@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.gamemodules.mapper.BattleLogMapper">
+
+    <select id="selectByBattleId" resultType="cn.iocoder.gamemodules.entity.BattleLog">
+        SELECT id, battle_id, round, log_text, create_time
+        FROM battle_log
+        WHERE battle_id = #{battleId}
+        ORDER BY id ASC
+    </select>
+
+</mapper>

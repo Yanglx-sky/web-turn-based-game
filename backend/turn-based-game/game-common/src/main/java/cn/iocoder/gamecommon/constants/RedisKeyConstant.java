@@ -58,16 +58,18 @@ public class RedisKeyConstant {
 
     // ==================== 工具方法 ====================
     
-    /** 获取今日日期字符串 yyyyMMdd */
+    /** 获取今日日期字符串 yyyyMMdd（统一使用UTC+8时区） */
+    private static final java.time.ZoneId CHINA_ZONE = java.time.ZoneId.of("Asia/Shanghai");
+    
     public static String getTodayStr() {
-        return LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        return LocalDate.now(CHINA_ZONE).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     }
     
-    /** 计算到明天凌晨的秒数 */
+    /** 计算到明天凌晨的秒数（统一使用UTC+8时区） */
     public static long getSecondsUntilMidnight() {
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = LocalDate.now(CHINA_ZONE).plusDays(1);
         long seconds = tomorrow.atStartOfDay()
-                .atZone(java.time.ZoneId.systemDefault())
+                .atZone(CHINA_ZONE)
                 .toEpochSecond() - System.currentTimeMillis() / 1000;
         return Math.max(seconds, 1);
     }

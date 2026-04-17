@@ -2,9 +2,16 @@ package cn.iocoder.gameai.service.impl;
 
 import cn.iocoder.gameai.config.AIConfig;
 import cn.iocoder.gameai.entity.ChatMessage;
+import cn.iocoder.gameai.entity.SensitiveWord;
+import cn.iocoder.gameai.mapper.SensitiveWordMapper;
 import cn.iocoder.gameai.service.AIService;
 import cn.iocoder.gameai.service.SessionService;
 import cn.iocoder.gamecommon.util.RedisUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Service
 public class AIServiceImpl implements AIService {
     
@@ -37,52 +45,13 @@ public class AIServiceImpl implements AIService {
     @Autowired
     private RedisUtil redisUtil;
     
-    // 会话管理（内存缓存，提高性能）
-    private final Map<Long, SessionInfo> sessions = new ConcurrentHashMap<>();
+    @Autowired
+    private SensitiveWordMapper sensitiveWordMapper;
     
-    // 敏感词列表
-    private final Set<String> sensitiveWords = new HashSet<>(Arrays.asList(
-        "系统信息", "泄露", "漏洞", "攻击", "破解", "管理员", "密码", "token"
-    ));
+    // Jackson JSON处理
+    private final ObjectMapper objectMapper = new ObjectMapper();
     
-    // 会话信息类
-    private static class SessionInfo {
-        Long userId;
-        Long sessionId;
-        LocalDateTime createTime;
-        List<Conversation> conversations;
-        
-        SessionInfo(Long userId, Long sessionId) {
-            this.userId = userId;
-            this.sessionId = sessionId;
-            this.createTime = LocalDateTime.now();
-            this.conversations = new ArrayList<>();
-        }
-    }
-    
-    // 对话信息类
-    private static class Conversation {
-        String role; // user 或 assistant
-        String content;
-        LocalDateTime timestamp;
-        
-        Conversation(String role, String content) {
-            this.role = role;
-            this.content = content;
-            this.timestamp = LocalDateTime.now();
-        }
-    }
-    
-    // 每日AI调用记录
-    private static class DailyAICallRecord {
-        LocalDate date;
-        int callCount;
-        
-        DailyAICallRecord() {
-            this.date = LocalDate.now();
-            this.callCount = 0;
-        }
-    }
+    private static final String SENSITIVE_WORDS_CACHE_KEY = "ai:sensitive:words";
 
     @Override
     public String getAIAnalysis(String content) {
@@ -274,23 +243,17 @@ public class AIServiceImpl implements AIService {
             connection.setRequestProperty("Authorization", "Bearer " + aiConfig.getApiKey());
             connection.setDoOutput(true);
             
-            // 构建请求体，确保正确转义JSON特殊字符
-            String escapedPrompt = prompt
-                .replace("\\", "\\\\")  // 先转义反斜杠
-                .replace("\"", "\\\"")  // 转义双引号
-                .replace("\n", "\\n")    // 转义换行符
-                .replace("\r", "\\r")    // 转义回车符
-                .replace("\t", "\\t");   // 转义制表符
+            // 使用Jackson构建请求体
+            ObjectNode rootNode = objectMapper.createObjectNode();
+            rootNode.put("model", aiConfig.getModel());
+            rootNode.put("temperature", 0.7);
             
-            String requestBody = "{" +
-                "\"model\":\"" + aiConfig.getModel() + "\"," +
-                "\"messages\":[" +
-                "{" +
-                "\"role\":\"user\"," +
-                "\"content\":\"" + escapedPrompt + "\"" +
-                "}]" +
-                ",\"temperature\":0.7" +
-                "}";
+            ArrayNode messagesArray = rootNode.putArray("messages");
+            ObjectNode messageNode = messagesArray.addObject();
+            messageNode.put("role", "user");
+            messageNode.put("content", prompt);
+            
+            String requestBody = objectMapper.writeValueAsString(rootNode);
             
             // 发送请求，使用UTF-8编码
             OutputStream os = connection.getOutputStream();
@@ -307,15 +270,16 @@ public class AIServiceImpl implements AIService {
             }
             br.close();
             
-            // 解析响应
+            // 使用Jackson解析响应
             String responseStr = response.toString();
-            // 简单解析，实际项目中可以使用JSON解析库
-            int contentStart = responseStr.indexOf("\"content\":\"");
-            if (contentStart != -1) {
-                contentStart += 11;
-                int contentEnd = responseStr.indexOf("\"", contentStart);
-                if (contentEnd != -1) {
-                    return responseStr.substring(contentStart, contentEnd);
+            JsonNode rootNode_response = objectMapper.readTree(responseStr);
+            
+            // 解析 choices[0].message.content
+            JsonNode choices = rootNode_response.path("choices");
+            if (choices.isArray() && choices.size() > 0) {
+                JsonNode message = choices.get(0).path("message");
+                if (message.has("content")) {
+                    return message.get("content").asText();
                 }
             }
             
@@ -365,32 +329,23 @@ public class AIServiceImpl implements AIService {
     
     @Override
     public Long createSession(Long userId, String title, String scene) {
-        // 创建数据库会话
-        Long sessionId = sessionService.createSession(userId, title, scene);
-        
-        // 创建内存会话信息
-        SessionInfo sessionInfo = new SessionInfo(userId, sessionId);
-        sessions.put(sessionId, sessionInfo);
-        
-        return sessionId;
+        // 创建数据库会话（Redis缓存由SessionServiceImpl处理）
+        return sessionService.createSession(userId, title, scene);
     }
     
     @Override
     public String addConversation(Long sessionId, String content) {
-        // 获取或加载会话信息
-        SessionInfo session = sessions.get(sessionId);
-        if (session == null) {
-            // 从数据库加载会话信息
-            cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, null);
-            if (dbSession == null) {
-                return "会话不存在，请先创建会话。";
-            }
-            session = new SessionInfo(dbSession.getUserId(), sessionId);
-            sessions.put(sessionId, session);
+        // 从数据库获取会话信息（带Redis缓存）
+        cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, null);
+        if (dbSession == null) {
+            return "会话不存在，请先创建会话。";
         }
-        
-        // 检查用户AI调用次数
-        if (!checkAICallLimit(session.userId)) {
+                    
+        // 使用从数据库获取的userId
+        Long sessionUserId = dbSession.getUserId();
+                    
+        // 检查用户AI调用次数（使用Redis）
+        if (!checkAICallLimit(sessionUserId)) {
             return "今日AI调用次数已达上限，请明日再试。";
         }
         
@@ -407,7 +362,7 @@ public class AIServiceImpl implements AIService {
         // 记录用户输入到数据库
         sessionService.addMessage(sessionId, "user", content, "text");
         
-        // 从数据库加载最近的消息作为上下文
+        // 从数据库加载最近的消息作为上下文（带Redis缓存）
         List<ChatMessage> recentMessages = sessionService.getRecentMessages(sessionId, 10);
         
         // 构建上下文
@@ -430,21 +385,16 @@ public class AIServiceImpl implements AIService {
         // 记录AI回复到数据库
         sessionService.addMessage(sessionId, "assistant", response, "text");
         
-        // 增加AI调用次数
-        incrementAICallCount(session.userId);
+        // 增加AI调用次数（Redis计数已在checkAICallLimit中完成）
+        // incrementAICallCount(userId); // 不需要重复增加
         
         return response;
     }
     
     @Override
     public boolean closeSession(Long sessionId, Long userId) {
-        // 从数据库删除会话
-        boolean success = sessionService.deleteSession(sessionId, userId);
-        if (success) {
-            // 从内存缓存中移除
-            sessions.remove(sessionId);
-        }
-        return success;
+        // 删除数据库会话（Redis缓存由SessionServiceImpl处理）
+        return sessionService.deleteSession(sessionId, userId);
     }
     
     @Override
@@ -465,8 +415,7 @@ public class AIServiceImpl implements AIService {
         
         String response = callAI(prompt);
         
-        // 增加AI调用次数
-        incrementAICallCount(userId);
+        // Redis计数已在checkAICallLimit中完成，不需要重复增加
         
         return response;
     }
@@ -497,7 +446,7 @@ public class AIServiceImpl implements AIService {
     }
     
     @Override
-    public void streamAIAnalysis(String sessionIdStr, String content, HttpServletResponse response) {
+    public void streamAIAnalysis(String sessionIdStr, String content, HttpServletResponse response, Long userId) {
         // 先设置SSE响应头
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
@@ -508,27 +457,24 @@ public class AIServiceImpl implements AIService {
             // 转换sessionId为Long类型
             Long sessionId = Long.parseLong(sessionIdStr);
             
-            // 获取或加载会话信息
-            SessionInfo session = sessions.get(sessionId);
-            if (session == null) {
-                // 从数据库加载会话信息
-                cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, null);
-                if (dbSession == null) {
-                    try (PrintWriter writer = response.getWriter()) {
-                        writer.write("data: 会话不存在，请先创建会话。\n\n");
-                        writer.write("data: [DONE]\n\n");
-                        writer.flush();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    return;
+            // 从数据库获取会话信息（带Redis缓存）
+            cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, userId);
+            if (dbSession == null) {
+                try (PrintWriter writer = response.getWriter()) {
+                    writer.write("data: 会话不存在，请先创建会话。\n\n");
+                    writer.write("data: [DONE]\n\n");
+                    writer.flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-                session = new SessionInfo(dbSession.getUserId(), sessionId);
-                sessions.put(sessionId, session);
+                return;
             }
             
-            // 检查用户AI调用次数
-            if (!checkAICallLimit(session.userId)) {
+            // 使用从数据库获取的userId
+            Long sessionUserId = dbSession.getUserId();
+            
+            // 检查用户AI调用次数（使用Redis）
+            if (!checkAICallLimit(sessionUserId)) {
                 try (PrintWriter writer = response.getWriter()) {
                     writer.write("data: 今日AI调用次数已达上限，请明日再试。\n\n");
                     writer.write("data: [DONE]\n\n");
@@ -566,15 +512,18 @@ public class AIServiceImpl implements AIService {
             try (PrintWriter writer = response.getWriter()) {
                 // 记录用户输入到数据库
                 sessionService.addMessage(sessionId, "user", content, "text");
-                
-                // 从数据库加载最近的消息作为上下文
+                            
+                // 从数据库加载最近的消息作为上下文（带Redis缓存）
                 List<ChatMessage> recentMessages = sessionService.getRecentMessages(sessionId, 10);
+                
+                log.info("加载到 {} 条历史消息", recentMessages.size());
                 
                 // 构建上下文
                 StringBuilder context = new StringBuilder();
                 context.append("你是一个精灵训练师的AI助手，负责帮助训练师分析精灵成长和战斗策略。\n\n");
+                context.append("请根据对话历史，回答用户的最后一个问题。\n\n");
                 
-                // 倒序遍历消息，构建上下文
+                // 倒序遍历消息（因为查询结果是降序），构建正序上下文（从旧到新）
                 for (int i = recentMessages.size() - 1; i >= 0; i--) {
                     ChatMessage message = recentMessages.get(i);
                     if (message.getRole().equals("user")) {
@@ -584,20 +533,35 @@ public class AIServiceImpl implements AIService {
                     }
                 }
                 
+                log.info("构建的上下文：\n{}", context.toString());
+                
                 // 调用AI
                 String responseContent = callAI(context.toString());
                 
                 // 记录AI回复到数据库
                 sessionService.addMessage(sessionId, "assistant", responseContent, "text");
                 
-                // 增加AI调用次数
-                incrementAICallCount(session.userId);
+                // Redis计数已在checkAICallLimit中完成，不需要重复增加
                 
-                // 流式输出
-                for (char c : responseContent.toCharArray()) {
-                    writer.write("data: " + c + "\n\n");
-                    writer.flush();
-                    Thread.sleep(50); // 控制输出速度
+                // 流式输出（优化性能：按词组输出而非单字符，减少flush次数）
+                // 使用更简单的分割策略：按标点、空格分割，中文按2-3字一组
+                String[] words = responseContent.split("(?<=[，。！？、；：\"\'\u2018\u2019\u201c\u201d（）【】《》])|(?<=\\s)");
+                for (String word : words) {
+                    if (word != null && !word.isEmpty()) {
+                        // 如果是纯中文且长度>3，进一步拆分
+                        if (word.length() > 3 && word.matches("^[\\u4e00-\\u9fa5]+$")) {
+                            for (int i = 0; i < word.length(); i += 3) {
+                                int end = Math.min(i + 3, word.length());
+                                writer.write("data: " + word.substring(i, end) + "\n\n");
+                                writer.flush();
+                                Thread.sleep(10);
+                            }
+                        } else {
+                            writer.write("data: " + word + "\n\n");
+                            writer.flush();
+                            Thread.sleep(10);
+                        }
+                    }
                 }
                 
                 // 结束信号
@@ -606,6 +570,7 @@ public class AIServiceImpl implements AIService {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+
         } catch (NumberFormatException e) {
             try (PrintWriter writer = response.getWriter()) {
                 writer.write("data: 无效的会话ID。\n\n");
@@ -627,24 +592,63 @@ public class AIServiceImpl implements AIService {
         return redisUtil.getAITodayCount(userId);
     }
     
-    // 增加AI调用次数
-    private void incrementAICallCount(Long userId) {
-        // 单独增加AI调用次数，用于统计
-        String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String key = "ai:limit:" + userId + ":" + date;
-        redisUtil.increment(key);
-        // 设置过期时间为当天结束
-        long secondsUntilMidnight = LocalDate.now().plusDays(1).atStartOfDay().toEpochSecond(java.time.ZoneOffset.UTC) - System.currentTimeMillis() / 1000;
-        redisUtil.expire(key, secondsUntilMidnight);
-    }
-    
-    // 检查敏感词
+    // 检查敏感词（从Redis缓存加载）
     private boolean containsSensitiveWords(String content) {
+        Set<String> sensitiveWords = loadSensitiveWords();
+        
+        if (sensitiveWords == null || sensitiveWords.isEmpty()) {
+            return false;
+        }
+        
         for (String word : sensitiveWords) {
             if (content.contains(word)) {
                 return true;
             }
         }
         return false;
+    }
+    
+    // 从Redis加载敏感词（未命中则从数据库读取）
+    @SuppressWarnings("unchecked")
+    private Set<String> loadSensitiveWords() {
+        try {
+            // 先从 Redis 缓存读取
+            Object cachedWords = redisUtil.get(SENSITIVE_WORDS_CACHE_KEY);
+            
+            if (cachedWords != null) {
+                // Redis 缓存命中，解析为 Set
+                if (cachedWords instanceof Set) {
+                    return (Set<String>) cachedWords;
+                } else if (cachedWords instanceof List) {
+                    return new HashSet<>((List<String>) cachedWords);
+                }
+            }
+            
+            // Redis 缓存未命中，从数据库读取
+            List<SensitiveWord> wordList = sensitiveWordMapper.selectList(null);
+            Set<String> words = new HashSet<>();
+            
+            if (wordList != null && !wordList.isEmpty()) {
+                for (SensitiveWord word : wordList) {
+                    words.add(word.getWord());
+                }
+            }
+            
+            // 写入 Redis 缓存（24小时过期）
+            redisUtil.set(SENSITIVE_WORDS_CACHE_KEY, new ArrayList<>(words), 24 * 60 * 60);
+            
+            return words;
+        } catch (Exception e) {
+            log.error("加载敏感词失败", e);
+            return new HashSet<>();
+        }
+    }
+    
+    /**
+     * 清理敏感词缓存（供管理接口调用）
+     */
+    public void clearSensitiveWordCache() {
+        redisUtil.delete(SENSITIVE_WORDS_CACHE_KEY);
+        log.info("敏感词Redis缓存已清理");
     }
 }
