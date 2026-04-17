@@ -303,4 +303,52 @@ public class TrainController {
             return Result.error("获取用户信息失败");
         }
     }
+    
+    @GetMapping("/logs")
+    @Operation(summary = "获取训练日志", description = "获取指定训练的所有日志记录")
+    public Result<List<Map<String, Object>>> getTrainLogs(
+            HttpServletRequest request,
+            @Parameter(description = "训练ID", required = true) @RequestParam String trainId) {
+        try {
+            return trainService.getTrainLogs(trainId);
+        } catch (Exception e) {
+            return Result.error("获取训练日志失败: " + e.getMessage());
+        }
+    }
+    
+    @PostMapping("/use_potion")
+    @Operation(summary = "训练使用药品", description = "训练中使用药品恢复精灵状态")
+    public Result<Map<String, Object>> usePotion(HttpServletRequest request,
+            @RequestParam Long elfId,
+            @RequestParam Long potionId) {
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return trainService.usePotion(userId, elfId, potionId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
+        }
+    }
+
+    @PutMapping("/offline")
+    @Operation(summary = "训练玩家离线", description = "训练模式中玩家离线，暂停训练")
+    public Result<Map<String, Object>> playerOffline(HttpServletRequest request) {
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return trainService.playerOffline(userId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
+        }
+    }
 }

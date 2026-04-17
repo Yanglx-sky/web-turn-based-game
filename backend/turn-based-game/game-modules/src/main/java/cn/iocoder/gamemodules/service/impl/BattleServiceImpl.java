@@ -53,6 +53,9 @@ public class BattleServiceImpl implements BattleService {
     private cn.iocoder.gamemodules.mapper.MonsterSkillMapper monsterSkillMapper;
     
     @Autowired
+    private BattleLogMapper battleLogMapper;
+    
+    @Autowired
     private BattleSecurityInterceptor battleSecurityInterceptor;
     
     @Autowired
@@ -582,14 +585,18 @@ public class BattleServiceImpl implements BattleService {
             battleRecord.setCurrentRound(battleRecord.getCurrentRound() + 1);
             battleRecordMapper.updateById(battleRecord);
             
+            // 保存战斗日志到数据库
+            saveBattleLogs(battleRecord.getBattleId(), battleRecord.getCurrentRound() - 1, logs);
+            
             // 11. 构建返回结果
             Map<String, Object> result = BattleUtils.buildBattleResult(
                     battleRecord, userElfRecord, userElf, elf, monsterRecord, monster, level, 
                     monsterRecord.getCurrentHp() <= 0, logs);
             
             // 12. 如果精灵死亡，添加切换标志和下一只精灵信息
-            System.out.println("[DEBUG] 检查精灵死亡 - userElfRecord.getCurrentHp(): " + userElfRecord.getCurrentHp());
-            if (userElfRecord.getCurrentHp() != null && userElfRecord.getCurrentHp() <= 0) {
+            // 注意：如果战斗已经失败（status=2），则不再添加切换标志
+            if (battleRecord.getStatus() != 2 && userElfRecord.getCurrentHp() != null && userElfRecord.getCurrentHp() <= 0) {
+                System.out.println("[DEBUG] 检查精灵死亡 - userElfRecord.getCurrentHp(): " + userElfRecord.getCurrentHp());
                 System.out.println("[DEBUG] 精灵已死亡，查找下一只可用精灵");
                 // 查找下一只可用精灵
                 List<BattleRecordElf> allElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
@@ -627,8 +634,8 @@ public class BattleServiceImpl implements BattleService {
                     result.put("nextElfMp", nextElfRecord.getCurrentMp());
                     System.out.println("[DEBUG] 精灵死亡，返回切换标志, nextElfId=" + nextElfRecord.getElfId());
                 } else {
-                    // 没有可用精灵，战斗失败
-                    System.out.println("[DEBUG] 没有可用精灵，战斗失败");
+                    // 没有可用精灵，战斗失败（这个情况已经在handlePlayerDeath中处理）
+                    System.out.println("[DEBUG] 没有可用精灵，战斗失败（已在handlePlayerDeath处理）");
                 }
             }
             
@@ -873,8 +880,8 @@ public class BattleServiceImpl implements BattleService {
     }
     
     /**
-     * 处理玩家精灵死亡，标记死亡状态，不自动切换
-     * @return 总是返回true，表示精灵已死亡，需要前端确认切换
+     * 处理玩家精灵死亡，标记死亡状态，检查是否所有精灵都死亡
+     * @return true=精灵已死亡（可能需要切换或战斗失败），false=精灵存活
      */
     private boolean handlePlayerDeath(Long userId, BattleRecordElf userElfRecord, UserElf userElf, Elf elf,
             BattleRecord battleRecord, List<String> logs) {
@@ -894,10 +901,31 @@ public class BattleServiceImpl implements BattleService {
         
         log.debug("精灵死亡, elfId={}, battleId={}", deadElfId, battleRecord.getBattleId());
         logs.add("你的精灵" + elf.getElfName() + "被击败了！");
-        logs.add("请确认切换下一只精灵");
         
-        // 返回true，表示精灵已死亡，需要前端处理切换
-        return true;
+        // 检查是否还有可用的精灵
+        List<BattleRecordElf> allElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+        boolean hasAvailableElf = false;
+        
+        for (BattleRecordElf elfRecord : allElves) {
+            if (elfRecord.getCurrentHp() != null && elfRecord.getCurrentHp() > 0
+                && elfRecord.getElfState() != null && elfRecord.getElfState() == 1) {
+                hasAvailableElf = true;
+                break;
+            }
+        }
+        
+        if (!hasAvailableElf) {
+            // 所有精灵都死亡，战斗失败
+            log.debug("所有出战精灵都死亡，战斗失败, userId={}, battleId={}", userId, battleRecord.getBattleId());
+            BattleUtils.handleDefeat(battleRecord, battleSecurityInterceptor, userId, battleRecordMapper);
+            logs.add("战斗失败！你的所有出战精灵都被击败了");
+            battleRecordMapper.updateById(battleRecord);
+            return true; // 返回true表示战斗结束
+        }
+        
+        // 还有可用精灵，等待前端确认切换
+        logs.add("请确认切换下一只精灵");
+        return true; // 返回true表示精灵已死亡，需要前端处理切换
     }
 
 
@@ -1427,29 +1455,102 @@ public class BattleServiceImpl implements BattleService {
             }
             
             BattleRecord battleRecord = recentBattles.get(0);
-            
-            // 生成AI总结
             String battleId = battleRecord.getBattleId();
             
-            // 获取战斗日志（从battle_round_log表查询）
-            // 这里简化处理，使用战斗基本信息生成总结
-            StringBuilder battleLog = new StringBuilder();
-            battleLog.append("战斗ID: ").append(battleId).append("\n");
-            battleLog.append("关卡ID: ").append(battleRecord.getLevelId()).append("\n");
-            battleLog.append("总回合数: ").append(battleRecord.getCurrentRound()).append("\n");
+            // 从battle_log表查询完整的战斗日志
+            List<BattleLog> battleLogs = battleLogMapper.selectByBattleId(battleId);
+            
+            if (battleLogs == null || battleLogs.isEmpty()) {
+                return Result.error("战斗日志不存在");
+            }
+            
+            // 构建完整的战斗日志文本
+            StringBuilder battleLogText = new StringBuilder();
+            battleLogText.append("战斗ID: ").append(battleId).append("\n");
+            battleLogText.append("关卡ID: ").append(battleRecord.getLevelId()).append("\n");
+            battleLogText.append("总回合数: ").append(battleRecord.getCurrentRound()).append("\n\n");
+            battleLogText.append("=== 战斗过程 ===\n");
+            
+            int currentRound = 0;
+            for (BattleLog log : battleLogs) {
+                // 如果是新回合，添加回合分隔线
+                if (!log.getRound().equals(currentRound)) {
+                    currentRound = log.getRound();
+                    battleLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
+                }
+                battleLogText.append(log.getLogText()).append("\n");
+            }
             
             String battleResult = battleRecord.getStatus() == 1 ? "胜利" : "失败";
-            battleLog.append("战斗结果: ").append(battleResult);
+            battleLogText.append("\n=== 战斗结果 ===\n");
+            battleLogText.append(battleResult);
             
-            // 调用AI服务生成总结（不保存到数据库）
-            String aiReport = aiService.getBattleSummary(battleLog.toString(), battleResult);
+            // 调用AI服务生成总结
+            String aiReport = aiService.getBattleSummary(battleLogText.toString(), battleResult);
             
             Map<String, Object> result = new HashMap<>();
             result.put("summary", aiReport);
+            result.put("battleId", battleId);
+            result.put("levelId", battleRecord.getLevelId());
+            result.put("totalRounds", battleRecord.getCurrentRound());
+            result.put("battleResult", battleResult);
+            result.put("logCount", battleLogs.size());
+            
             return Result.success(result);
         } catch (Exception e) {
             log.error("获取AI战报总结失败", e);
             return Result.error("获取AI战报总结失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 保存战斗日志到数据库
+     * @param battleId 战斗ID
+     * @param round 回合数
+     * @param logs 日志列表
+     */
+    private void saveBattleLogs(String battleId, Integer round, List<String> logs) {
+        if (logs == null || logs.isEmpty()) {
+            return;
+        }
+        
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            for (String logText : logs) {
+                BattleLog battleLog = new BattleLog();
+                battleLog.setBattleId(battleId);
+                battleLog.setRound(round);
+                battleLog.setLogText(logText);
+                battleLog.setCreateTime(now);
+                battleLogMapper.insert(battleLog);
+            }
+            log.debug("保存战斗日志成功, battleId={}, round={}, count={}", battleId, round, logs.size());
+        } catch (Exception e) {
+            log.error("保存战斗日志失败, battleId={}, round={}", battleId, round, e);
+        }
+    }
+    
+    @Override
+    public Result<List<Map<String, Object>>> getBattleLogs(String battleId) {
+        try {
+            // 查询战斗日志
+            List<BattleLog> battleLogs = battleLogMapper.selectByBattleId(battleId);
+            
+            // 转换为前端需要的格式
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (BattleLog log : battleLogs) {
+                Map<String, Object> logMap = new HashMap<>();
+                logMap.put("id", log.getId());
+                logMap.put("round", log.getRound());
+                logMap.put("logText", log.getLogText());
+                logMap.put("createTime", log.getCreateTime());
+                result.add(logMap);
+            }
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取战斗日志失败, battleId={}", battleId, e);
+            return Result.error("获取战斗日志失败: " + e.getMessage());
         }
     }
 }

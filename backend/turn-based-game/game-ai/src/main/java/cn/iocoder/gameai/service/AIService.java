@@ -113,8 +113,9 @@ public interface AIService {
      * @param sessionId 会话ID
      * @param content 用户输入内容
      * @param response HttpServletResponse
+     * @param userId 用户ID
      */
-    void streamAIAnalysis(String sessionId, String content, HttpServletResponse response);
+    void streamAIAnalysis(String sessionId, String content, HttpServletResponse response, Long userId);
     
     /**
      * 检查用户AI调用次数

@@ -107,6 +107,13 @@ public interface BattleService {
     Result<Map<String, Object>> getBattleSummary(Long userId);
     
     /**
+     * 获取战斗日志
+     * @param battleId 战斗ID
+     * @return 战斗日志列表
+     */
+    Result<List<Map<String, Object>>> getBattleLogs(String battleId);
+    
+    /**
      * 校验出招冷却时间
      * @param userId 用户ID
      * @return true=可以出招，false=冷却中

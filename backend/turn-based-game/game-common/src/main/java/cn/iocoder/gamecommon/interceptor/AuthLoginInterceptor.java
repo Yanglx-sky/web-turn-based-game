@@ -1,6 +1,7 @@
 package cn.iocoder.gamecommon.interceptor;
 
 import cn.iocoder.gamecommon.util.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -12,6 +13,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * 未登录返回 401 无权限
  * 放行登录、注册、验证码接口
  */
+@Slf4j
 @Component
 public class AuthLoginInterceptor implements HandlerInterceptor {
 
@@ -72,6 +74,7 @@ public class AuthLoginInterceptor implements HandlerInterceptor {
         try {
             userId = jwtUtil.getUserIdFromToken(token);
         } catch (Exception e) {
+            log.error("Token解析失败: {}", e.getMessage());
             // token解析失败，返回401
             response.setStatus(401);
             response.setContentType("application/json; charset=utf-8");

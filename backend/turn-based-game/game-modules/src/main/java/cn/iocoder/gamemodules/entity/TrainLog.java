@@ -8,15 +8,18 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("train_record")
-public class TrainRecord {
+@TableName("train_log")
+public class TrainLog {
     @TableId(type = IdType.AUTO)
     private Long id;
+    
     private String trainId;
+    
     private Long userId;
-    private Long mannequinId;
-    private Integer status; // 战斗状态：0=战斗中 1=胜利 2=失败 3=断线暂停
-    private LocalDateTime offlineTime; // 玩家断线时间
-    private Integer aiScore;
-    private String aiReport;
+    
+    private Integer round;
+    
+    private String logText;
+    
+    private LocalDateTime createTime;
 }

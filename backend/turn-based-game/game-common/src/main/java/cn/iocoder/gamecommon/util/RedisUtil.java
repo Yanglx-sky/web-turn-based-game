@@ -66,7 +66,7 @@ public class RedisUtil {
      * 检查AI调用次数是否超过限制
      * @param userId 用户ID
      * @param limit 每日限制次数
-     * @return 是否超过限制
+     * @return 是否超过限制（true=未超过，允许调用；false=已超过，拒绝调用）
      */
     public boolean checkAILimit(long userId, int limit) {
         String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
@@ -81,16 +81,19 @@ public class RedisUtil {
         
         // 检查是否超过限制
         if (count >= limit) {
-            return false;
+            return false; // 已达上限
         }
         
         // 自增并设置过期时间（当天结束）
         redisTemplate.opsForValue().increment(key);
-        // 计算当天剩余秒数作为过期时间
-        long secondsUntilMidnight = LocalDate.now().plusDays(1).atStartOfDay().toEpochSecond(java.time.ZoneOffset.UTC) - System.currentTimeMillis() / 1000;
+        // 计算当天剩余秒数作为过期时间（使用东八区）
+        long secondsUntilMidnight = LocalDate.now()
+            .plusDays(1)
+            .atStartOfDay(java.time.ZoneOffset.ofHours(8))
+            .toEpochSecond() - System.currentTimeMillis() / 1000;
         redisTemplate.expire(key, secondsUntilMidnight, TimeUnit.SECONDS);
         
-        return true;
+        return true; // 未超过限制，允许调用
     }
 
     /**

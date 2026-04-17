@@ -43,12 +43,20 @@ public class TrainServiceImpl implements TrainService {
     private ElfMapper elfMapper;
     @Autowired
     private BattleService battleService;
+    
+    @Autowired
+    private TrainLogMapper trainLogMapper;
+    @Autowired
+    private PotionConfigMapper potionConfigMapper;
+    @Autowired
+    private UserPotionMapper userPotionMapper;
 
     // 训练战斗状态 - 使用Map存储每个用户的训练状态
     private ConcurrentHashMap<Long, TrainState> userTrainStates = new ConcurrentHashMap<>();
 
     // 训练状态类
     private static class TrainState {
+        String trainId;  // 训练ID
         boolean trainEnded;
         boolean trainWon;
         List<String> trainLog = new ArrayList<>();
@@ -60,6 +68,7 @@ public class TrainServiceImpl implements TrainService {
         int mannequinHp;
         int mannequinMp;
         boolean elfSwitched; // 标记是否发生了精灵切换
+        int currentRound = 1; // 当前回合数
     }
 
     @Override
@@ -97,10 +106,20 @@ public class TrainServiceImpl implements TrainService {
     public Result<Map<String, Object>> startTrain(Long userId, Long mannequinId) {
         // 重置训练状态
         TrainState trainState = new TrainState();
+        trainState.trainId = java.util.UUID.randomUUID().toString();
         trainState.trainEnded = false;
         trainState.trainWon = false;
         trainState.trainLog.clear();
         trainState.battleLogManager.reset();
+        trainState.currentRound = 1;
+
+        // 创建训练记录
+        TrainRecord trainRecord = new TrainRecord();
+        trainRecord.setTrainId(trainState.trainId);
+        trainRecord.setUserId(userId);
+        trainRecord.setMannequinId(mannequinId);
+        trainRecord.setStatus(0); // 0=战斗中
+        trainRecordMapper.insert(trainRecord);
 
         // 获取训练人偶信息
         trainState.currentMannequin = trainMannequinMapper.selectById(mannequinId);
@@ -208,10 +227,12 @@ public class TrainServiceImpl implements TrainService {
     public Result<Map<String, Object>> startTrainWithMannequinParams(Long userId, Integer attack, Integer defense, Integer hp, Integer mp, Integer speed, Integer type, Integer isAttack) {
         // 重置训练状态
         TrainState trainState = new TrainState();
+        trainState.trainId = java.util.UUID.randomUUID().toString();
         trainState.trainEnded = false;
         trainState.trainWon = false;
         trainState.trainLog.clear();
         trainState.battleLogManager.reset();
+        trainState.currentRound = 1;
 
         // 创建训练人偶对象并保存到数据库
         TrainMannequin mannequin = new TrainMannequin();
@@ -228,6 +249,14 @@ public class TrainServiceImpl implements TrainService {
         
         // 插入数据库
         trainMannequinMapper.insert(mannequin);
+        
+        // 创建训练记录
+        TrainRecord trainRecord = new TrainRecord();
+        trainRecord.setTrainId(trainState.trainId);
+        trainRecord.setUserId(userId);
+        trainRecord.setMannequinId(mannequin.getId());
+        trainRecord.setStatus(0); // 0=战斗中
+        trainRecordMapper.insert(trainRecord);
         
         // 为训练人偶添加对应系别的技能
         QueryWrapper<Skill> skillWrapper = new QueryWrapper<>();
@@ -888,26 +917,66 @@ public class TrainServiceImpl implements TrainService {
             return Result.error("未进入训练或训练未结束");
         }
 
-        // 构建训练日志字符串
-        StringBuilder trainLogStr = new StringBuilder();
-        for (String log : trainState.trainLog) {
-            trainLogStr.append(log).append("\n");
+        // 先保存训练日志到数据库
+        saveTrainLogs(trainState);
+        
+        // 从train_log表查询完整的训练日志
+        List<TrainLog> trainLogs = trainLogMapper.selectByTrainId(trainState.trainId);
+        
+        // 构建完整的训练日志文本
+        StringBuilder trainLogText = new StringBuilder();
+        trainLogText.append("训练ID: ").append(trainState.trainId).append("\n");
+        trainLogText.append("训练人偶: ").append(getMannequinTypeName(trainState.currentMannequin.getType())).append("\n\n");
+        trainLogText.append("=== 训练过程 ===\n");
+        
+        int currentRound = 0;
+        for (TrainLog log : trainLogs) {
+            // 如果是新回合，添加回合分隔线
+            if (!log.getRound().equals(currentRound)) {
+                currentRound = log.getRound();
+                trainLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
+            }
+            trainLogText.append(log.getLogText()).append("\n");
         }
+        
+        String battleResult = trainState.trainWon ? "胜利" : "失败";
+        trainLogText.append("\n=== 训练结果 ===\n");
+        trainLogText.append(battleResult);
 
         // 调用AI服务获取训练评分报告
-        String battleResult = trainState.trainWon ? "胜利" : "失败";
-        String aiReport = aiService.getBattleSummary(trainLogStr.toString(), battleResult);
+        String aiReport = aiService.getBattleSummary(trainLogText.toString(), battleResult);
 
         // 生成AI评分（简单模拟）
         int aiScore = trainState.trainWon ? 80 + (int) (Math.random() * 20) : 40 + (int) (Math.random() * 30);
 
-        // 保存训练记录
-        TrainRecord trainRecord = new TrainRecord();
-        trainRecord.setUserId(userId);
-        trainRecord.setMannequinId(trainState.currentMannequin.getId());
+        // 保存训练记录（更新已有的记录）
+        QueryWrapper<TrainRecord> recordWrapper = new QueryWrapper<>();
+        recordWrapper.eq("train_id", trainState.trainId);
+        TrainRecord trainRecord = trainRecordMapper.selectOne(recordWrapper);
+        
+        if (trainRecord == null) {
+            // 如果没有记录，创建新的
+            trainRecord = new TrainRecord();
+            trainRecord.setTrainId(trainState.trainId);
+            trainRecord.setUserId(userId);
+            trainRecord.setMannequinId(trainState.currentMannequin.getId());
+        }
+        
         trainRecord.setAiScore(aiScore);
         trainRecord.setAiReport(aiReport);
-        trainRecordMapper.insert(trainRecord);
+        
+        // 设置训练状态
+        if (trainState.trainWon) {
+            trainRecord.setStatus(1); // 1=胜利
+        } else {
+            trainRecord.setStatus(2); // 2=失败
+        }
+        
+        if (trainRecord.getId() == null) {
+            trainRecordMapper.insert(trainRecord);
+        } else {
+            trainRecordMapper.updateById(trainRecord);
+        }
 
         // 训练胜利时给精灵添加经验
         if (trainState.trainWon) {
@@ -948,6 +1017,7 @@ public class TrainServiceImpl implements TrainService {
         res.put("trainLog", trainState.trainLog);
         res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
         res.put("trainResult", trainState.trainLog.contains("你逃跑了！") ? "逃跑" : battleResult);
+        res.put("status", trainState.trainWon ? 1 : 2); // 添加status字段：1=胜利 2=失败
         res.put("aiScore", aiScore);
         res.put("aiReport", aiReport);
         return Result.success(res);
@@ -1279,6 +1349,234 @@ public class TrainServiceImpl implements TrainService {
                 return "草系训练人偶";
             default:
                 return "训练人偶";
+        }
+    }
+    
+    /**
+     * 保存训练日志到数据库
+     * @param trainState 训练状态
+     */
+    private void saveTrainLogs(TrainState trainState) {
+        List<Map<String, Object>> roundLogs = trainState.battleLogManager.getRoundLogs();
+        
+        if (roundLogs == null || roundLogs.isEmpty()) {
+            return;
+        }
+        
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            
+            for (Map<String, Object> roundData : roundLogs) {
+                Integer round = (Integer) roundData.get("round");
+                List<String> logs = (List<String>) roundData.get("logs");
+                
+                if (logs == null || logs.isEmpty()) {
+                    continue;
+                }
+                
+                for (String logText : logs) {
+                    TrainLog trainLog = new TrainLog();
+                    trainLog.setTrainId(trainState.trainId);
+                    trainLog.setUserId(trainState.currentMannequin.getUserId());
+                    trainLog.setRound(round);
+                    trainLog.setLogText(logText);
+                    trainLog.setCreateTime(now);
+                    trainLogMapper.insert(trainLog);
+                }
+            }
+            
+            log.debug("保存训练日志成功, trainId={}, rounds={}", trainState.trainId, roundLogs.size());
+        } catch (Exception e) {
+            log.error("保存训练日志失败, trainId={}", trainState.trainId, e);
+        }
+    }
+    
+    @Override
+    public Result<List<Map<String, Object>>> getTrainLogs(String trainId) {
+        try {
+            // 查询训练日志
+            List<TrainLog> trainLogs = trainLogMapper.selectByTrainId(trainId);
+            
+            // 转换为前端需要的格式
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (TrainLog log : trainLogs) {
+                Map<String, Object> logMap = new HashMap<>();
+                logMap.put("id", log.getId());
+                logMap.put("round", log.getRound());
+                logMap.put("logText", log.getLogText());
+                logMap.put("createTime", log.getCreateTime());
+                result.add(logMap);
+            }
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取训练日志失败, trainId={}", trainId, e);
+            return Result.error("获取训练日志失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<Map<String, Object>> usePotion(Long userId, Long elfId, Long potionId) {
+        try {
+            // 检查是否有进行中的训练
+            TrainState trainState = userTrainStates.get(userId);
+            if (trainState == null || trainState.trainEnded) {
+                return Result.error("未进入训练或训练已结束");
+            }
+
+            // 检查精灵是否存在且属于该用户
+            QueryWrapper<UserElf> elfWrapper = new QueryWrapper<>();
+            elfWrapper.eq("id", elfId).eq("user_id", userId);
+            UserElf userElf = userElfMapper.selectOne(elfWrapper);
+            if (userElf == null) {
+                return Result.error("精灵不存在或不属于该用户");
+            }
+
+            System.out.println("[DEBUG] 训练模式-使用药品前 - HP: " + trainState.playerElfHp + "/" + userElf.getMaxHp() + ", MP: " + trainState.currentPlayerElf.getMp() + "/" + userElf.getMaxMp());
+
+            // 检查药品是否存在
+            PotionConfig potion = potionConfigMapper.selectById(potionId);
+            if (potion == null) {
+                return Result.error("药品不存在");
+            }
+
+            System.out.println("[DEBUG] 训练模式-药品信息 - 名称: " + potion.getName() + ", 类型: " + potion.getType() + ", 恢复值: " + potion.getHealValue());
+
+            // 检查用户是否拥有该药品
+            QueryWrapper<UserPotion> userPotionWrapper = new QueryWrapper<>();
+            userPotionWrapper.eq("user_id", userId);
+            userPotionWrapper.eq("potion_config_id", potionId);
+            UserPotion userPotion = userPotionMapper.selectOne(userPotionWrapper);
+            if (userPotion == null || userPotion.getCount() <= 0) {
+                return Result.error("您没有该药品");
+            }
+
+            // 检查是否是当前出战的精灵
+            if (!trainState.currentPlayerElf.getId().equals(elfId)) {
+                return Result.error("只能对当前出战的精灵使用药品");
+            }
+
+            // 根据药品类型恢复对应的属性
+            int healValue = potion.getHealValue();
+            if (potion.getType() == 1) {
+                // 血瓶，恢复生命值
+                int oldHp = trainState.playerElfHp;
+                trainState.playerElfHp = Math.min(trainState.playerElfHp + healValue, userElf.getMaxHp());
+                System.out.println("[DEBUG] 训练模式-血瓶 - HP从 " + oldHp + " 增加到 " + trainState.playerElfHp);
+                
+                // 更新train_record_elf表
+                TrainRecordElf currentRecord = findTrainRecordElf(trainState, elfId);
+                if (currentRecord != null) {
+                    currentRecord.setCurrentHp(trainState.playerElfHp);
+                    currentRecord.setUpdateTime(LocalDateTime.now());
+                    trainRecordElfMapper.updateById(currentRecord);
+                }
+            } else if (potion.getType() == 2) {
+                // 蓝瓶，恢复魔法值
+                int oldMp = trainState.currentPlayerElf.getMp();
+                trainState.currentPlayerElf.setMp(Math.min(trainState.currentPlayerElf.getMp() + healValue, userElf.getMaxMp()));
+                System.out.println("[DEBUG] 训练模式-蓝瓶 - MP从 " + oldMp + " 增加到 " + trainState.currentPlayerElf.getMp());
+                
+                // 更新train_record_elf表
+                TrainRecordElf currentRecord = findTrainRecordElf(trainState, elfId);
+                if (currentRecord != null) {
+                    currentRecord.setCurrentMp(trainState.currentPlayerElf.getMp());
+                    currentRecord.setUpdateTime(LocalDateTime.now());
+                    trainRecordElfMapper.updateById(currentRecord);
+                }
+            }
+
+            // 同步更新 user_elf 表（保持数据一致性）
+            if (potion.getType() == 1) {
+                userElf.setHp(trainState.playerElfHp);
+            } else if (potion.getType() == 2) {
+                userElf.setMp(trainState.currentPlayerElf.getMp());
+            }
+            userElfMapper.updateById(userElf);
+
+            System.out.println("[DEBUG] 训练模式-使用药品后 - HP: " + trainState.playerElfHp + "/" + userElf.getMaxHp() + ", MP: " + trainState.currentPlayerElf.getMp() + "/" + userElf.getMaxMp());
+
+            // 减少药品数量
+            userPotion.setCount(userPotion.getCount() - 1);
+            userPotion.setUpdateTime(LocalDateTime.now());
+            if (userPotion.getCount() <= 0) {
+                userPotionMapper.deleteById(userPotion.getId());
+            } else {
+                userPotionMapper.updateById(userPotion);
+            }
+
+            // 添加训练日志
+            String potionLog;
+            if (potion.getType() == 1) {
+                potionLog = "使用了" + potion.getName() + "，恢复了" + healValue + "点生命值";
+            } else {
+                potionLog = "使用了" + potion.getName() + "，恢复了" + healValue + "点魔法值";
+            }
+            trainState.trainLog.add(potionLog);
+            trainState.battleLogManager.addLog(potionLog);
+
+            // 构建返回结果
+            Map<String, Object> result = new HashMap<>();
+            Map<String, Object> elfData = new HashMap<>();
+            elfData.put("id", userElf.getId());
+            elfData.put("elfId", userElf.getElfId());
+            elfData.put("userId", userElf.getUserId());
+            elfData.put("level", userElf.getLevel());
+            elfData.put("exp", userElf.getExp());
+            elfData.put("hp", trainState.playerElfHp);
+            elfData.put("maxHp", userElf.getMaxHp());
+            elfData.put("mp", trainState.currentPlayerElf.getMp());
+            elfData.put("maxMp", userElf.getMaxMp());
+            elfData.put("attack", userElf.getAttack());
+            elfData.put("defense", userElf.getDefense());
+            elfData.put("speed", userElf.getSpeed());
+            
+            result.put("elf", elfData);
+            result.put("potion", potion);
+            result.put("playerElfHp", trainState.playerElfHp);
+            result.put("elfMp", trainState.currentPlayerElf.getMp());
+            result.put("trainLog", trainState.trainLog);
+            result.put("roundLogs", trainState.battleLogManager.getRoundLogs());
+            result.put("msg", "使用药品成功");
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("训练模式使用药品失败", e);
+            return Result.error("使用药品失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<Map<String, Object>> playerOffline(Long userId) {
+        try {
+            // 检查是否有进行中的训练
+            TrainState trainState = userTrainStates.get(userId);
+            if (trainState == null || trainState.trainEnded) {
+                return Result.error("未进入训练或训练已结束");
+            }
+
+            // 查询训练记录
+            QueryWrapper<TrainRecord> recordWrapper = new QueryWrapper<>();
+            recordWrapper.eq("train_id", trainState.trainId);
+            TrainRecord trainRecord = trainRecordMapper.selectOne(recordWrapper);
+            
+            if (trainRecord == null) {
+                return Result.error("训练记录不存在");
+            }
+
+            // 更新训练状态为断线暂停
+            trainRecord.setStatus(3); // 3=断线暂停
+            trainRecord.setOfflineTime(LocalDateTime.now());
+            trainRecordMapper.updateById(trainRecord);
+
+            log.info("用户 {} 的训练 {} 已暂停", userId, trainState.trainId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("msg", "训练已暂停");
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("训练模式玩家离线失败", e);
+            return Result.error("训练暂停失败: " + e.getMessage());
         }
     }
 }

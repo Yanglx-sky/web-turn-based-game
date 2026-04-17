@@ -89,5 +89,14 @@ export const battleApi = {
         battleId
       }
     })
+  },
+  
+  // 获取战斗日志
+  getBattleLogs: (battleId) => {
+    return api.get('/api/battle/logs', {
+      params: {
+        battleId
+      }
+    })
   }
 }
