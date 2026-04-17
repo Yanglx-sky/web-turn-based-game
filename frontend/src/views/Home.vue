@@ -31,15 +31,15 @@
           <p>手机号: {{ user?.phone }}</p>
           <p>邮箱: {{ user?.email }}</p>
           <div class="user-stats">
-            <div class="stat-item">
+            <div class="stat-item stat-days">
               <span class="stat-label">游戏天数</span>
               <span class="stat-value">{{ gameDays }}天</span>
             </div>
-            <div class="stat-item">
+            <div class="stat-item stat-elves">
               <span class="stat-label">精灵数量</span>
               <span class="stat-value">{{ elves.length }}只</span>
             </div>
-            <div class="stat-item">
+            <div class="stat-item stat-level">
               <span class="stat-label">当前关卡</span>
               <span class="stat-value">{{ currentLevelName }}</span>
             </div>
@@ -675,7 +675,32 @@ onMounted(async () => {
   display: block;
   font-size: 1.2rem;
   font-weight: bold;
-  color: #ff6b00;
+  color: var(--color-brand);
+}
+
+/* 统计项颜色区分 */
+.stat-item.stat-days {
+  border-color: oklch(0.70 0.18 85 / 0.3);
+}
+
+.stat-item.stat-days .stat-value {
+  color: var(--color-gold);
+}
+
+.stat-item.stat-elves {
+  border-color: oklch(0.55 0.18 150 / 0.3);
+}
+
+.stat-item.stat-elves .stat-value {
+  color: var(--color-grass);
+}
+
+.stat-item.stat-level {
+  border-color: oklch(0.55 0.18 240 / 0.3);
+}
+
+.stat-item.stat-level .stat-value {
+  color: var(--color-water);
 }
 
 /* 精灵展示区 */
@@ -959,13 +984,13 @@ onMounted(async () => {
 }
 
 .action-btn.quaternary {
-  background: linear-gradient(135deg, #9C27B0 0%, #CE93D8 100%);
+  background: linear-gradient(135deg, var(--color-brand-dark) 0%, var(--color-brand) 100%);
   color: white;
 }
 
 .action-btn.quaternary:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(156, 39, 176, 0.4);
+  box-shadow: 0 8px 25px oklch(0.55 0.20 50 / 0.4);
 }
 
 .action-btn.tertiary:hover {

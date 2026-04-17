@@ -74,9 +74,9 @@
             <p>{{ playerElf.elfName }}</p>
             <p>HP: {{ playerElfHp }}</p>
           </div>
-          <div class="mannequin-info">
+          <div class="mannequin-info" :class="getElementColorClass(mannequin.type)">
             <h3>训练人偶</h3>
-            <p>{{ getMannequinTypeName(mannequin.type) }}</p>
+            <span class="element-badge" :class="getElementColorClass(mannequin.type)">{{ getMannequinTypeName(mannequin.type) }}</span>
             <p>HP: {{ mannequinHp }}</p>
           </div>
         </div>
@@ -282,6 +282,20 @@ const getMannequinTypeName = (type) => {
       return '草系训练人偶'
     default:
       return '训练人偶'
+  }
+}
+
+// 根据元素类型获取CSS颜色类名
+const getElementColorClass = (type) => {
+  switch (type) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
   }
 }
 
@@ -498,12 +512,29 @@ h2 {
   padding: 15px;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+}
+
+/* 人偶元素类型颜色 */
+.mannequin-info.element-fire {
+  border-color: var(--color-fire);
+  background: var(--color-fire-bg);
+}
+
+.mannequin-info.element-water {
+  border-color: var(--color-water);
+  background: var(--color-water-bg);
+}
+
+.mannequin-info.element-grass {
+  border-color: var(--color-grass);
+  background: var(--color-grass-bg);
 }
 
 .player-info h3,
 .mannequin-info h3 {
-  color: #333;
+  color: var(--color-neutral-700);
   margin-bottom: 15px;
   font-size: 18px;
   font-weight: bold;
@@ -512,8 +543,33 @@ h2 {
 .player-info p,
 .mannequin-info p {
   margin: 8px 0;
-  color: #666;
+  color: var(--color-neutral-500);
   font-size: 16px;
+}
+
+/* 元素徽章 */
+.element-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.element-badge.element-fire {
+  background: var(--color-fire);
+  color: white;
+}
+
+.element-badge.element-water {
+  background: var(--color-water);
+  color: white;
+}
+
+.element-badge.element-grass {
+  background: var(--color-grass);
+  color: white;
 }
 
 .battle-log {

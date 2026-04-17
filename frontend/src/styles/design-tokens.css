@@ -1,0 +1,159 @@
+/**
+ * Design Tokens for 洛克王国 Web Game
+ * Color system using OKLCH for perceptually uniform color scales
+ */
+
+:root {
+  /* ============================================
+   * PRIMARY BRAND COLOR (Orange)
+   * ============================================ */
+  --color-brand: oklch(0.65 0.18 50);
+  --color-brand-light: oklch(0.75 0.12 50);
+  --color-brand-dark: oklch(0.55 0.20 50);
+  --color-brand-bg: oklch(0.95 0.03 50);
+
+  /* ============================================
+   * ELEMENT TYPE COLORS
+   * Fire, Water, Grass - Pokemon-style types
+   * ============================================ */
+
+  /* Fire - Warm red-orange */
+  --color-fire: oklch(0.55 0.22 30);
+  --color-fire-light: oklch(0.65 0.15 30);
+  --color-fire-bg: oklch(0.92 0.05 30);
+  --color-fire-text: oklch(0.45 0.25 30);
+
+  /* Water - Cool blue */
+  --color-water: oklch(0.55 0.18 240);
+  --color-water-light: oklch(0.65 0.12 240);
+  --color-water-bg: oklch(0.92 0.04 240);
+  --color-water-text: oklch(0.45 0.20 240);
+
+  /* Grass - Fresh green */
+  --color-grass: oklch(0.55 0.18 150);
+  --color-grass-light: oklch(0.65 0.12 150);
+  --color-grass-bg: oklch(0.92 0.04 150);
+  --color-grass-text: oklch(0.45 0.20 150);
+
+  /* ============================================
+   * RARITY TIER COLORS (Equipment)
+   * ============================================ */
+  --color-common: oklch(0.60 0.02 50);
+  --color-common-bg: oklch(0.94 0.01 50);
+  --color-rare: oklch(0.55 0.15 240);
+  --color-rare-bg: oklch(0.92 0.04 240);
+  --color-epic: oklch(0.50 0.18 310);
+  --color-epic-bg: oklch(0.90 0.05 310);
+  --color-legendary: oklch(0.72 0.16 85);
+  --color-legendary-bg: oklch(0.95 0.06 85);
+
+  /* ============================================
+   * RANK POSITION COLORS
+   * ============================================ */
+  --color-gold: oklch(0.80 0.15 85);
+  --color-gold-bg: oklch(0.95 0.05 85);
+  --color-silver: oklch(0.78 0.02 50);
+  --color-silver-bg: oklch(0.94 0.01 50);
+  --color-bronze: oklch(0.65 0.10 60);
+  --color-bronze-bg: oklch(0.90 0.03 60);
+
+  /* ============================================
+   * SEMANTIC COLORS
+   * ============================================ */
+  --color-success: oklch(0.55 0.18 150);
+  --color-success-light: oklch(0.75 0.10 150);
+  --color-success-bg: oklch(0.94 0.04 150);
+  --color-error: oklch(0.55 0.22 25);
+  --color-error-light: oklch(0.70 0.15 25);
+  --color-error-bg: oklch(0.92 0.05 25);
+  --color-warning: oklch(0.70 0.18 85);
+  --color-warning-light: oklch(0.80 0.12 85);
+  --color-warning-bg: oklch(0.94 0.05 85);
+  --color-info: oklch(0.55 0.15 240);
+  --color-info-light: oklch(0.70 0.10 240);
+  --color-info-bg: oklch(0.94 0.04 240);
+
+  /* ============================================
+   * NEUTRALS (Orange-tinted for brand cohesion)
+   * ============================================ */
+  --color-neutral-50: oklch(0.99 0.005 50);
+  --color-neutral-100: oklch(0.98 0.01 50);
+  --color-neutral-200: oklch(0.95 0.01 50);
+  --color-neutral-300: oklch(0.90 0.01 50);
+  --color-neutral-400: oklch(0.80 0.02 50);
+  --color-neutral-500: oklch(0.70 0.02 50);
+  --color-neutral-600: oklch(0.55 0.02 50);
+  --color-neutral-700: oklch(0.45 0.02 50);
+  --color-neutral-800: oklch(0.35 0.02 50);
+  --color-neutral-900: oklch(0.25 0.02 50);
+
+  /* ============================================
+   * STAT COLORS (Character attributes)
+   * ============================================ */
+  --color-stat-hp: oklch(0.55 0.18 150);
+  --color-stat-mp: oklch(0.50 0.18 310);
+  --color-stat-atk: oklch(0.55 0.22 25);
+  --color-stat-def: oklch(0.55 0.15 240);
+  --color-stat-speed: oklch(0.72 0.16 85);
+
+  /* ============================================
+   * SPACING TOKENS (4pt scale)
+   * ============================================ */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+  --space-5xl: 96px;
+
+  /* ============================================
+   * BORDER RADIUS
+   * ============================================ */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ============================================
+   * SHADOWS
+   * ============================================ */
+  --shadow-sm: 0 1px 2px oklch(0.25 0.02 50 / 0.05);
+  --shadow-md: 0 4px 6px oklch(0.25 0.02 50 / 0.1);
+  --shadow-lg: 0 10px 15px oklch(0.25 0.02 50 / 0.1);
+  --shadow-xl: 0 20px 25px oklch(0.25 0.02 50 / 0.15);
+
+  /* ============================================
+   * TRANSITIONS
+   * ============================================ */
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 250ms ease-out;
+  --transition-slow: 400ms ease-out;
+
+  /* ============================================
+   * Z-INDEX SCALE
+   * ============================================ */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+  --z-tooltip: 500;
+}
+
+/* ============================================
+ * LEGACY COLOR MAPPINGS
+ * For backwards compatibility with existing hex colors
+ * ============================================ */
+:root {
+  /* Map old hex colors to new tokens */
+  --orange-primary: var(--color-brand);
+  --orange-light: var(--color-brand-light);
+  --green-success: var(--color-success);
+  --blue-info: var(--color-info);
+  --red-error: var(--color-error);
+  --purple-mp: var(--color-stat-mp);
+  --gold-speed: var(--color-stat-speed);
+}

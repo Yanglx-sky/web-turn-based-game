@@ -40,13 +40,16 @@
         <div v-if="loading" class="loading">加载中...</div>
         <div v-else-if="rankData.length === 0" class="no-data">暂无数据</div>
         <div v-else class="rank-list">
-          <div 
-            v-for="(item, index) in rankData" 
-            :key="item.id" 
+          <div
+            v-for="(item, index) in rankData"
+            :key="item.id"
             class="rank-item"
-            :class="{ 'current-user': item.userId === user?.id }"
+            :class="[
+              { 'current-user': item.userId === user?.id },
+              getRankPositionClass(index + 1)
+            ]"
           >
-            <div class="rank-number">{{ index + 1 }}</div>
+            <div class="rank-number" :class="getRankPositionClass(index + 1)">{{ index + 1 }}</div>
             <div class="rank-user">{{ item.nickname }}</div>
             <div class="rank-score">{{ item.score }}</div>
           </div>
@@ -88,6 +91,14 @@ const logout = () => {
   localStorage.removeItem('user')
   localStorage.removeItem('token')
   router.push('/auth')
+}
+
+// 根据排名位置获取CSS类名
+const getRankPositionClass = (position) => {
+  if (position === 1) return 'position-gold'
+  if (position === 2) return 'position-silver'
+  if (position === 3) return 'position-bronze'
+  return ''
 }
 
 // 选择排行榜类型
@@ -310,19 +321,36 @@ onMounted(async () => {
   padding: 1rem;
   background: white;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
-  border: 1px solid rgba(255, 107, 0, 0.2);
+  border: 2px solid transparent;
 }
 
 .rank-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .rank-item.current-user {
-  background: rgba(255, 107, 0, 0.1);
-  border: 2px solid #ff6b00;
+  background: var(--color-brand-bg);
+  border-color: var(--color-brand);
+}
+
+/* 排名位置颜色 - 金银铜 */
+.rank-item.position-gold {
+  background: var(--color-gold-bg);
+  border-color: var(--color-gold);
+  box-shadow: var(--shadow-md), 0 0 20px oklch(0.80 0.15 85 / 0.3);
+}
+
+.rank-item.position-silver {
+  background: var(--color-silver-bg);
+  border-color: var(--color-silver);
+}
+
+.rank-item.position-bronze {
+  background: var(--color-bronze-bg);
+  border-color: var(--color-bronze);
 }
 
 .rank-number {
@@ -330,14 +358,26 @@ onMounted(async () => {
   text-align: center;
   font-size: 1.2rem;
   font-weight: bold;
-  color: #ff6b00;
+  color: var(--color-brand);
+}
+
+.rank-number.position-gold {
+  color: var(--color-gold);
+}
+
+.rank-number.position-silver {
+  color: var(--color-silver);
+}
+
+.rank-number.position-bronze {
+  color: var(--color-bronze);
 }
 
 .rank-user {
   flex: 1;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--color-neutral-700);
 }
 
 .rank-score {

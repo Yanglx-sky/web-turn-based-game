@@ -24,11 +24,11 @@
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else class="elves-list">
-        <div v-for="elf in elves" :key="elf.id" class="elf-card">
+        <div v-for="elf in elves" :key="elf.id" class="elf-card" :class="getElementColorClass(elf.elfId)">
           <img :src="getElfImage(elf.elfId)" :alt="elf.elfId" class="elf-image">
+          <span class="element-badge" :class="getElementColorClass(elf.elfId)">{{ getElementType(elf.elfId) }}</span>
           <h3>{{ elf.elfName || `精灵 ${elf.elfId}` }}</h3>
           <p>等级: {{ elf.level }}</p>
-          <p>系别: {{ getElementType(elf.elfId) }}</p>
           <p v-if="elf.level < 10">经验: {{ elf.exp }}/{{ elf.expNeed }}</p>
           <p v-else>状态: 已满级</p>
           <p>HP: {{ elf.maxHp }}</p>
@@ -46,7 +46,7 @@
             </select>
             <button @click="setActiveElf(elf.id, selectedOrder[elf.id])">设置</button>
           </div>
-          <button @click="viewElfDetail(elf.id)" class="detail-btn">查看详情</button>
+          <button @click="viewElfDetail(elf.id)" class="detail-btn" :class="getElementColorClass(elf.elfId)">查看详情</button>
         </div>
       </div>
     </div>
@@ -83,6 +83,20 @@ const getElementType = (elfId) => {
       return '草系'
     default:
       return '未知'
+  }
+}
+
+// 根据精灵ID获取元素颜色CSS类名
+const getElementColorClass = (elfId) => {
+  switch (elfId) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
   }
 }
 
@@ -266,17 +280,42 @@ h1 {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 15px;
   padding: 2rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   position: relative;
   text-align: center;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(76, 175, 80, 0.3);
+  border: 2px solid transparent;
   transition: all 0.3s ease;
 }
 
 .elf-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(76, 175, 80, 0.3);
+  box-shadow: var(--shadow-xl);
+}
+
+/* 元素类型颜色边框 */
+.elf-card.element-fire {
+  border-color: var(--color-fire);
+}
+
+.elf-card.element-fire:hover {
+  box-shadow: var(--shadow-xl), 0 0 20px oklch(0.55 0.22 30 / 0.3);
+}
+
+.elf-card.element-water {
+  border-color: var(--color-water);
+}
+
+.elf-card.element-water:hover {
+  box-shadow: var(--shadow-xl), 0 0 20px oklch(0.55 0.18 240 / 0.3);
+}
+
+.elf-card.element-grass {
+  border-color: var(--color-grass);
+}
+
+.elf-card.element-grass:hover {
+  box-shadow: var(--shadow-xl), 0 0 20px oklch(0.55 0.18 150 / 0.3);
 }
 
 .elf-image {
@@ -285,28 +324,61 @@ h1 {
   object-fit: cover;
   border-radius: 50%;
   margin-bottom: 1.5rem;
-  border: 3px solid #4CAF50;
-  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+  border: 3px solid var(--color-grass);
+  box-shadow: 0 4px 15px oklch(0.55 0.18 150 / 0.4);
   transition: all 0.3s ease;
+}
+
+.elf-card.element-fire .elf-image {
+  border-color: var(--color-fire);
+  box-shadow: 0 4px 15px oklch(0.55 0.22 30 / 0.4);
+}
+
+.elf-card.element-water .elf-image {
+  border-color: var(--color-water);
+  box-shadow: 0 4px 15px oklch(0.55 0.18 240 / 0.4);
 }
 
 .elf-card:hover .elf-image {
   transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
 }
 
 .elf-card h3 {
   margin-top: 0;
-  color: #333;
+  color: var(--color-neutral-700);
   font-size: 1.3rem;
   margin-bottom: 1rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .elf-card p {
   margin: 0.5rem 0;
-  color: #666;
+  color: var(--color-neutral-500);
   font-size: 0.9rem;
+}
+
+/* 元素徽章 */
+.element-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.element-badge.element-fire {
+  background: var(--color-fire-bg);
+  color: var(--color-fire-text);
+}
+
+.element-badge.element-water {
+  background: var(--color-water-bg);
+  color: var(--color-water-text);
+}
+
+.element-badge.element-grass {
+  background: var(--color-grass-bg);
+  color: var(--color-grass-text);
 }
 
 .active-tag {
@@ -374,7 +446,7 @@ h1 {
 .detail-btn {
   margin-top: 1rem;
   padding: 0.8rem 1.5rem;
-  background: linear-gradient(135deg, #2196F3 0%, #64B5F6 100%);
+  background: var(--color-info);
   color: white;
   border: none;
   border-radius: 25px;
@@ -382,14 +454,45 @@ h1 {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+  box-shadow: 0 4px 12px oklch(0.55 0.15 240 / 0.3);
   width: 100%;
 }
 
 .detail-btn:hover {
-  background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
+  background: var(--color-info-light);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
+  box-shadow: 0 6px 16px oklch(0.55 0.15 240 / 0.4);
+}
+
+/* 元素类型按钮颜色 */
+.detail-btn.element-fire {
+  background: var(--color-fire);
+  box-shadow: 0 4px 12px oklch(0.55 0.22 30 / 0.3);
+}
+
+.detail-btn.element-fire:hover {
+  background: var(--color-fire-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.22 30 / 0.4);
+}
+
+.detail-btn.element-water {
+  background: var(--color-water);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 240 / 0.3);
+}
+
+.detail-btn.element-water:hover {
+  background: var(--color-water-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.18 240 / 0.4);
+}
+
+.detail-btn.element-grass {
+  background: var(--color-grass);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.3);
+}
+
+.detail-btn.element-grass:hover {
+  background: var(--color-grass-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.18 150 / 0.4);
 }
 
 /* 响应式设计 */

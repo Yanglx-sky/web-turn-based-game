@@ -34,14 +34,15 @@
 
     <!-- 物品列表 -->
     <div class="item-list">
-      <div 
-        v-for="item in items" 
+      <div
+        v-for="item in items"
         :key="item.id || item.itemId"
         class="item-card"
+        :class="getPriceTierClass(item.price)"
       >
         <div class="item-image">
-            <img 
-              :src="getItemImage(item)" 
+            <img
+              :src="getItemImage(item)"
               :alt="item.name"
             />
             <div v-if="item.isWorn" class="bound-tag">已绑定</div>
@@ -65,8 +66,9 @@
             </template>
           </div>
           <div class="item-actions">
-            <button 
+            <button
               class="action-btn"
+              :class="getPriceTierClass(item.price)"
               @click="viewItemDetail(item)"
               v-if="item.itemType !== 2"
             >
@@ -104,6 +106,15 @@ const navigateTo = (path) => {
 const logout = () => {
   localStorage.removeItem('user')
   router.push('/')
+}
+
+// 根据价格获取稀有度CSS类名
+const getPriceTierClass = (price) => {
+  if (!price) return 'tier-common'
+  if (price >= 10000) return 'tier-legendary'
+  if (price >= 5000) return 'tier-epic'
+  if (price >= 2000) return 'tier-rare'
+  return 'tier-common'
 }
 
 // 获取物品图片
@@ -333,29 +344,51 @@ h1 {
 
 .item-card {
   display: flex;
-  background: #f9f9f9;
+  background: var(--color-neutral-100);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
 .item-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 稀有度颜色 - 价格分层 */
+.item-card.tier-common {
+  border-color: var(--color-common);
+}
+
+.item-card.tier-rare {
+  border-color: var(--color-rare);
+  background: var(--color-rare-bg);
+}
+
+.item-card.tier-epic {
+  border-color: var(--color-epic);
+  background: var(--color-epic-bg);
+}
+
+.item-card.tier-legendary {
+  border-color: var(--color-legendary);
+  background: var(--color-legendary-bg);
+  box-shadow: var(--shadow-md), 0 0 20px oklch(0.72 0.16 85 / 0.3);
 }
 
 .bound-tag {
   position: absolute;
   top: -5px;
   right: -5px;
-  background: #666;
+  background: var(--color-neutral-600);
   color: white;
   font-size: 12px;
   font-weight: bold;
   padding: 2px 6px;
   border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .item-image {
@@ -446,7 +479,7 @@ h1 {
 
 .action-btn {
   padding: 8px 16px;
-  background: #ff8c00;
+  background: var(--color-brand);
   color: white;
   border: none;
   border-radius: 20px;
@@ -456,8 +489,26 @@ h1 {
 }
 
 .action-btn:hover {
-  background: #ff7f00;
+  background: var(--color-brand-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  box-shadow: 0 4px 8px oklch(0.55 0.20 50 / 0.4);
+}
+
+/* 稀有度按钮颜色 */
+.action-btn.tier-common {
+  background: var(--color-common);
+}
+
+.action-btn.tier-rare {
+  background: var(--color-rare);
+}
+
+.action-btn.tier-epic {
+  background: var(--color-epic);
+}
+
+.action-btn.tier-legendary {
+  background: var(--color-legendary);
+  box-shadow: 0 0 15px oklch(0.72 0.16 85 / 0.5);
 }
 </style>

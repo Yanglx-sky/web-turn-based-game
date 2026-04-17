@@ -120,18 +120,29 @@
       <div v-if="showSkills" class="skills-section">
         <h4>选择技能</h4>
         <div class="skills-grid">
-          <button v-for="skill in skills" :key="skill.id" @click="useSelectedSkill(skill)" class="skill-btn">
+          <button
+            v-for="skill in skills"
+            :key="skill.id"
+            @click="useSelectedSkill(skill)"
+            class="skill-btn"
+            :class="getElementColorClass(playerElf?.elementType)"
+          >
             {{ skill.skillName }} (MP: {{ skill.costMp }})
           </button>
         </div>
       </div>
-      
+
       <!-- 战斗操作 -->
       <div class="battle-actions">
         <h3>战斗操作</h3>
         <div class="action-buttons">
           <button @click="attack" class="action-btn attack-btn" :disabled="isButtonsDisabled">攻击</button>
-          <button @click="useSkill" class="action-btn skill-btn" :disabled="isButtonsDisabled">技能</button>
+          <button
+            @click="useSkill"
+            class="action-btn skill-btn"
+            :class="getElementColorClass(playerElf?.elementType)"
+            :disabled="isButtonsDisabled"
+          >技能</button>
           <button @click="switchElf" class="action-btn switch-btn" :disabled="isButtonsDisabled">更换精灵</button>
           <button @click="flee" class="action-btn flee-btn" :disabled="isButtonsDisabled">逃跑</button>
           <button @click="showPotions = true" class="action-btn potion-btn" :disabled="isButtonsDisabled">药品</button>
@@ -415,6 +426,20 @@ const getElementType = (elementType) => {
       return '光系'
     default:
       return '未知'
+  }
+}
+
+// 根据elementType获取CSS颜色类名
+const getElementColorClass = (elementType) => {
+  switch (elementType) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
   }
 }
 
@@ -2981,7 +3006,7 @@ h1 {
 .hp-bar {
   width: 100%;
   height: 10px;
-  background: #e0e0e0;
+  background: var(--color-neutral-300);
   border-radius: 5px;
   overflow: hidden;
   margin: 10px 0;
@@ -2989,7 +3014,22 @@ h1 {
 
 .hp-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--color-success);
+  transition: width 0.5s ease;
+}
+
+.mp-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--color-neutral-300);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.mp-fill {
+  height: 100%;
+  background: var(--color-stat-mp);
   transition: width 0.5s ease;
 }
 
@@ -3019,13 +3059,25 @@ h1 {
 }
 
 .attack-btn {
-  background: #ff5722;
+  background: var(--color-fire);
   color: white;
 }
 
 .skill-btn {
-  background: #2196f3;
+  background: var(--color-info);
   color: white;
+}
+
+.skill-btn.element-fire {
+  background: var(--color-fire);
+}
+
+.skill-btn.element-water {
+  background: var(--color-water);
+}
+
+.skill-btn.element-grass {
+  background: var(--color-grass);
 }
 
 .switch-btn {
@@ -3075,6 +3127,37 @@ h1 {
 
 .skill-btn:hover {
   background: #bbdefb;
+}
+
+/* 技能元素类型颜色 */
+.skill-btn.element-fire {
+  background: var(--color-fire-bg);
+  border-color: var(--color-fire);
+  color: var(--color-fire-text);
+}
+
+.skill-btn.element-fire:hover {
+  background: oklch(0.85 0.08 30);
+}
+
+.skill-btn.element-water {
+  background: var(--color-water-bg);
+  border-color: var(--color-water);
+  color: var(--color-water-text);
+}
+
+.skill-btn.element-water:hover {
+  background: oklch(0.85 0.06 240);
+}
+
+.skill-btn.element-grass {
+  background: var(--color-grass-bg);
+  border-color: var(--color-grass);
+  color: var(--color-grass-text);
+}
+
+.skill-btn.element-grass:hover {
+  background: oklch(0.85 0.06 150);
 }
 
 /* 战斗日志 */
@@ -3241,7 +3324,7 @@ h1 {
 }
 
 .elf-death-dialog .confirm-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-light) 100%);
   color: white;
   border: none;
   padding: 12px 40px;
@@ -3250,12 +3333,12 @@ h1 {
   font-size: 16px;
   font-weight: bold;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 15px oklch(0.65 0.18 50 / 0.4);
 }
 
 .elf-death-dialog .confirm-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 20px oklch(0.65 0.18 50 / 0.6);
 }
 
 .potion-list {

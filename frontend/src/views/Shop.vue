@@ -40,14 +40,15 @@
 
     <!-- 装备列表 -->
     <div class="equip-list">
-      <div 
-        v-for="equip in equips" 
+      <div
+        v-for="equip in equips"
         :key="equip.id"
         class="equip-card"
+        :class="getPriceTierClass(equip.price)"
       >
         <div class="equip-image">
-          <img 
-            :src="getEquipImage(equip)" 
+          <img
+            :src="getEquipImage(equip)"
             :alt="equip.name"
           />
         </div>
@@ -70,8 +71,9 @@
           </div>
           <div class="equip-price">
             <span class="price">{{ equip.price }} 金币</span>
-            <button 
+            <button
               class="buy-btn"
+              :class="getPriceTierClass(equip.price)"
               @click="buyEquip(equip.id)"
               :disabled="false"
             >
@@ -111,6 +113,14 @@ const navigateTo = (path) => {
 const logout = () => {
   localStorage.removeItem('user')
   router.push('/')
+}
+
+// 根据价格获取稀有度CSS类名
+const getPriceTierClass = (price) => {
+  if (price >= 10000) return 'tier-legendary'
+  if (price >= 5000) return 'tier-epic'
+  if (price >= 2000) return 'tier-rare'
+  return 'tier-common'
 }
 
 // 获取装备图片
@@ -388,16 +398,38 @@ h1 {
 
 .equip-card {
   display: flex;
-  background: #f9f9f9;
+  background: var(--color-neutral-100);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
 .equip-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 稀有度颜色 - 价格分层 */
+.equip-card.tier-common {
+  border-color: var(--color-common);
+}
+
+.equip-card.tier-rare {
+  border-color: var(--color-rare);
+  background: var(--color-rare-bg);
+}
+
+.equip-card.tier-epic {
+  border-color: var(--color-epic);
+  background: var(--color-epic-bg);
+}
+
+.equip-card.tier-legendary {
+  border-color: var(--color-legendary);
+  background: var(--color-legendary-bg);
+  box-shadow: var(--shadow-md), 0 0 20px oklch(0.72 0.16 85 / 0.3);
 }
 
 .equip-image {
@@ -456,8 +488,8 @@ h1 {
 }
 
 .stat.speed {
-  background: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
+  background: oklch(0.80 0.12 85 / 0.2);
+  color: var(--color-gold);
 }
 
 .equip-price {
@@ -469,13 +501,12 @@ h1 {
 .price {
   font-size: 18px;
   font-weight: bold;
-  color: #ffd700;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  color: var(--color-gold);
 }
 
 .buy-btn {
   padding: 8px 16px;
-  background: #ff8c00;
+  background: var(--color-brand);
   color: white;
   border: none;
   border-radius: 20px;
@@ -485,13 +516,35 @@ h1 {
 }
 
 .buy-btn:hover:not(:disabled) {
-  background: #ff7f00;
+  background: var(--color-brand-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.4);
+  box-shadow: 0 4px 8px oklch(0.55 0.20 50 / 0.4);
 }
 
 .buy-btn:disabled {
-  background: #cccccc;
+  background: var(--color-neutral-400);
   cursor: not-allowed;
+}
+
+/* 稀有度按钮颜色 */
+.buy-btn.tier-common {
+  background: var(--color-common);
+}
+
+.buy-btn.tier-rare {
+  background: var(--color-rare);
+}
+
+.buy-btn.tier-epic {
+  background: var(--color-epic);
+}
+
+.buy-btn.tier-legendary {
+  background: var(--color-legendary);
+  box-shadow: 0 0 15px oklch(0.72 0.16 85 / 0.5);
+}
+
+.buy-btn.tier-legendary:hover:not(:disabled) {
+  box-shadow: 0 0 25px oklch(0.72 0.16 85 / 0.7);
 }
 </style>

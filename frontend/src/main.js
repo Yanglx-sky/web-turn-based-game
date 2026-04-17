@@ -4,6 +4,9 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router'
 
+// Import design tokens for global color system
+import './styles/design-tokens.css'
+
 const app = createApp(App)
 const pinia = createPinia()
 

@@ -747,14 +747,19 @@ const generateUUID = () => {
   border-radius: 20px;
   font-size: 14px;
   font-weight: bold;
-  background: rgba(255, 255, 255, 0.2);
+  background: oklch(0.70 0.02 50 / 0.8);
   color: white;
   border: 2px solid white;
 }
 
 .connection-status.connected {
-  background: rgba(76, 175, 80, 0.8);
-  color: white;
+  background: var(--color-success);
+  border-color: oklch(0.55 0.18 150);
+}
+
+.connection-status.disconnected {
+  background: var(--color-error);
+  border-color: oklch(0.55 0.22 25);
 }
 
 .main-content {
@@ -1084,8 +1089,8 @@ h1 {
 }
 
 .load-more:hover {
-  color: #ff6f00;
-  background: rgba(255, 140, 0, 0.1);
+  color: var(--color-brand);
+  background: var(--color-brand-bg);
   border-radius: 8px;
 }
 
@@ -1107,7 +1112,7 @@ h1 {
 
 .message-info {
   font-size: 12px;
-  color: #666;
+  color: var(--color-neutral-500);
   margin-bottom: 6px;
   display: flex;
   justify-content: space-between;
@@ -1115,7 +1120,7 @@ h1 {
 }
 
 .message-item.self .message-info {
-  color: #ff8c00;
+  color: var(--color-brand);
 }
 
 .message-content {
@@ -1124,19 +1129,19 @@ h1 {
   background: white;
   border-radius: 12px;
   word-break: break-word;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e0e0e0;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-neutral-300);
 }
 
 .message-item.self .message-content {
-  background: rgba(255, 140, 0, 0.1);
-  border-color: #ff8c00;
+  background: var(--color-brand-bg);
+  border-color: var(--color-brand);
 }
 
 .chat-input {
   padding: 20px;
   background: white;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--color-neutral-300);
   display: flex;
   gap: 15px;
   align-items: flex-end;
@@ -1145,7 +1150,7 @@ h1 {
 .chat-input textarea {
   flex: 1;
   padding: 15px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--color-neutral-300);
   border-radius: 8px;
   resize: none;
   height: 80px;

@@ -134,10 +134,10 @@
       <div v-if="elfDetail" class="section">
         <h3>已解锁技能</h3>
         <div class="skill-list">
-          <div v-for="skill in elfDetail.unlockedSkills" :key="skill.id" class="skill-item">
+          <div v-for="skill in elfDetail.unlockedSkills" :key="skill.id" class="skill-item" :class="getElementColorClass(skill.elementType)">
             <div class="skill-header">
               <h4>{{ skill.skillName }}</h4>
-              <span class="skill-type">{{ getElementType(skill.elementType) }}</span>
+              <span class="skill-type" :class="getElementColorClass(skill.elementType)">{{ getElementType(skill.elementType) }}</span>
             </div>
             <div class="skill-stats">
               <div class="skill-stat">
@@ -160,10 +160,10 @@
       <div v-if="elfDetail" class="section">
         <h3>可解锁技能</h3>
         <div class="skill-list">
-          <div v-for="skill in elfDetail.unlockableSkills" :key="skill.id" class="skill-item">
+          <div v-for="skill in elfDetail.unlockableSkills" :key="skill.id" class="skill-item" :class="getElementColorClass(skill.elementType)">
             <div class="skill-header">
               <h4>{{ skill.skillName }}</h4>
-              <span class="skill-type">{{ getElementType(skill.elementType) }}</span>
+              <span class="skill-type" :class="getElementColorClass(skill.elementType)">{{ getElementType(skill.elementType) }}</span>
             </div>
             <div class="skill-stats">
               <div class="skill-stat">
@@ -180,7 +180,7 @@
               </div>
             </div>
             <p class="skill-description">{{ skill.des }}</p>
-            <button @click="unlockSkill(skill.id)" class="unlock-btn">解锁技能</button>
+            <button @click="unlockSkill(skill.id)" class="unlock-btn" :class="getElementColorClass(skill.elementType)">解锁技能</button>
           </div>
           <p v-if="!elfDetail.unlockableSkills || elfDetail.unlockableSkills.length === 0" class="no-skills">
             暂无可解锁技能
@@ -333,6 +333,20 @@ const getElementType = (elfId) => {
     3: '草系'
   }
   return types[elfId] || '未知'
+}
+
+// 根据元素类型获取CSS颜色类名
+const getElementColorClass = (elementType) => {
+  switch (elementType) {
+    case 1:
+      return 'element-fire'
+    case 2:
+      return 'element-water'
+    case 3:
+      return 'element-grass'
+    default:
+      return ''
+  }
 }
 
 const goBack = () => {
@@ -747,12 +761,11 @@ h1 {
 }
 
 .section h3 {
-  color: #4CAF50;
+  color: var(--color-grass);
   margin-bottom: 1.5rem;
   text-align: center;
   font-size: 1.5rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-  border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+  border-bottom: 2px solid oklch(0.55 0.18 150 / 0.3);
   padding-bottom: 0.5rem;
 }
 
@@ -766,14 +779,39 @@ h1 {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(76, 175, 80, 0.2);
+  box-shadow: var(--shadow-md);
+  border: 2px solid transparent;
   transition: all 0.3s ease;
 }
 
 .skill-item:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.25);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 技能元素类型颜色 */
+.skill-item.element-fire {
+  border-color: var(--color-fire);
+}
+
+.skill-item.element-fire:hover {
+  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.22 30 / 0.3);
+}
+
+.skill-item.element-water {
+  border-color: var(--color-water);
+}
+
+.skill-item.element-water:hover {
+  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.18 240 / 0.3);
+}
+
+.skill-item.element-grass {
+  border-color: var(--color-grass);
+}
+
+.skill-item.element-grass:hover {
+  box-shadow: var(--shadow-lg), 0 0 20px oklch(0.55 0.18 150 / 0.3);
 }
 
 .skill-header {
@@ -784,18 +822,31 @@ h1 {
 }
 
 .skill-header h4 {
-  color: #333;
+  color: var(--color-neutral-700);
   margin: 0;
   font-size: 1.2rem;
 }
 
 .skill-type {
-  background: #4CAF50;
+  background: var(--color-grass);
   color: white;
   padding: 0.3rem 0.8rem;
   border-radius: 15px;
   font-size: 0.8rem;
   font-weight: bold;
+}
+
+/* 技能类型徽章元素颜色 */
+.skill-type.element-fire {
+  background: var(--color-fire);
+}
+
+.skill-type.element-water {
+  background: var(--color-water);
+}
+
+.skill-type.element-grass {
+  background: var(--color-grass);
 }
 
 .skill-stats {
@@ -836,7 +887,7 @@ h1 {
 .unlock-btn {
   width: 100%;
   padding: 0.8rem 1.5rem;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
+  background: var(--color-grass);
   color: white;
   border: none;
   border-radius: 25px;
@@ -844,13 +895,44 @@ h1 {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.3);
 }
 
 .unlock-btn:hover {
-  background: linear-gradient(135deg, #388E3C 0%, #66BB6A 100%);
+  background: var(--color-grass-light);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+  box-shadow: 0 6px 16px oklch(0.55 0.18 150 / 0.4);
+}
+
+/* 解锁按钮元素颜色 */
+.unlock-btn.element-fire {
+  background: var(--color-fire);
+  box-shadow: 0 4px 12px oklch(0.55 0.22 30 / 0.3);
+}
+
+.unlock-btn.element-fire:hover {
+  background: var(--color-fire-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.22 30 / 0.4);
+}
+
+.unlock-btn.element-water {
+  background: var(--color-water);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 240 / 0.3);
+}
+
+.unlock-btn.element-water:hover {
+  background: var(--color-water-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.18 240 / 0.4);
+}
+
+.unlock-btn.element-grass {
+  background: var(--color-grass);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.3);
+}
+
+.unlock-btn.element-grass:hover {
+  background: var(--color-grass-light);
+  box-shadow: 0 6px 16px oklch(0.55 0.18 150 / 0.4);
 }
 
 .no-skills {

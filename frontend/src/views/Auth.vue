@@ -42,12 +42,18 @@
       <h2>选择你的初始精灵</h2>
       <p class="starter-intro">请从以下三只精灵中选择一只作为你的初始伙伴</p>
       <div class="starter-list" v-if="!loadingStarterElves && starterElves.length > 0">
-        <div v-for="elf in starterElves" :key="elf.id" class="starter-item" @click="selectStarter(elf.id)">
-          <div class="starter-image">
+        <div
+          v-for="elf in starterElves"
+          :key="elf.id"
+          class="starter-item"
+          :class="getElementClass(elf.type)"
+          @click="selectStarter(elf.id)"
+        >
+          <div class="starter-image" :class="getElementClass(elf.type)">
             <div class="elf-icon">{{ elf.name.charAt(0) }}</div>
           </div>
           <h3>{{ elf.name }}</h3>
-          <p class="elf-type">{{ elf.type }}</p>
+          <p class="elf-type" :class="getElementClass(elf.type)">{{ elf.type }}</p>
         </div>
       </div>
       <div v-else-if="loadingStarterElves" class="loading-state">
@@ -107,6 +113,16 @@ const loadStarterElves = async () => {
   } finally {
     loadingStarterElves.value = false
   }
+}
+
+// 根据精灵类型返回CSS类名
+const getElementClass = (type) => {
+  const typeMap = {
+    '火': 'element-fire',
+    '水': 'element-water',
+    '草': 'element-grass'
+  }
+  return typeMap[type] || ''
 }
 
 // 组件挂载时获取御三家精灵
@@ -424,6 +440,49 @@ input:focus {
   font-size: 14px;
   margin: 0;
   font-weight: 500;
+}
+
+/* 元素类型颜色 */
+.starter-item.element-fire:hover {
+  border-color: var(--color-fire);
+  box-shadow: 0 6px 20px oklch(0.55 0.22 30 / 0.3);
+}
+
+.starter-image.element-fire {
+  background: linear-gradient(135deg, var(--color-fire) 0%, var(--color-fire-light) 100%);
+  box-shadow: 0 4px 12px oklch(0.55 0.22 30 / 0.4);
+}
+
+.elf-type.element-fire {
+  color: oklch(0.75 0.12 30);
+}
+
+.starter-item.element-water:hover {
+  border-color: var(--color-water);
+  box-shadow: 0 6px 20px oklch(0.55 0.18 240 / 0.3);
+}
+
+.starter-image.element-water {
+  background: linear-gradient(135deg, var(--color-water) 0%, var(--color-water-light) 100%);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 240 / 0.4);
+}
+
+.elf-type.element-water {
+  color: oklch(0.75 0.12 240);
+}
+
+.starter-item.element-grass:hover {
+  border-color: var(--color-grass);
+  box-shadow: 0 6px 20px oklch(0.55 0.18 150 / 0.3);
+}
+
+.starter-image.element-grass {
+  background: linear-gradient(135deg, var(--color-grass) 0%, var(--color-grass-light) 100%);
+  box-shadow: 0 4px 12px oklch(0.55 0.18 150 / 0.4);
+}
+
+.elf-type.element-grass {
+  color: oklch(0.75 0.12 150);
 }
 
 .loading-state,

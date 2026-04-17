@@ -342,11 +342,11 @@ h1 {
 }
 
 .level-card {
-  background: #f9f9f9;
-  border: 1px solid #ddd;
+  background: var(--color-neutral-100);
+  border: 2px solid transparent;
   border-radius: 8px;
   padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   text-align: center;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   position: relative;
@@ -359,18 +359,31 @@ h1 {
 
 .level-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 难度颜色 - 根据关卡ID递增 */
+.level-card:nth-child(3n+1) {
+  border-color: var(--color-success);
+}
+
+.level-card:nth-child(3n+2) {
+  border-color: var(--color-warning);
+}
+
+.level-card:nth-child(3n+3) {
+  border-color: var(--color-error);
 }
 
 .level-card.locked {
   opacity: 0.5;
-  background: #e0e0e0;
-  border: 2px solid #ccc;
+  background: var(--color-neutral-300);
+  border-color: var(--color-neutral-400);
 }
 
 .level-card.locked:hover {
   transform: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .locked-overlay {

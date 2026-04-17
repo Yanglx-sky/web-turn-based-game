@@ -348,21 +348,27 @@ onMounted(async () => {
   background: white;
   border-radius: 15px;
   padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   transition: all 0.3s ease;
-  border: 2px solid rgba(255, 107, 0, 0.2);
+  border: 2px solid var(--color-brand);
   display: flex;
   gap: 1rem;
 }
 
 .achievement-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(255, 107, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
+/* 成就完成状态 - 金色荣誉 */
 .achievement-card.completed {
-  border-color: #4CAF50;
-  background: rgba(76, 175, 80, 0.05);
+  border-color: var(--color-gold);
+  background: var(--color-gold-bg);
+  box-shadow: var(--shadow-md), 0 0 15px oklch(0.80 0.15 85 / 0.2);
+}
+
+.achievement-card.completed:hover {
+  box-shadow: var(--shadow-lg), 0 0 25px oklch(0.80 0.15 85 / 0.4);
 }
 
 .achievement-icon {
@@ -370,11 +376,15 @@ onMounted(async () => {
   height: 80px;
   border-radius: 0;
   overflow: hidden;
-  border: 2px solid #ff6b00;
+  border: 2px solid var(--color-brand);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.achievement-card.completed .achievement-icon {
+  border-color: var(--color-gold);
 }
 
 .achievement-icon img {
@@ -407,7 +417,7 @@ onMounted(async () => {
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: #e0e0e0;
+  background: var(--color-neutral-300);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 0.5rem;
@@ -415,18 +425,19 @@ onMounted(async () => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ff6b00, #ff9e4f);
+  background: var(--color-brand);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
 
+/* 成就完成进度条 - 金色 */
 .achievement-card.completed .progress-fill {
-  background: linear-gradient(90deg, #4CAF50, #81C784);
+  background: var(--color-gold);
 }
 
 .progress-text {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--color-neutral-500);
   font-weight: 600;
 }
 
@@ -455,13 +466,13 @@ onMounted(async () => {
 }
 
 .completed-text {
-  color: #4CAF50;
+  color: var(--color-gold);
   font-weight: 600;
   font-size: 0.9rem;
 }
 
 .uncompleted-text {
-  color: #ff6b00;
+  color: var(--color-brand);
   font-weight: 600;
   font-size: 0.9rem;
 }
