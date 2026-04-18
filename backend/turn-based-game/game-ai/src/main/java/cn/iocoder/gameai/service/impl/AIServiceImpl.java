@@ -174,69 +174,147 @@ public class AIServiceImpl implements AIService {
 
     @Override
     public String getStrategyRecommendation(String elfInfo, String monsterInfo) {
-        // 解析精灵和怪物信息
-        String[] monsterParts = monsterInfo.split(",");
-        
-        if (monsterParts.length < 2) {
-            return "请提供完整的怪物信息。";
+        try {
+            // 解析精灵和怪物信息
+            String[] monsterParts = monsterInfo.split(",");
+            
+            if (monsterParts.length < 2) {
+                return "请提供完整的怪物信息。";
+            }
+            
+            String monsterName = monsterParts[0];
+            String monsterElementType = monsterParts[1];
+            String monsterSkills = monsterParts.length > 2 ? monsterParts[2] : "未知";
+            
+            // 解析精灵信息，处理多个精灵的情况
+            String[] elfLines = elfInfo.split(";\n");
+            if (elfLines.length == 0) {
+                return "请提供完整的精灵信息。";
+            }
+            
+            // 构建精灵详细信息
+            StringBuilder elfDetails = new StringBuilder();
+            for (int i = 0; i < elfLines.length; i++) {
+                if (elfLines[i].trim().isEmpty()) {
+                    continue;
+                }
+                
+                String[] elfParts = elfLines[i].split(",");
+                if (elfParts.length < 2) {
+                    continue;
+                }
+                
+                String elfName = elfParts[0];
+                String elfElementType = elfParts[1];
+                String elfSkills = elfParts.length > 2 ? elfParts[2] : "未知";
+                
+                elfDetails.append(String.format("精灵%d：%s（%s），技能：%s\n", 
+                    i + 1, elfName, elfElementType, elfSkills));
+            }
+            
+            if (elfDetails.length() == 0) {
+                return "请提供完整的精灵信息。";
+            }
+            
+            // 构建AI提示词
+            String prompt = String.format(
+                "你是一个专业的精灵训练师AI助手，擅长分析战斗局势并制定最优策略。\n\n" +
+                "【对手信息】\n" +
+                "怪物名称：%s\n" +
+                "怪物系别：%s\n" +
+                "怪物技能：%s\n\n" +
+                "【我的精灵】\n" +
+                "%s\n" +
+                "【元素克制关系】\n" +
+                "- 火系克制草系\n" +
+                "- 草系克制水系\n" +
+                "- 水系克制火系\n" +
+                "- 草系克制光系\n\n" +
+                "请根据以上信息，生成战斗策略推荐，要求：\n" +
+                "1. 推荐最适合出战的精灵（基于元素克制关系）\n" +
+                "2. 分析元素克制优势或劣势\n" +
+                "3. 给出技能使用建议\n" +
+                "4. 提供战斗注意事项\n" +
+                "5. 语言风格生动有趣，符合游戏氛围\n" +
+                "6. 长度控制在100-200字\n" +
+                "7. 直接返回策略内容，不要添加任何解释或前缀\n\n" +
+                "请生成策略：",
+                monsterName,
+                monsterElementType,
+                monsterSkills,
+                elfDetails.toString()
+            );
+            
+            // 调用AI大模型
+            String aiResponse = callAI(prompt);
+            
+            // 如果AI调用失败，使用默认策略
+            if (aiResponse.contains("AI处理失败")) {
+                return generateDefaultStrategy(elfInfo, monsterInfo);
+            }
+            
+            return aiResponse.trim();
+            
+        } catch (Exception e) {
+            log.error("生成AI策略推荐失败", e);
+            return generateDefaultStrategy(elfInfo, monsterInfo);
         }
-        
-        String monsterName = monsterParts[0];
-        String monsterElementType = monsterParts[1];
-        
-        // 解析精灵信息，处理多个精灵的情况
-        String[] elfLines = elfInfo.split(";\n");
-        if (elfLines.length == 0) {
-            return "请提供完整的精灵信息。";
-        }
-        
-        // 找出最适合的精灵
-        String bestElfName = "";
-        String bestElfElementType = "";
-        boolean foundCounter = false;
-        
-        for (String elfLine : elfLines) {
-            if (elfLine.trim().isEmpty()) {
-                continue;
+    }
+    
+    /**
+     * 生成默认策略（AI失败时的备选方案）
+     */
+    private String generateDefaultStrategy(String elfInfo, String monsterInfo) {
+        try {
+            String[] monsterParts = monsterInfo.split(",");
+            String monsterName = monsterParts[0];
+            String monsterElementType = monsterParts[1];
+            
+            String[] elfLines = elfInfo.split(";\n");
+            String bestElfName = "";
+            String bestElfElementType = "";
+            boolean foundCounter = false;
+            
+            for (String elfLine : elfLines) {
+                if (elfLine.trim().isEmpty()) continue;
+                
+                String[] elfParts = elfLine.split(",");
+                if (elfParts.length < 2) continue;
+                
+                String elfName = elfParts[0];
+                String elfElementType = elfParts[1];
+                
+                // 检查是否克制怪物
+                if (("火系".equals(elfElementType) && "草系".equals(monsterElementType)) ||
+                    ("草系".equals(elfElementType) && "水系".equals(monsterElementType)) ||
+                    ("水系".equals(elfElementType) && "火系".equals(monsterElementType)) ||
+                    ("草系".equals(elfElementType) && "光系".equals(monsterElementType))) {
+                    bestElfName = elfName;
+                    bestElfElementType = elfElementType;
+                    foundCounter = true;
+                    break;
+                }
+                
+                if (bestElfName.isEmpty()) {
+                    bestElfName = elfName;
+                    bestElfElementType = elfElementType;
+                }
             }
             
-            String[] elfParts = elfLine.split(",");
-            if (elfParts.length < 2) {
-                continue;
-            }
-            
-            String elfName = elfParts[0];
-            String elfElementType = elfParts[1];
-            
-            // 检查是否克制怪物
-            if (("火系".equals(elfElementType) && "草系".equals(monsterElementType)) ||
-                ("草系".equals(elfElementType) && "水系".equals(monsterElementType)) ||
-                ("水系".equals(elfElementType) && "火系".equals(monsterElementType)) ||
-                ("草系".equals(elfElementType) && "光系".equals(monsterElementType))) {
-                bestElfName = elfName;
-                bestElfElementType = elfElementType;
-                foundCounter = true;
-                break; // 找到克制的精灵就停止
-            }
-            
-            // 如果还没有找到克制的精灵，记录第一个精灵
             if (bestElfName.isEmpty()) {
-                bestElfName = elfName;
-                bestElfElementType = elfElementType;
+                return "请提供完整的精灵信息。";
             }
-        }
-        
-        if (bestElfName.isEmpty()) {
-            return "请提供完整的精灵信息。";
-        }
-        
-        // 使用默认逻辑生成战斗策略推荐，确保系别克制关系正确
-        if (foundCounter) {
-            return "战斗策略推荐：" + bestElfName + "克制" + monsterName + "，用" + bestElfElementType + "技能攻击！";
-        } else if (bestElfElementType.equals(monsterElementType)) {
-            return "战斗策略推荐：" + bestElfName + "与" + monsterName + "同系，用高伤技能！";
-        } else {
-            return "战斗策略推荐：用" + bestElfName + "的强力技能攻击" + monsterName + "！";
+            
+            // 使用默认逻辑生成战斗策略推荐
+            if (foundCounter) {
+                return "战斗策略推荐：" + bestElfName + "克制" + monsterName + "，用" + bestElfElementType + "技能攻击！";
+            } else if (bestElfElementType.equals(monsterElementType)) {
+                return "战斗策略推荐：" + bestElfName + "与" + monsterName + "同系，用高伤技能！";
+            } else {
+                return "战斗策略推荐：用" + bestElfName + "的强力技能攻击" + monsterName + "！";
+            }
+        } catch (Exception e) {
+            return "战斗策略推荐：合理运用精灵技能，注意元素克制关系，祝你战斗顺利！";
         }
     }
     

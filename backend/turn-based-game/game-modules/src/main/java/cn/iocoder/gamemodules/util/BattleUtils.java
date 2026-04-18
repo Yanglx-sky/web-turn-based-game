@@ -38,11 +38,14 @@ public class BattleUtils {
         return (int) (baseDamage * multiplier);
     }
 
-    // 计算普通攻击伤害
-    public static int calculateNormalDamage(int attackerAttack, int defenderDefense) {
-        int damage = attackerAttack - defenderDefense / 2;
-        return Math.max(damage, 1);
-    }
+    // 计算普通攻击伤害（已废弃）
+    // 注意：普通攻击现在使用真实伤害（normalDamage字段），不再使用此公式计算
+    // 保留此方法仅作为参考，实际代码中不再调用
+//    @Deprecated
+//    public static int calculateNormalDamage(int attackerAttack, int defenderDefense) {
+//        int damage = attackerAttack - defenderDefense / 2;
+//        return Math.max(damage, 1);
+//    }
 
     // 获取精灵系别
     public static int getElfElementType(UserElf elf, ElfMapper elfMapper) {

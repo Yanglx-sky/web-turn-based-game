@@ -5,8 +5,11 @@ import cn.iocoder.gamecommon.result.Result;
 import cn.iocoder.gamecommon.util.JwtUtil;
 import cn.iocoder.gamemodules.entity.*;
 import cn.iocoder.gamemodules.mapper.ElfMapper;
+import cn.iocoder.gamemodules.mapper.ElfSkillMapper;
 import cn.iocoder.gamemodules.mapper.LevelMapper;
 import cn.iocoder.gamemodules.mapper.MonsterMapper;
+import cn.iocoder.gamemodules.mapper.MonsterSkillMapper;
+import cn.iocoder.gamemodules.mapper.SkillMapper;
 import cn.iocoder.gamemodules.service.BattleService;
 import cn.iocoder.gamemodules.service.UserElfService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/battle")
@@ -46,6 +50,15 @@ public class BattleController {
     
     @Autowired
     private ElfMapper elfMapper;
+    
+    @Autowired
+    private SkillMapper skillMapper;
+    
+    @Autowired
+    private ElfSkillMapper elfSkillMapper;
+    
+    @Autowired
+    private MonsterSkillMapper monsterSkillMapper;
 
     /**
      * 开始战斗
@@ -258,6 +271,9 @@ public class BattleController {
             if (monster == null) {
                 return Result.error("怪物不存在");
             }
+            
+            // 获取怪物技能
+            String monsterSkills = getMonsterSkills(monster.getId());
 
             // 获取用户出战精灵
             Result<List<Map<String, Object>>> elvesResult = userElfService.getBattleElves(userId);
@@ -266,24 +282,27 @@ public class BattleController {
             }
             List<Map<String, Object>> elves = elvesResult.getData();
 
-            // 构建精灵信息字符串
+            // 构建精灵信息字符串（包含技能）
             StringBuilder elfInfoBuilder = new StringBuilder();
             for (int i = 0; i < elves.size(); i++) {
                 Map<String, Object> elf = elves.get(i);
                 String elfName = (String) elf.get("elfName");
                 Integer elementType = (Integer) elf.get("elementType");
+                Integer elfId = (Integer) elf.get("elfId");
                 
                 String elementTypeName = getElementTypeName(elementType);
-                elfInfoBuilder.append(elfName).append(",").append(elementTypeName);
+                String elfSkills = getElfSkills(elfId);
+                
+                elfInfoBuilder.append(elfName).append(",").append(elementTypeName).append(",").append(elfSkills);
                 
                 if (i < elves.size() - 1) {
                     elfInfoBuilder.append(";\n");
                 }
             }
 
-            // 构建怪物信息字符串
+            // 构建怪物信息字符串（包含技能）
             String monsterElementTypeName = getElementTypeName(monster.getElementType());
-            String monsterInfo = monster.getMonsterName() + "," + monsterElementTypeName;
+            String monsterInfo = monster.getMonsterName() + "," + monsterElementTypeName + "," + monsterSkills;
 
             // 调用AI服务获取策略推荐
             String recommendation = aiService.getStrategyRecommendation(elfInfoBuilder.toString(), monsterInfo);
@@ -337,6 +356,70 @@ public class BattleController {
                 return "光系";
             default:
                 return "未知";
+        }
+    }
+    
+    /**
+     * 获取精灵技能列表
+     */
+    private String getElfSkills(Integer elfId) {
+        try {
+            // 查询精灵技能关联表
+            List<ElfSkill> elfSkills = elfSkillMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ElfSkill>()
+                    .eq("elf_id", elfId)
+            );
+            
+            if (elfSkills == null || elfSkills.isEmpty()) {
+                return "无";
+            }
+            
+            // 获取技能ID列表
+            List<Integer> skillIds = elfSkills.stream()
+                .map(ElfSkill::getSkillId)
+                .collect(Collectors.toList());
+            
+            // 查询技能详情
+            List<Skill> skills = skillMapper.selectBatchIds(skillIds);
+            
+            // 拼接技能名称
+            return skills.stream()
+                .map(Skill::getSkillName)
+                .collect(Collectors.joining("、"));
+        } catch (Exception e) {
+            return "未知";
+        }
+    }
+    
+    /**
+     * 获取怪物技能列表
+     */
+    private String getMonsterSkills(Integer monsterId) {
+        try {
+            // 查询怪物技能关联表
+            List<MonsterSkill> monsterSkills = monsterSkillMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<MonsterSkill>()
+                    .eq("monster_id", monsterId)
+            );
+            
+            if (monsterSkills == null || monsterSkills.isEmpty()) {
+                return "无";
+            }
+            
+            // 获取技能ID列表
+            List<Integer> skillIds = monsterSkills.stream()
+                .map(MonsterSkill::getSkillId)
+                .collect(Collectors.toList());
+            
+            // 查询技能详情
+            List<Skill> skills = skillMapper.selectBatchIds(skillIds);
+            
+            // 拼接技能名称
+            return skills.stream()
+                .map(Skill::getSkillName)
+                .collect(Collectors.joining("、"));
+        } catch (Exception e) {
+            return "未知";
         }
     }
     

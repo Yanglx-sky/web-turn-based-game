@@ -997,37 +997,8 @@ public class TrainServiceImpl implements TrainService {
             trainRecordMapper.updateById(trainRecord);
         }
 
-        // 训练胜利时给精灵添加经验
-        if (trainState.trainWon) {
-            // 给当前训练精灵添加经验
-            Long elfId = trainState.currentPlayerElf.getId();
-            UserElf elf = userElfService.getById(elfId);
-            if (elf != null && elf.getLevel() < 10) {
-                // 增加经验（训练获得的经验较少）
-                int rewardExp = 50; // 训练获得的经验
-                elf.setExp(elf.getExp() + rewardExp);
-                userElfService.updateById(elf);
-                
-                // 循环检查是否可以连续升级
-                while (true) {
-                    // 重新获取精灵信息，确保包含升级后的状态
-                    elf = userElfService.getById(elfId);
-                    if (elf == null || elf.getLevel() >= 10) {
-                        break;
-                    }
-                    
-                    // 检查是否可以升级
-                    if (elf.getExp() >= elf.getExpNeed()) {
-                        userElfService.upgradeElf(elf.getId());
-                    } else {
-                        break;
-                    }
-                }
-                
-                // 添加获得经验的日志
-                trainState.trainLog.add("获得经验: " + rewardExp);
-            }
-        }
+        // 训练模式无奖励，仅提供AI总结反馈
+        // 训练的目的是练习技巧，不提供经验、金币等奖励
 
         // 清理训练状态
         userTrainStates.remove(userId);

@@ -22,17 +22,17 @@ public class AuthLoginInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response, Object handler) throws Exception {
-        // 放行登录、注册、验证码接口
         String path = request.getRequestURI();
-        if (path.contains("/users/login") || path.contains("/users/register") || path.contains("/users/captcha") || 
-            path.contains("/levels") || path.contains("/level/") || 
-            path.contains("/elf/") || path.contains("/user-elf/") || 
-            path.contains("/battle/ai/strategy") || path.contains("/users/me/level-stars") || 
-            path.contains("/friends/") || path.contains("/equip/") || 
-            path.contains("/equips/") || path.contains("/potion/") || 
-            path.contains("/potions/") || path.contains("/shop/") || 
-            path.contains("/train/") || path.contains("/rank/") || 
-            path.contains("/achievement/") || path.contains("/ai/")) {
+
+        if (path.contains("/users/login") || path.contains("/users/register") || path.contains("/users/captcha") ||
+                path.contains("/levels") || path.contains("/level/") ||
+                path.contains("/elf/") || path.contains("/user-elf/") ||
+                path.contains("/battle/ai/strategy") || path.contains("/users/me/level-stars") ||
+                path.contains("/friends/") || path.contains("/equip/") ||
+                path.contains("/equips/") || path.contains("/potion/") ||
+                path.contains("/potions/") || path.contains("/shop/") ||
+                path.contains("/train/") || path.contains("/rank/") ||
+                path.contains("/achievement/") || path.contains("/ai/")) {
             return true;
         }
 
