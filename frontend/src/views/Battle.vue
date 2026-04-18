@@ -2209,9 +2209,24 @@ const useSelectedSkill = async (skill) => {
                     { type: 'exp', label: '经验', value: rewardResponse.data.actualExp || 0 },
                     { type: 'gold', label: '金币', value: rewardResponse.data.actualGold || 0 }
                   ]
+                  
+                  // 检查每日收益上限提示
+                  const limitMessages = []
+                  if (rewardResponse.data.expLimitReached) {
+                    limitMessages.push('今日经验收益已达上限（1500/天），超出部分无法获得')
+                  }
+                  if (rewardResponse.data.goldLimitReached) {
+                    limitMessages.push('今日金币收益已达上限（1500/天），超出部分无法获得')
+                  }
+                  
                   // 如果有升级提示
                   if (rewardResponse.data.levelUp) {
                     alert(`精灵升级到 ${rewardResponse.data.levelUp} 级！`)
+                  }
+                  
+                  // 显示每日上限提示
+                  if (limitMessages.length > 0) {
+                    alert(limitMessages.join('\n'))
                   }
                 } else {
                   console.warn('[DEBUG] 奖励领取失败:', rewardResponse.msg)
@@ -2631,9 +2646,24 @@ const executeMonsterAction = async () => {
                     { type: 'exp', label: '经验', value: rewardResponse.data.actualExp || 0 },
                     { type: 'gold', label: '金币', value: rewardResponse.data.actualGold || 0 }
                   ]
+                  
+                  // 检查每日收益上限提示
+                  const limitMessages = []
+                  if (rewardResponse.data.expLimitReached) {
+                    limitMessages.push('今日经验收益已达上限（1500/天），超出部分无法获得')
+                  }
+                  if (rewardResponse.data.goldLimitReached) {
+                    limitMessages.push('今日金币收益已达上限（1500/天），超出部分无法获得')
+                  }
+                  
                   // 如果有升级提示
                   if (rewardResponse.data.levelUp) {
                     alert(`精灵升级到 ${rewardResponse.data.levelUp} 级！`)
+                  }
+                  
+                  // 显示每日上限提示
+                  if (limitMessages.length > 0) {
+                    alert(limitMessages.join('\n'))
                   }
                 } else {
                   console.warn('[DEBUG] 奖励领取失败:', rewardResponse.msg)
