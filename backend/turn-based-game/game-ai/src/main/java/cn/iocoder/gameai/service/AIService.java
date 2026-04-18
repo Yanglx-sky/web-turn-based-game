@@ -53,6 +53,14 @@ public interface AIService {
     String getBattleSummary(String battleLog, String battleResult);
     
     /**
+     * 获取战斗评分和评星
+     * @param battleLog 战斗日志
+     * @param battleResult 战斗结果：胜利或失败
+     * @return JSON格式的评分和评星，如：{"score": 85, "star": 2}
+     */
+    String getBattleScoreAndStar(String battleLog, String battleResult);
+    
+    /**
      * 获取战斗策略推荐
      * @param elfInfo 精灵信息，格式为"精灵名称,系别,技能1,技能2,..."
      * @param monsterInfo 怪物信息，格式为"怪物名称,系别,技能1,技能2,..."

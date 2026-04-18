@@ -67,6 +67,9 @@ public class BattleServiceImpl implements BattleService {
     @Autowired
     private cn.iocoder.gameai.service.AIService aiService;
     
+    @Autowired
+    private UserLevelStarMapper userLevelStarMapper;
+    
     // ==================== Redis相关 ====================
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -530,6 +533,125 @@ public class BattleServiceImpl implements BattleService {
                             battleSecurityInterceptor, userService);
                     recordBattleVictory(userId, level.getId(), battleRecord.getBattleId());
                     
+                    // 更新通关成就进度
+                    try {
+                        achievementService.updateAchievementProgress(userId, "pass-stage", 1);
+                        log.info("通关成就进度已更新, userId={}, levelId={}", userId, level.getId());
+                    } catch (Exception e) {
+                        log.error("更新通关成就进度失败, userId={}, levelId={}, error={}", userId, level.getId(), e.getMessage());
+                    }
+                    
+                    // AI评分和评星（异步处理，不阻塞战斗流程）
+                    try {
+                        final String battleIdForAi = battleRecord.getBattleId();
+                        final Integer levelIdForAi = level.getId();
+                        final Integer currentRoundForAi = battleRecord.getCurrentRound();
+                        
+                        // 使用异步线程处理AI评分
+                        new Thread(() -> {
+                            try {
+                                // 等待500ms，确保战斗日志已经保存到数据库
+                                Thread.sleep(500);
+                                
+                                // 构建战斗日志文本
+                                List<BattleLog> battleLogs = battleLogMapper.selectByBattleId(battleIdForAi);
+                                log.info("AI评分-查询到战斗日志数量: {}", battleLogs.size());
+                                
+                                StringBuilder battleLogText = new StringBuilder();
+                                battleLogText.append("战斗ID: ").append(battleIdForAi).append("\n");
+                                battleLogText.append("关卡ID: ").append(levelIdForAi).append("\n");
+                                battleLogText.append("总回合数: ").append(currentRoundForAi).append("\n\n");
+                                battleLogText.append("=== 战斗过程 ===\n");
+                                
+                                int currentRound = 0;
+                                for (BattleLog battleLog : battleLogs) {
+                                    if (!battleLog.getRound().equals(currentRound)) {
+                                        currentRound = battleLog.getRound();
+                                        battleLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
+                                    }
+                                    battleLogText.append(battleLog.getLogText()).append("\n");
+                                }
+                                
+                                battleLogText.append("\n=== 战斗结果 ===\n");
+                                battleLogText.append("胜利");
+                                
+                                log.info("AI评分-战斗日志内容:\n{}", battleLogText.toString());
+                                
+                                // 调用AI生成评分和评星
+                                String aiResponse = aiService.getBattleScoreAndStar(battleLogText.toString(), "胜利");
+                                log.info("AI原始响应: {}", aiResponse);
+                                
+                                // 尝试解析AI返回的JSON
+                                int aiScore = 75; // 默认分数
+                                int star = 2; // 默认星级
+                                
+                                try {
+                                    // 简单解析JSON
+                                    String jsonStr = aiResponse.trim();
+                                    if (jsonStr.contains("{") && jsonStr.contains("}")) {
+                                        jsonStr = jsonStr.substring(jsonStr.indexOf("{"), jsonStr.indexOf("}") + 1);
+                                        if (jsonStr.contains("\"score\"")) {
+                                            String scoreStr = jsonStr.split("\"score\"\\s*:\\s*")[1].split("[,}]")[0].trim();
+                                            aiScore = Integer.parseInt(scoreStr);
+                                        }
+                                        if (jsonStr.contains("\"star\"")) {
+                                            String starStr = jsonStr.split("\"star\"\\s*:\\s*")[1].split("[,}]")[0].trim();
+                                            star = Integer.parseInt(starStr);
+                                        }
+                                    }
+                                } catch (Exception parseEx) {
+                                    log.warn("解析AI评分失败，使用默认值: {}", parseEx.getMessage());
+                                    // 根据回合数计算默认评分
+                                    if (currentRoundForAi <= 5) {
+                                        aiScore = 90;
+                                        star = 3;
+                                    } else if (currentRoundForAi <= 10) {
+                                        aiScore = 75;
+                                        star = 2;
+                                    } else {
+                                        aiScore = 60;
+                                        star = 1;
+                                    }
+                                }
+                                
+                                // 保存到user_level_star表
+                                UserLevelStar existingStar = userLevelStarMapper.selectOne(
+                                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserLevelStar>()
+                                        .eq("user_id", userId)
+                                        .eq("level_id", levelIdForAi)
+                                );
+                                
+                                if (existingStar != null) {
+                                    // 更新记录，取最高分
+                                    if (aiScore > existingStar.getMaxScore()) {
+                                        existingStar.setMaxScore(aiScore);
+                                        existingStar.setStar(star);
+                                        existingStar.setIsPassed(1);
+                                        existingStar.setUpdateTime(LocalDateTime.now());
+                                        userLevelStarMapper.updateById(existingStar);
+                                    }
+                                } else {
+                                    // 新增记录
+                                    UserLevelStar newStar = new UserLevelStar();
+                                    newStar.setUserId(userId);
+                                    newStar.setLevelId(levelIdForAi.longValue());
+                                    newStar.setMaxScore(aiScore);
+                                    newStar.setStar(star);
+                                    newStar.setIsPassed(1);
+                                    newStar.setCreateTime(LocalDateTime.now());
+                                    newStar.setUpdateTime(LocalDateTime.now());
+                                    userLevelStarMapper.insert(newStar);
+                                }
+                                
+                                log.info("AI评分完成, userId={}, levelId={}, score={}, star={}", userId, levelIdForAi, aiScore, star);
+                            } catch (Exception ex) {
+                                log.error("AI评分失败, userId={}, levelId={}, error={}", userId, levelIdForAi, ex.getMessage());
+                            }
+                        }).start();
+                    } catch (Exception e) {
+                        log.error("启动AI评分线程失败, userId={}, levelId={}, error={}", userId, level.getId(), e.getMessage());
+                    }
+                    
                     int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
                     int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;
                     String victoryLog = BattleUtils.generateVictoryLog(expReward, goldReward, expReward, goldReward);
@@ -572,6 +694,124 @@ public class BattleServiceImpl implements BattleService {
                         BattleUtils.handleVictory(battleRecord, userId, level, userElf, userElfMapper,
                                 battleSecurityInterceptor, userService);
                         recordBattleVictory(userId, level.getId(), battleRecord.getBattleId());
+                        
+                        // 更新通关成就进度
+                        try {
+                            achievementService.updateAchievementProgress(userId, "pass-stage", 1);
+                            log.info("通关成就进度已更新, userId={}, levelId={}", userId, level.getId());
+                        } catch (Exception e) {
+                            log.error("更新通关成就进度失败, userId={}, levelId={}, error={}", userId, level.getId(), e.getMessage());
+                        }
+                        
+                        // AI评分和评星（异步处理，不阻塞战斗流程）
+                        try {
+                            final String battleIdForAi = battleRecord.getBattleId();
+                            final Integer levelIdForAi = level.getId();
+                            final Integer currentRoundForAi = battleRecord.getCurrentRound();
+                            
+                            // 使用异步线程处理AI评分
+                            new Thread(() -> {
+                                try {
+                                    // 等待500ms，确保战斗日志已经保存到数据库
+                                    Thread.sleep(500);
+                                    
+                                    // 构建战斗日志文本
+                                    List<BattleLog> battleLogs = battleLogMapper.selectByBattleId(battleIdForAi);
+                                    log.info("AI评分-查询到战斗日志数量: {}", battleLogs.size());
+                                    
+                                    StringBuilder battleLogText = new StringBuilder();
+                                    battleLogText.append("战斗ID: ").append(battleIdForAi).append("\n");
+                                    battleLogText.append("关卡ID: ").append(levelIdForAi).append("\n");
+                                    battleLogText.append("总回合数: ").append(currentRoundForAi).append("\n\n");
+                                    battleLogText.append("=== 战斗过程 ===\n");
+                                    
+                                    int currentRound = 0;
+                                    for (BattleLog battleLog : battleLogs) {
+                                        if (!battleLog.getRound().equals(currentRound)) {
+                                            currentRound = battleLog.getRound();
+                                            battleLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
+                                        }
+                                        battleLogText.append(battleLog.getLogText()).append("\n");
+                                    }
+                                    
+                                    battleLogText.append("\n=== 战斗结果 ===\n");
+                                    battleLogText.append("胜利");
+                                    
+                                    log.info("AI评分-战斗日志内容:\n{}", battleLogText.toString());
+                                    
+                                    // 调用AI生成评分和评星
+                                    String aiResponse = aiService.getBattleScoreAndStar(battleLogText.toString(), "胜利");
+                                    
+                                    // 尝试解析AI返回的JSON
+                                    int aiScore = 75; // 默认分数
+                                    int star = 2; // 默认星级
+                                    
+                                    try {
+                                        // 简单解析JSON
+                                        String jsonStr = aiResponse.trim();
+                                        if (jsonStr.contains("{") && jsonStr.contains("}")) {
+                                            jsonStr = jsonStr.substring(jsonStr.indexOf("{"), jsonStr.indexOf("}") + 1);
+                                            if (jsonStr.contains("\"score\"")) {
+                                                String scoreStr = jsonStr.split("\"score\"\\s*:\\s*")[1].split("[,}]")[0].trim();
+                                                aiScore = Integer.parseInt(scoreStr);
+                                            }
+                                            if (jsonStr.contains("\"star\"")) {
+                                                String starStr = jsonStr.split("\"star\"\\s*:\\s*")[1].split("[,}]")[0].trim();
+                                                star = Integer.parseInt(starStr);
+                                            }
+                                        }
+                                    } catch (Exception parseEx) {
+                                        log.warn("解析AI评分失败，使用默认值: {}", parseEx.getMessage());
+                                        // 根据回合数计算默认评分
+                                        if (currentRoundForAi <= 5) {
+                                            aiScore = 90;
+                                            star = 3;
+                                        } else if (currentRoundForAi <= 10) {
+                                            aiScore = 75;
+                                            star = 2;
+                                        } else {
+                                            aiScore = 60;
+                                            star = 1;
+                                        }
+                                    }
+                                    
+                                    // 保存到user_level_star表
+                                    UserLevelStar existingStar = userLevelStarMapper.selectOne(
+                                        new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserLevelStar>()
+                                            .eq("user_id", userId)
+                                            .eq("level_id", levelIdForAi)
+                                    );
+                                    
+                                    if (existingStar != null) {
+                                        // 更新记录，取最高分
+                                        if (aiScore > existingStar.getMaxScore()) {
+                                            existingStar.setMaxScore(aiScore);
+                                            existingStar.setStar(star);
+                                            existingStar.setIsPassed(1);
+                                            existingStar.setUpdateTime(LocalDateTime.now());
+                                            userLevelStarMapper.updateById(existingStar);
+                                        }
+                                    } else {
+                                        // 新增记录
+                                        UserLevelStar newStar = new UserLevelStar();
+                                        newStar.setUserId(userId);
+                                        newStar.setLevelId(levelIdForAi.longValue());
+                                        newStar.setMaxScore(aiScore);
+                                        newStar.setStar(star);
+                                        newStar.setIsPassed(1);
+                                        newStar.setCreateTime(LocalDateTime.now());
+                                        newStar.setUpdateTime(LocalDateTime.now());
+                                        userLevelStarMapper.insert(newStar);
+                                    }
+                                    
+                                    log.info("AI评分完成, userId={}, levelId={}, score={}, star={}", userId, levelIdForAi, aiScore, star);
+                                } catch (Exception ex) {
+                                    log.error("AI评分失败, userId={}, levelId={}, error={}", userId, levelIdForAi, ex.getMessage());
+                                }
+                            }).start();
+                        } catch (Exception e) {
+                            log.error("启动AI评分线程失败, userId={}, levelId={}, error={}", userId, level.getId(), e.getMessage());
+                        }
                         
                         int expReward = level != null && level.getRewardExp() != null ? level.getRewardExp() : 100;
                         int goldReward = level != null && level.getRewardGold() != null ? level.getRewardGold() : 50;

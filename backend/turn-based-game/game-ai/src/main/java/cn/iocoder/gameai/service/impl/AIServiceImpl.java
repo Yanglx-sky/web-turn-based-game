@@ -328,6 +328,35 @@ public class AIServiceImpl implements AIService {
     }
     
     @Override
+    public String getBattleScoreAndStar(String battleLog, String battleResult) {
+        // 构建提示词，要求返回JSON格式
+        String prompt = "你是一个专业的游戏战斗评分系统。请根据以下战斗日志和战斗结果，客观地给出评分（0-100分）和评星（1-3星）。\n\n" +
+            "战斗结果：" + battleResult + "\n\n" +
+            "战斗日志：\n" + battleLog + "\n\n" +
+            "评分标准：\n" +
+            "- 90-100分：3星，完美通关，回合数少（≤5回合），无损失或极少损失\n" +
+            "- 75-89分：2星，顺利通关，回合数适中（6-10回合），有一定损失\n" +
+            "- 60-74分：1星，勉强通关，回合数较多（11-15回合），损失较大\n" +
+            "- 0-59分：0星，非常艰难，回合数很多（>15回合），损失严重\n\n" +
+            "评分要素：\n" +
+            "1. 回合数：回合越少分数越高\n" +
+            "2. 战斗效率：是否快速击败敌人\n" +
+            "3. 策略运用：是否合理使用技能和属性克制\n\n" +
+            "请严格按照以下JSON格式返回，不要返回其他内容，不要添加任何解释或markdown标记：\n" +
+            "{\"score\": 分数, \"star\": 星级}";
+        
+        // 调用大模型API
+        String aiResponse = callAI(prompt);
+        
+        // 如果API调用失败，返回默认JSON
+        if (aiResponse.equals("AI处理失败，使用默认回复。")) {
+            return "{\"score\": 75, \"star\": 2}";
+        }
+        
+        return aiResponse;
+    }
+    
+    @Override
     public Long createSession(Long userId, String title, String scene) {
         // 创建数据库会话（Redis缓存由SessionServiceImpl处理）
         return sessionService.createSession(userId, title, scene);
