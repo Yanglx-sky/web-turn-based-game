@@ -207,7 +207,10 @@ public class UserController {
             return Result.success(fileUrl);
         } catch (Exception e) {
             e.printStackTrace();
-            return Result.error("上传失败");
+            System.err.println("[头像上传失败] 错误信息: " + e.getMessage());
+            System.err.println("[头像上传失败] 文件名: " + (file != null ? file.getOriginalFilename() : "null"));
+            System.err.println("[头像上传失败] 文件大小: " + (file != null ? file.getSize() : 0));
+            return Result.error("上传失败: " + e.getMessage());
         }
     }
 

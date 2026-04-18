@@ -404,7 +404,7 @@ const handleAvatarUpload = async (event) => {
     formData.append('file', file)
     
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/users/upload-avatar', {
+    const response = await fetch('http://localhost:8080/api/users/me/avatar', {
       method: 'POST',
       headers: {
         'Authorization': token
