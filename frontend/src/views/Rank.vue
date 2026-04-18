@@ -35,7 +35,7 @@
           <div v-else class="rank-list">
             <div
               v-for="(item, index) in rankData"
-              :key="item.id"
+              :key="item.userId"
               class="rank-item"
               :class="[
                 { 'current-user': item.userId === user?.id },
@@ -44,11 +44,11 @@
             >
               <div class="rank-number" :class="getRankPositionClass(index + 1)">{{ index + 1 }}</div>
               <div class="rank-info">
-                <div class="rank-user">{{ item.nickname }}</div>
+                <div class="rank-user">{{ item.nickname || '未知用户' }}</div>
               </div>
               <div class="rank-score-container">
                 <span class="score-label">分数</span>
-                <div class="rank-score">{{ item.score }}</div>
+                <div class="rank-score">{{ item.score || 0 }}</div>
               </div>
             </div>
           </div>
@@ -121,7 +121,7 @@ const loadRankConfigs = async () => {
   try {
     const response = await rankApi.getConfigs()
     if (response && response.code === 200 && response.data) {
-      rankConfigs.value = response.data.filter(config => !config.rankName.includes('通关'))
+      rankConfigs.value = response.data
       if (rankConfigs.value.length > 0 && !activeRankType.value) {
         activeRankType.value = rankConfigs.value[0].rankType
         await loadRankData(activeRankType.value)
@@ -130,18 +130,6 @@ const loadRankConfigs = async () => {
     }
   } catch (error) {
     console.error('加载排行榜配置失败:', error)
-  }
-}
-
-// 加载用户信息
-const loadUserInfo = async (userId) => {
-  try {
-    // 注意：这里可能需要修改，因为userApi.getUserInfo()现在不接受userId参数
-    // 暂时返回默认值，实际项目中可能需要调整API设计
-    return '用户'
-  } catch (error) {
-    console.error('加载用户信息失败:', error)
-    return '未知用户'
   }
 }
 
