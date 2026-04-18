@@ -59,110 +59,118 @@ public class AIServiceImpl implements AIService {
     }
 
     @Override
-    public String getBattleStrategy(String elfInfo, String monsterInfo) {
-        return "战斗策略: 攻击怪物弱点";
-    }
-
-    @Override
-    public Integer getAIAction(int playerHp, int playerMaxHp, int enemyHp, int enemyMaxHp, String skills) {
-        try {
-            // 解析技能列表
-            String[] skillArray = skills.split(";\n");
-            if (skillArray.length == 0) {
-                return 0;
-            }
-
-            // 敌人血量低于30%时，优先使用回血技能
-            double enemyHpPercentage = (double) enemyHp / enemyMaxHp;
-            if (enemyHpPercentage < 0.3) {
-                for (int i = 0; i < skillArray.length; i++) {
-                    String skill = skillArray[i];
-                    String[] skillParts = skill.split(",");
-                    if (skillParts.length >= 3 && "回血".equals(skillParts[2])) {
-                        return i;
-                    }
-                }
-            }
-
-            // 玩家血量较低时，优先选择高伤害攻击技能
-            double playerHpPercentage = (double) playerHp / playerMaxHp;
-            if (playerHpPercentage < 0.5) {
-                int bestSkillIndex = 0;
-                int maxDamage = 0;
-                for (int i = 0; i < skillArray.length; i++) {
-                    String skill = skillArray[i];
-                    String[] skillParts = skill.split(",");
-                    if (skillParts.length >= 3 && "攻击".equals(skillParts[2])) {
-                        try {
-                            int damage = Integer.parseInt(skillParts[1]);
-                            if (damage > maxDamage) {
-                                maxDamage = damage;
-                                bestSkillIndex = i;
-                            }
-                        } catch (NumberFormatException e) {
-                            // 忽略格式错误的技能
-                        }
-                    }
-                }
-                return bestSkillIndex;
-            }
-
-            // 无特殊局势时，随机使用普通攻击或技能
-            int randomIndex = random.nextInt(skillArray.length);
-            return randomIndex;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return 0;
-        }
-    }
-
-    @Override
     public String getMonsterTaunt(String monsterName, int playerHp, int playerMaxHp, int monsterHp, int monsterMaxHp, String actionType) {
-        // 计算血量百分比
-        double playerHpPercentage = (double) playerHp / playerMaxHp;
-        double monsterHpPercentage = (double) monsterHp / monsterMaxHp;
-        
-        // 攻击时的嘲讽
-        if ("attack".equals(actionType)) {
-            String[] attackTaunts = {
-                monsterName + " 狞笑着说：你的精灵不堪一击！",
-                monsterName + " 嘲讽道：就这点能耐？",
-                monsterName + " 冷笑道：这就是你的全部实力吗？",
-                monsterName + " 大笑：太弱了，太弱了！",
-                monsterName + " 不屑地说：浪费我的时间！"
-            };
-            return attackTaunts[random.nextInt(attackTaunts.length)];
+        try {
+            // 计算血量百分比
+            double playerHpPercent = (double) playerHp / playerMaxHp;
+            double monsterHpPercent = (double) monsterHp / monsterMaxHp;
+            
+            // 构建AI提示词
+            String prompt = String.format(
+                "你是一个游戏中的怪物角色，名叫'%s'。\n" +
+                "\n当前战斗状态：\n" +
+                "- 玩家血量：%d/%d (%.0f%%)\n" +
+                "- 你的血量：%d/%d (%.0f%%)\n" +
+                "\n动作类型：%s\n" +
+                "\n请生成一句符合以下要求的嘲讽/台词：\n" +
+                "1. 必须以'%s '开头（注意有空格）\n" +
+                "2. 如果你的血量较低（<30%%），表现出愤怒、恐惧或垂死挣扎，使用'怒吼'、'垂死挣扎'、'惊慌'等词\n" +
+                "3. 如果玩家血量较低（<30%%），表现出得意、嘲讽或轻蔑，使用'狞笑着说'、'嘲讽道'、'大笑'等词\n" +
+                "4. 如果是你攻击玩家，说出攻击性的台词，使用'冷笑道'、'不屑地说'、'嘲讽道'等词\n" +
+                "5. 如果是你被玩家攻击，说出反击或受伤的台词，使用'怒道'、'咬牙切齿'、'冷声道'等词\n" +
+                "6. 语言风格要符合游戏氛围，生动有趣\n" +
+                "7. 长度控制在20-40字\n" +
+                "8. 直接返回台词内容，不要添加任何解释或前缀\n" +
+                "\n示例格式：\n" +
+                "%s 冷笑道：这就是你的全部实力吗？\n" +
+                "%s 怒吼：不可能！我怎么会输？\n" +
+                "\n请生成台词：",
+                monsterName,
+                playerHp, playerMaxHp, playerHpPercent * 100,
+                monsterHp, monsterMaxHp, monsterHpPercent * 100,
+                "attack".equals(actionType) ? "你正在攻击玩家" : "你被玩家攻击",
+                monsterName,
+                monsterName,
+                monsterName
+            );
+            
+            // 调用AI
+            String aiResponse = callAI(prompt);
+            
+            // 如果AI调用失败，使用默认台词
+            if (aiResponse.contains("AI处理失败")) {
+                return generateDefaultTaunt(monsterName, playerHpPercent, monsterHpPercent, actionType);
+            }
+            
+            // 清理AI返回内容，确保格式正确
+            return aiResponse.trim();
+            
+        } catch (Exception e) {
+            log.error("生成怪物嘲讽失败", e);
+            return generateDefaultTaunt(monsterName, 
+                (double) playerHp / playerMaxHp, 
+                (double) monsterHp / monsterMaxHp, 
+                actionType);
         }
-        // 被攻击时的嘲讽
-        else if ("attacked".equals(actionType)) {
-            if (monsterHpPercentage > 0.7) {
-                String[] highHpTaunts = {
-                    monsterName + " 轻蔑地说：挠痒痒吗？",
-                    monsterName + " 大笑：这点伤害对我来说不算什么！",
-                    monsterName + " 嘲讽道：就这点攻击力？",
-                    monsterName + " 不屑地说：继续努力吧，蝼蚁！"
+    }
+    
+    /**
+     * 生成默认嘲讽（AI失败时的备选方案）
+     */
+    private String generateDefaultTaunt(String monsterName, double playerHpPercent, double monsterHpPercent, String actionType) {
+        Random random = new Random();
+        
+        if ("attack".equals(actionType)) {
+            // 怪物攻击玩家
+            if (playerHpPercent < 0.3) {
+                String[] taunts = {
+                    monsterName + " 狞笑着说：你的精灵不堪一击！",
+                    monsterName + " 嘲讽道：就这点能耐？马上就能结束战斗了！",
+                    monsterName + " 大笑：太弱了，马上就能击败你了！"
                 };
-                return highHpTaunts[random.nextInt(highHpTaunts.length)];
-            } else if (monsterHpPercentage > 0.3) {
-                String[] midHpTaunts = {
+                return taunts[random.nextInt(taunts.length)];
+            } else if (monsterHpPercent < 0.3) {
+                String[] taunts = {
+                    monsterName + " 怒吼：就算我受伤了，也能击败你！",
+                    monsterName + " 咬牙切齿：我要把你的精灵打败！",
+                    monsterName + " 狞笑：垂死挣扎也要拉你一起！"
+                };
+                return taunts[random.nextInt(taunts.length)];
+            } else {
+                String[] taunts = {
+                    monsterName + " 冷笑道：这就是你的全部实力吗？",
+                    monsterName + " 不屑地说：浪费我的时间！",
+                    monsterName + " 嘲讽道：你的精灵还不够强！"
+                };
+                return taunts[random.nextInt(taunts.length)];
+            }
+        } else {
+            // 怪物被玩家攻击
+            if (monsterHpPercent < 0.3) {
+                String[] taunts = {
+                    monsterName + " 怒吼：不可能！我怎么会输？",
+                    monsterName + " 垂死挣扎：我还能战斗！",
+                    monsterName + " 惊慌：不，这不可能！"
+                };
+                return taunts[random.nextInt(taunts.length)];
+            } else if (monsterHpPercent > 0.7) {
+                String[] taunts = {
+                    monsterName + " 轻蔑地说：这点伤害对我来说不算什么！",
+                    monsterName + " 大笑：挠痒痒吗？继续努力吧！",
+                    monsterName + " 不屑地说：就这点攻击力？"
+                };
+                return taunts[random.nextInt(taunts.length)];
+            } else {
+                String[] taunts = {
                     monsterName + " 怒道：有点意思！",
                     monsterName + " 咬牙切齿：你会为此付出代价的！",
-                    monsterName + " 狞笑着说：看来我要认真了！",
                     monsterName + " 冷声道：不错的攻击，但还不够！"
                 };
-                return midHpTaunts[random.nextInt(midHpTaunts.length)];
-            } else {
-                String[] lowHpTaunts = {
-                    monsterName + " 怒吼：不可能！我怎么会输？",
-                    monsterName + " 惊慌失措：不，这不可能！",
-                    monsterName + " 垂死挣扎：我还能战斗！",
-                    monsterName + " 哀求：放过我吧！"
-                };
-                return lowHpTaunts[random.nextInt(lowHpTaunts.length)];
+                return taunts[random.nextInt(taunts.length)];
             }
         }
-        return monsterName + " 发出了一声怪叫！";
     }
+
 
     @Override
     public String getStrategyRecommendation(String elfInfo, String monsterInfo) {

@@ -720,17 +720,23 @@ const extractEnemyDialog = (battleLog) => {
     return
   }
   
-  // 清空之前的对话
-  enemyDialog.value = ''
-  
-  // 遍历战斗日志，查找敌人的对话
+  // 遍历战斗日志，查找最新的敌人对话
   for (let i = battleLog.length - 1; i >= 0; i--) {
     const log = battleLog[i]
     // 检查日志是否包含敌人的名称
     if (isEnemyDialog(log)) {
-      // 提取敌人的对话
-      enemyDialog.value = log
-      // 不再从战斗日志中移除这条对话，避免影响攻击动画的触发
+      // 只有当是新的嘲讽时才更新（避免重复显示同一条）
+      if (enemyDialog.value !== log) {
+        enemyDialog.value = log
+        console.log('[DEBUG] 显示怪物嘲讽:', log)
+        
+        // 5秒后自动隐藏嘲讽
+        setTimeout(() => {
+          if (enemyDialog.value === log) {
+            enemyDialog.value = ''
+          }
+        }, 5000)
+      }
       break
     }
   }

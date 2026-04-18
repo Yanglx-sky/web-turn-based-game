@@ -14,26 +14,7 @@ public interface AIService {
     String getAIAnalysis(String content);
 
     /**
-     * 获取战斗策略
-     * @param elfInfo 精灵信息
-     * @param monsterInfo 怪物信息
-     * @return 战斗策略
-     */
-    String getBattleStrategy(String elfInfo, String monsterInfo);
-    
-    /**
-     * 获取AI行动决策
-     * @param playerHp 玩家当前血量
-     * @param playerMaxHp 玩家最大血量
-     * @param enemyHp 敌人当前血量
-     * @param enemyMaxHp 敌人最大血量
-     * @param skills 敌人可用技能列表，格式为"技能名称,伤害/回血值,类型"，多个技能用分号分隔
-     * @return 技能序号（从0开始）
-     */
-    Integer getAIAction(int playerHp, int playerMaxHp, int enemyHp, int enemyMaxHp, String skills);
-    
-    /**
-     * 获取怪物嘲讽语言
+     * 获取怪物嘲讽语言（基于AI动态生成）
      * @param monsterName 怪物名称
      * @param playerHp 玩家当前血量
      * @param playerMaxHp 玩家最大血量
@@ -43,6 +24,7 @@ public interface AIService {
      * @return 嘲讽语言
      */
     String getMonsterTaunt(String monsterName, int playerHp, int playerMaxHp, int monsterHp, int monsterMaxHp, String actionType);
+
     
     /**
      * 获取战斗总结

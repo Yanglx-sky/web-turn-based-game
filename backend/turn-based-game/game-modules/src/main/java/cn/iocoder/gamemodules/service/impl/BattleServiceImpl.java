@@ -1092,6 +1092,23 @@ public class BattleServiceImpl implements BattleService {
         logs.add(String.format("敌人HP: %d/%d → %d/%d", 
                 originalMonsterHp, monster.getHp(), monsterRecord.getCurrentHp(), monster.getHp()));
         
+        // 概率触发AI嘲讽（70%概率）
+        if (Math.random() < 0.7) {
+            try {
+                String taunt = aiService.getMonsterTaunt(
+                    monster.getMonsterName(),
+                    userElfRecord.getCurrentHp(), userElf.getMaxHp(),
+                    monsterRecord.getCurrentHp(), monster.getHp(),
+                    "attacked"
+                );
+                if (taunt != null && !taunt.isEmpty()) {
+                    logs.add(taunt);
+                }
+            } catch (Exception e) {
+                log.warn("AI嘲讽生成失败", e);
+            }
+        }
+        
         return monsterRecord.getCurrentHp() <= 0;
     }
     
@@ -1109,6 +1126,23 @@ public class BattleServiceImpl implements BattleService {
         String attackType = (String) enemyResult.get("attackType");
         String enemyAttackLog = BattleUtils.generateEnemyAttackLogWithDetail(monster.getMonsterName(), attackType, enemyDamage);
         logs.add(enemyAttackLog);
+        
+        // 概率触发AI嘲讽（70%概率）
+        if (Math.random() < 0.7) {
+            try {
+                String taunt = aiService.getMonsterTaunt(
+                    monster.getMonsterName(),
+                    userElfRecord.getCurrentHp(), userElf.getMaxHp(),
+                    monsterRecord.getCurrentHp(), monster.getHp(),
+                    "attack"
+                );
+                if (taunt != null && !taunt.isEmpty()) {
+                    logs.add(taunt);
+                }
+            } catch (Exception e) {
+                log.warn("AI嘲讽生成失败", e);
+            }
+        }
         
         // 检查玩家是否死亡
         if (userElfRecord.getCurrentHp() > 0) {

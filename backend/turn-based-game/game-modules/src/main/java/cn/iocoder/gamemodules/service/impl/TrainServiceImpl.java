@@ -407,6 +407,25 @@ public class TrainServiceImpl implements TrainService {
             
             trainState.trainLog.add(attackLog);
             trainState.battleLogManager.addLog(attackLog);
+            
+            // 概率触发AI嘲讽（70%概率，训练人偶受到攻击）
+            if (Math.random() < 0.7) {
+                try {
+                    String mannequinName = getMannequinTypeName(trainState.currentMannequin.getType());
+                    String taunt = aiService.getMonsterTaunt(
+                        mannequinName,
+                        trainState.playerElfHp, trainState.currentPlayerElf.getMaxHp(),
+                        trainState.mannequinHp, trainState.currentMannequin.getHp(),
+                        "attacked"
+                    );
+                    if (taunt != null && !taunt.isEmpty()) {
+                        trainState.trainLog.add(taunt);
+                        trainState.battleLogManager.addLog(taunt);
+                    }
+                } catch (Exception e) {
+                    System.err.println("[WARN] AI嘲讽生成失败: " + e.getMessage());
+                }
+            }
 
             // 检查训练人偶是否被击败
             if (trainState.mannequinHp <= 0) {
@@ -1119,6 +1138,24 @@ public class TrainServiceImpl implements TrainService {
         
         trainState.trainLog.add(actionLog);
         trainState.battleLogManager.addLog(actionLog);
+        
+        // 概率触发AI嘲讽（70%概率）
+        if (Math.random() < 0.7) {
+            try {
+                String taunt = aiService.getMonsterTaunt(
+                    mannequinName,
+                    trainState.playerElfHp, trainState.currentPlayerElf.getMaxHp(),
+                    trainState.mannequinHp, trainState.currentMannequin.getHp(),
+                    "attack"
+                );
+                if (taunt != null && !taunt.isEmpty()) {
+                    trainState.trainLog.add(taunt);
+                    trainState.battleLogManager.addLog(taunt);
+                }
+            } catch (Exception e) {
+                System.err.println("[WARN] AI嘲讽生成失败: " + e.getMessage());
+            }
+        }
     }
 
     /**
