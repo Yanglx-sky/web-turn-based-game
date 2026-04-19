@@ -102,15 +102,47 @@ public class UserElfController {
     @PostMapping("/{elfId}/upgrade")
     @Operation(summary = "精灵升级", description = "精灵升级")
     public Result<UserElf> upgradeElf(
+            HttpServletRequest request,
             @Parameter(name = "elfId", description = "精灵ID", required = true) @PathVariable Long elfId) {
-        return userElfService.upgradeElf(elfId);
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 去除Bearer前缀
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return userElfService.upgradeElf(elfId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
+        }
     }
 
     @GetMapping("/{elfId}")
     @Operation(summary = "查看精灵详情", description = "查看精灵的详细信息，包括等级、经验、属性和可解锁技能")
     public Result<Map<String, Object>> getElfDetail(
+            HttpServletRequest request,
             @Parameter(name = "elfId", description = "精灵ID", required = true) @PathVariable Long elfId) {
-        return userElfService.getElfDetail(elfId);
+        try {
+            // 从请求头中获取token
+            String token = request.getHeader("Authorization");
+            if (token == null || token.isEmpty()) {
+                return Result.error("未登录，无权限访问");
+            }
+            // 去除Bearer前缀
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            // 从token中获取userId
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return userElfService.getElfDetail(elfId);
+        } catch (Exception e) {
+            return Result.error("获取用户信息失败");
+        }
     }
 
     @PostMapping

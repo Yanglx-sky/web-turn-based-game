@@ -10,6 +10,41 @@
       </div>
       
       <div class="ai-workspace">
+        <!-- 左侧会话列表 -->
+        <div class="session-list-section">
+          <div class="session-header">
+            <h3>会话列表</h3>
+            <button class="new-session-btn" @click="createNewSession" title="新建会话">
+              ＋
+            </button>
+          </div>
+          <div class="session-list">
+            <div v-if="sessions.length === 0" class="empty-sessions">
+              暂无会话
+            </div>
+            <div 
+              v-for="session in sessions" 
+              :key="session.id"
+              class="session-item"
+              :class="{ active: sessionId === session.id.toString() }"
+              @click="switchSession(session.id)"
+            >
+              <div class="session-info">
+                <div class="session-title">{{ session.title || '新对话' }}</div>
+                <div class="session-time">{{ formatTime(session.createTime) }}</div>
+              </div>
+              <button 
+                class="delete-session-btn" 
+                @click.stop="deleteSession(session.id, session.title)"
+                title="删除会话"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 中间聊天区域 -->
         <div class="chat-section">
           <div class="chat-container">
             <div class="chat-messages">
@@ -47,6 +82,7 @@
           </div>
         </div>
         
+        <!-- 右侧信息面板 -->
         <div class="sidebar-section">
           <div class="ai-info">
             <div class="info-item">每日额度<span>{{ aiCallLimit }}次</span></div>
@@ -74,6 +110,7 @@ const router = useRouter()
 // 状态管理
 const activeTab = ref('ai')
 const sessionId = ref('')
+const sessions = ref([])  // 会话列表
 const chatMessages = ref([])
 const userInput = ref('')
 const isStreaming = ref(false)
@@ -163,6 +200,9 @@ const initSession = async () => {
     sessionId.value = sessionIdLong.toString()
     console.log('会话初始化成功，sessionId:', sessionId.value)
     
+    // 加载会话列表
+    await loadSessions()
+    
     // 添加欢迎消息
     chatMessages.value = [{
       role: 'ai',
@@ -191,6 +231,170 @@ const initSession = async () => {
     } else {
       alert('❌ 初始化失败\n\n' + errorMsg + '\n\n请刷新页面重试')
     }
+  }
+}
+
+// 加载会话列表
+const loadSessions = async () => {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (!userStr) return
+    
+    const userData = JSON.parse(userStr)
+    const token = userData.token || localStorage.getItem('token')
+    
+    if (!token) return
+    
+    const response = await fetch('/api/ai/session/list', {
+      headers: {
+        'Authorization': token
+      }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200) {
+        sessions.value = result.data || []
+        console.log('加载会话列表成功:', sessions.value.length, '个会话')
+      }
+    }
+  } catch (error) {
+    console.error('加载会话列表失败:', error)
+  }
+}
+
+// 创建新会话
+const createNewSession = async () => {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (!userStr) {
+      router.push('/auth')
+      return
+    }
+    
+    const userData = JSON.parse(userStr)
+    const token = userData.token || localStorage.getItem('token')
+    
+    if (!token) {
+      router.push('/auth')
+      return
+    }
+    
+    const response = await fetch('/api/ai/session/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': token
+      },
+      body: `title=新对话&scene=common`
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200) {
+        const newSessionId = result.data.toString()
+        console.log('创建新会话成功:', newSessionId)
+        
+        // 切换到新会话
+        sessionId.value = newSessionId
+        chatMessages.value = [{
+          role: 'ai',
+          content: '你好！我是你的精灵训练AI助手，有什么可以帮助你的吗？',
+          time: new Date().toLocaleTimeString()
+        }]
+        
+        // 重新加载会话列表
+        await loadSessions()
+      }
+    }
+  } catch (error) {
+    console.error('创建新会话失败:', error)
+    alert('创建会话失败，请重试')
+  }
+}
+
+// 切换会话
+const switchSession = async (targetSessionId) => {
+  sessionId.value = targetSessionId.toString()
+  chatMessages.value = []  // 清空当前消息
+  userInput.value = ''
+  
+  // TODO: 可以添加加载历史消息的功能
+  console.log('切换到会话:', sessionId.value)
+}
+
+// 删除会话
+const deleteSession = async (targetSessionId, title) => {
+  if (!confirm(`确定要删除会话“${title || '新对话'}”吗？`)) {
+    return
+  }
+  
+  try {
+    const userStr = localStorage.getItem('user')
+    if (!userStr) return
+    
+    const userData = JSON.parse(userStr)
+    const token = userData.token || localStorage.getItem('token')
+    
+    if (!token) return
+    
+    const response = await fetch('/api/ai/session/close', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': token
+      },
+      body: `sessionId=${targetSessionId}`
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200 && result.data) {
+        console.log('删除会话成功:', targetSessionId)
+        
+        // 如果删除的是当前会话，清空聊天
+        if (sessionId.value === targetSessionId.toString()) {
+          sessionId.value = ''
+          chatMessages.value = []
+          // 如果有其他会话，切换到第一个
+          if (sessions.value.length > 1) {
+            const otherSession = sessions.value.find(s => s.id !== targetSessionId)
+            if (otherSession) {
+              switchSession(otherSession.id)
+            }
+          }
+        }
+        
+        // 重新加载会话列表
+        await loadSessions()
+        
+        alert('删除成功')
+      }
+    }
+  } catch (error) {
+    console.error('删除会话失败:', error)
+    alert('删除失败，请重试')
+  }
+}
+
+// 格式化时间
+const formatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  const now = new Date()
+  const diff = now - date
+  
+  // 今天
+  if (diff < 24 * 60 * 60 * 1000) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
+  // 昨天
+  else if (diff < 48 * 60 * 60 * 1000) {
+    return '昨天'
+  }
+  // 更早
+  else {
+    return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
   }
 }
 
@@ -503,6 +707,148 @@ onUnmounted(() => {
   margin-top: 10px;
 }
 
+/* 会话列表面板 */
+.session-list-section {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-height: 65vh;
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(180deg, rgba(24, 15, 6, 0.85), rgba(16, 9, 3, 0.85));
+  border-radius: 16px;
+  border: 1px solid rgba(255, 169, 79, 0.2);
+  border-top: 3px solid rgba(255, 152, 0, 0.5);
+}
+
+.session-header h3 {
+  margin: 0;
+  color: #fff4df;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.new-session-btn {
+  background: rgba(255, 156, 58, 0.2);
+  color: #ffc107;
+  border: 1px solid rgba(255, 156, 58, 0.4);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.new-session-btn:hover {
+  background: rgba(255, 156, 58, 0.3);
+  border-color: rgba(255, 156, 58, 0.8);
+  transform: scale(1.1);
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: calc(65vh - 80px);
+  padding: 8px;
+}
+
+.session-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 156, 58, 0.3);
+  border-radius: 3px;
+}
+
+.empty-sessions {
+  text-align: center;
+  color: rgba(247, 239, 224, 0.5);
+  padding: 40px 20px;
+  font-size: 0.9rem;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(24, 15, 6, 0.6);
+  border: 1px solid rgba(255, 169, 79, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.session-item:hover {
+  background: rgba(255, 156, 58, 0.1);
+  border-color: rgba(255, 156, 58, 0.4);
+  transform: translateX(4px);
+}
+
+.session-item.active {
+  background: rgba(255, 156, 58, 0.2);
+  border-color: rgba(255, 156, 58, 0.6);
+  box-shadow: 0 0 12px rgba(255, 156, 58, 0.2);
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-title {
+  color: #fff4df;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.session-time {
+  color: rgba(247, 239, 224, 0.5);
+  font-size: 0.75rem;
+}
+
+.delete-session-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  line-height: 1;
+  opacity: 0;
+}
+
+.session-item:hover .delete-session-btn {
+  opacity: 1;
+}
+
+.delete-session-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  transform: scale(1.1);
+}
+
 .chat-section {
   flex: 1;
   min-width: 0;
@@ -762,6 +1108,15 @@ onUnmounted(() => {
   .ai-workspace {
     flex-direction: column;
     gap: 15px;
+  }
+  
+  .session-list-section {
+    width: 100%;
+    max-height: 200px;
+  }
+  
+  .session-list {
+    max-height: calc(200px - 80px);
   }
   
   .sidebar-section {

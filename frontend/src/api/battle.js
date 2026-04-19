@@ -1,16 +1,6 @@
 import api from './axios'
 
 export const battleApi = {
-  // 开始战斗
-  startBattle: (userElfId, levelId) => {
-    return api.post('/api/battle', {}, {
-      params: {
-        userElfId,
-        levelId
-      }
-    })
-  },
-  
   // 获取当前战斗状态
   getCurrentBattle: () => {
     return api.get('/api/battle')

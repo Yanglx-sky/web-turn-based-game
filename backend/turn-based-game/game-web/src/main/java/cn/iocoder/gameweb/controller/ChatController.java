@@ -57,44 +57,6 @@ public class ChatController {
     }
 
     /**
-     * 发送频道消息
-     */
-    @PostMapping("/channels/{channelId}/messages")
-    @Operation(summary = "发送频道消息", description = "在指定频道发送消息")
-    public Result<ChatContent> sendChannelMessage(
-            HttpServletRequest request,
-            @PathVariable Long channelId,
-            @Parameter(name = "content", description = "消息内容", required = true) @RequestParam String content,
-            @Parameter(name = "msgUuid", description = "消息唯一标识（防重）") @RequestParam(required = false) String msgUuid) {
-        
-        Long userId = getUserIdFromRequest(request);
-        if (userId == null) {
-            return Result.error("未登录，无权限访问");
-        }
-
-        return chatService.sendChannelMessage(userId, channelId, content, msgUuid);
-    }
-
-    /**
-     * 发送私聊消息
-     */
-    @PostMapping("/private/{receiverId}/messages")
-    @Operation(summary = "发送私聊消息", description = "向好友发送私聊消息")
-    public Result<ChatContent> sendPrivateMessage(
-            HttpServletRequest request,
-            @PathVariable Long receiverId,
-            @Parameter(name = "content", description = "消息内容", required = true) @RequestParam String content,
-            @Parameter(name = "msgUuid", description = "消息唯一标识（防重）") @RequestParam(required = false) String msgUuid) {
-        
-        Long userId = getUserIdFromRequest(request);
-        if (userId == null) {
-            return Result.error("未登录，无权限访问");
-        }
-
-        return chatService.sendPrivateMessage(userId, receiverId, content, msgUuid);
-    }
-
-    /**
      * 获取频道历史消息（ID游标分页）
      */
     @GetMapping("/channels/{channelId}/messages")

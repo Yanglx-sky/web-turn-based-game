@@ -10,28 +10,6 @@ export const chatApi = {
   getChannelList: () => api.get('/api/chat/channels'),
 
   /**
-   * 发送频道消息
-   * @param {number} channelId - 频道ID
-   * @param {string} content - 消息内容
-   * @param {string} msgUuid - 消息唯一标识（防重）
-   */
-  sendChannelMessage: (channelId, content, msgUuid) => 
-    api.post('/api/chat/channel/send', null, {
-      params: { channelId, content, msgUuid }
-    }),
-
-  /**
-   * 发送私聊消息
-   * @param {number} receiverId - 接收者ID
-   * @param {string} content - 消息内容
-   * @param {string} msgUuid - 消息唯一标识（防重）
-   */
-  sendPrivateMessage: (receiverId, content, msgUuid) => 
-    api.post('/api/chat/private/send', null, {
-      params: { receiverId, content, msgUuid }
-    }),
-
-  /**
    * 获取频道历史消息（ID游标分页）
    * @param {number} channelId - 频道ID
    * @param {number} lastId - 上一页最后一条消息ID（首次加载不传）

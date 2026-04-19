@@ -60,34 +60,6 @@ public class BattleController {
     @Autowired
     private MonsterSkillMapper monsterSkillMapper;
 
-    /**
-     * 开始战斗
-     * 自动使用玩家配置的出战精灵列表（按fight_order排序）
-     */
-    @PostMapping
-    @Operation(summary = "开始战斗", description = "开始一场新的战斗，自动使用玩家配置的出战精灵列表")
-    public Result<?> startBattle(
-            HttpServletRequest request,
-            @Parameter(description = "关卡ID", required = true) @RequestParam Integer levelId) {
-        try {
-            // 从token中获取userId
-            String token = request.getHeader("Authorization");
-            if (token == null || token.isEmpty()) {
-                return Result.error("未登录，无权限访问");
-            }
-            // 去除Bearer前缀
-            if (token.startsWith("Bearer ")) {
-                token = token.substring(7);
-            }
-            Long userId = jwtUtil.getUserIdFromToken(token);
-
-            // 开始战斗
-            return battleService.startBattle(userId, levelId);
-        } catch (Exception e) {
-            return Result.error("获取用户信息失败");
-        }
-    }
-
 /**
      * 获取当前战斗状态
      */

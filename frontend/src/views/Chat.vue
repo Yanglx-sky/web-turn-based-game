@@ -91,6 +91,14 @@
                 @click="switchFriend(friend)"
               >
                 <span class="friend-name">{{ friend.nickname || friend.remark || `用户${friend.friendId}` }}</span>
+                <!-- 删除好友按钮 -->
+                <button 
+                  @click.stop="handleDeleteFriend(friend.friendId, friend.nickname || friend.remark || `用户${friend.friendId}`)" 
+                  class="delete-friend-btn"
+                  title="删除好友"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           </div>
@@ -357,6 +365,33 @@ const rejectRequest = async (friendId) => {
   } catch (error) {
     console.error('拒绝好友申请失败:', error)
     alert('拒绝失败，请重试')
+  }
+}
+
+// 删除好友
+const handleDeleteFriend = async (friendId, friendName) => {
+  // 确认删除
+  if (!confirm(`确定要删除好友“${friendName}”吗？`)) {
+    return
+  }
+  
+  try {
+    const response = await friendApi.deleteFriend(friendId)
+    if (response.code === 200) {
+      alert('删除好友成功')
+      // 如果当前正在和该好友聊天，清空聊天区域
+      if (currentFriend.value?.friendId === friendId) {
+        currentFriend.value = null
+        messages.value = []
+      }
+      // 重新加载好友列表
+      await loadFriends()
+    } else {
+      alert(response.msg || '删除失败')
+    }
+  } catch (error) {
+    console.error('删除好友失败:', error)
+    alert('删除失败，请重试')
   }
 }
 
@@ -961,6 +996,25 @@ const generateUUID = () => {
   border-left: 4px solid #ff9c3a;
   color: #fff4df;
   font-weight: bold;
+}
+
+/* 删除好友按钮样式 */
+.delete-friend-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  line-height: 1;
+}
+
+.delete-friend-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  transform: scale(1.1);
 }
 
 .unread-badge {
