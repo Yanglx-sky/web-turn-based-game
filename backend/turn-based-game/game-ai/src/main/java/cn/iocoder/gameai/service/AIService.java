@@ -108,6 +108,15 @@ public interface AIService {
     void streamAIAnalysis(String sessionId, String content, HttpServletResponse response, Long userId);
     
     /**
+     * 真正的SSE流式聊天（边生成边推送）
+     * @param sessionId 会话ID
+     * @param content 用户输入内容
+     * @param response HttpServletResponse
+     * @param userId 用户ID
+     */
+    void streamChat(String sessionId, String content, HttpServletResponse response, Long userId);
+    
+    /**
      * 检查用户AI调用次数
      * @param userId 用户ID
      * @return 是否可以调用

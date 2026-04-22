@@ -172,7 +172,7 @@ public class AIController {
     }
     
     /**
-     * SSE流式输出
+     * SSE流式输出（伪流式：等待完整响应后播放）
      */
     @GetMapping("/stream/analysis")
     public void streamAIAnalysis(HttpServletRequest request,
@@ -201,6 +201,40 @@ public class AIController {
             aiService.streamAIAnalysis(sessionId, content, response, userId);
         } catch (Exception e) {
             log.error("流式输出失败: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 真正的SSE流式聊天（边生成边推送）
+     */
+    @GetMapping("/stream/chat")
+    public void streamChat(HttpServletRequest request,
+                           @RequestParam(required = false) String sessionId,
+                           @RequestParam(required = false) String content,
+                           HttpServletResponse response) {
+        if (sessionId == null || "undefined".equals(sessionId) || "".equals(sessionId) || content == null) {
+            response.setStatus(400);
+            response.setContentType("application/json; charset=utf-8");
+            try {
+                response.getWriter().write("{\"code\": 400, \"message\": \"会话ID和内容不能为空\", \"data\": null}");
+            } catch (Exception e) {
+                log.error("写入响应失败", e);
+            }
+            return;
+        }
+        
+        try {
+            Long userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                response.setStatus(401);
+                response.setContentType("application/json; charset=utf-8");
+                response.getWriter().write("{\"code\": 401, \"message\": \"未登录，无权限访问\", \"data\": null}");
+                return;
+            }
+            log.info("[真正SSE] 用户 {} 开始流式聊天, sessionId: {}", userId, sessionId);
+            aiService.streamChat(sessionId, content, response, userId);
+        } catch (Exception e) {
+            log.error("[真正SSE] 流式聊天失败: {}", e.getMessage(), e);
         }
     }
     

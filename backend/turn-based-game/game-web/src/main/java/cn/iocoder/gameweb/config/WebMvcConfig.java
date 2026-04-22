@@ -37,7 +37,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/favicon.ico");
 
         // Knife4j文档路径
-        String[] docPaths = {"/doc.html", "/v3/api-docs/**", "/webjars/**", "/swagger-ui/**", "/swagger-resources/**", "/favicon.ico"};
+        String[] docPaths = {"/doc.html", "/v3/api-docs/**", "/webjars/**", "/swagger-ui/**", "/swagger-resources/**", "/favicon.ico", "/", "/api/", "/api/favicon.ico"};
 
         // 登录和鉴权拦截器
         registry.addInterceptor(authLoginInterceptor)

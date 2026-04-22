@@ -24,6 +24,12 @@ public class AuthLoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response, Object handler) throws Exception {
         String path = request.getRequestURI();
 
+        // 放行根路径和favicon（包括带context-path的情况）
+        if ("/".equals(path) || "/favicon.ico".equals(path) || 
+            "/api/".equals(path) || "/api/favicon.ico".equals(path)) {
+            return true;
+        }
+
         if (path.contains("/users/login") || path.contains("/users/register") || path.contains("/users/captcha") ||
                 path.contains("/levels") || path.contains("/level/") ||
                 path.contains("/elf/") || path.contains("/user-elf/") ||

@@ -468,8 +468,8 @@ const sendMessage = async () => {
     
     console.log('发送消息，sessionId:', sessionId.value)
     
-    // 使用fetch API获取AI回复
-    const response = await fetch(`/api/ai/stream/analysis?sessionId=${sessionId.value}&content=${encodeURIComponent(inputContent)}`, {
+    // 使用真正的SSE流式接口获取AI回复
+    const response = await fetch(`/api/ai/stream/chat?sessionId=${sessionId.value}&content=${encodeURIComponent(inputContent)}`, {
       headers: {
         'Authorization': token
       }
@@ -500,14 +500,21 @@ const sendMessage = async () => {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let chunkCount = 0
+    
+    console.log('[SSE前端] 开始接收流式数据')
     
     while (true) {
       const { done, value } = await reader.read()
       if (done) {
+        console.log('[SSE前端] 流式接收完成，总共接收', chunkCount, '个数据块')
         break
       }
       
+      chunkCount++
       const chunk = decoder.decode(value, { stream: true })
+      console.log(`[SSE前端] 第${chunkCount}块数据 (${chunk.length}字节):`, chunk.substring(0, 100))
+      
       buffer += chunk
       
       // 按行处理SSE数据
@@ -522,16 +529,21 @@ const sendMessage = async () => {
         
         // 检查是否结束
         if (trimmedLine === '[DONE]') {
+          console.log('[SSE前端] 收到[DONE]结束信号')
           break
         }
         
         // 解析data: 行
         if (trimmedLine.startsWith('data: ')) {
           const content = trimmedLine.substring(6) // 去掉 "data: " 前缀
+          console.log('[SSE前端] 解析到内容:', content)
           streamingContent.value += content
         }
       }
     }
+    
+    console.log('[SSE前端] 最终流式内容长度:', streamingContent.value.length)
+    console.log('[SSE前端] 最终流式内容:', streamingContent.value.substring(0, 100))
     
     isStreaming.value = false
     chatMessages.value.push({

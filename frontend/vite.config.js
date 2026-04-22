@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
-    allowedHosts: 'all',
+    allowedHosts: ['3195bb97.r9.cpolar.cn', '.cpolar.cn'],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

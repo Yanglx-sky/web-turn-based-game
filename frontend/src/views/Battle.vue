@@ -3143,27 +3143,42 @@ const continueBattle = async () => {
     // 设置本地状态
     if (battleData.elves && battleData.elves.length > 0) {
       const elf = battleData.elves[0]
+      console.log('[重连] 精灵数据:', elf)
+      
       playerElf.value = {
-        id: elf.elf_id,
-        elfName: elf.elfName,
-        elementType: elf.elementType,
-        hp: elf.current_hp,
-        maxHp: elf.maxHp,
-        mp: elf.current_mp,
-        maxMp: elf.maxMp,
-        level: elf.level
+        id: elf.userElfId || 0,  // 用户精灵ID，用于查询技能
+        elfId: elf.elfId || 0,   // 精灵模板ID，用于显示图片
+        elfName: elf.elfName || '',
+        elementType: elf.elementType || 0,
+        hp: elf.currentHp || 0,
+        maxHp: elf.maxHp || 0,
+        mp: elf.currentMp || 0,
+        maxMp: elf.maxMp || 0,
+        level: elf.level || 1,
+        attack: elf.attack || 0,
+        defense: elf.defense || 0,
+        speed: elf.speed || 0
       }
+      
+      console.log('[重连] 设置玩家精灵:', playerElf.value)
+      console.log('[重连] 精灵图片路径:', getElfImage(playerElf.value.elfId))
     }
     
     // 设置敌人信息
     enemyName.value = battleData.monsterName || '敌人'
     enemyElementType.value = battleData.monsterElementType || 0
+    
     if (battleData.monsters && battleData.monsters.length > 0) {
       const monster = battleData.monsters[0]
-      enemyHp.value = monster.current_hp
-      enemyMaxHp.value = monster.maxHp
-      enemyMp.value = monster.current_mp
-      enemyMaxMp.value = monster.maxMp
+      console.log('[重连] 怪物数据:', monster)
+      
+      enemyHp.value = monster.currentHp || 0
+      enemyMaxHp.value = monster.maxHp || 0
+      enemyMp.value = monster.currentMp || 0
+      enemyMaxMp.value = monster.maxMp || 0
+      
+      console.log('[重连] 设置敌人血量:', enemyHp.value, '/', enemyMaxHp.value)
+      console.log('[重连] 设置敌人蓝量:', enemyMp.value, '/', enemyMaxMp.value)
     }
     
     // 获取精灵技能

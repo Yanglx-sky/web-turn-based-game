@@ -273,20 +273,62 @@ public class BattleServiceImpl implements BattleService {
         battleRecordMapper.updateById(battleRecord);
 
         // 查询精灵状态
-        List<BattleRecordElf> elves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
+        List<BattleRecordElf> battleRecordElves = battleRecordElfMapper.selectByBattleId(battleRecord.getBattleId());
 
         // 查询怪物状态
-        List<BattleRecordMonster> monsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
+        List<BattleRecordMonster> battleRecordMonsters = battleRecordMonsterMapper.selectByBattleId(battleRecord.getBattleId());
 
         // 查询怪物信息获取怪物名称和系别
         String monsterName = "敌人";
         Integer monsterElementType = 0;
-        if (monsters != null && !monsters.isEmpty()) {
-            Monster monster = monsterMapper.selectById(monsters.get(0).getMonsterId());
+        Integer monsterMaxHp = 0;
+        Integer monsterMaxMp = 0;
+        if (battleRecordMonsters != null && !battleRecordMonsters.isEmpty()) {
+            Monster monster = monsterMapper.selectById(battleRecordMonsters.get(0).getMonsterId());
             if (monster != null) {
                 monsterName = monster.getMonsterName();
                 monsterElementType = monster.getElementType();
+                monsterMaxHp = monster.getHp() != null ? monster.getHp() : 0;
+                monsterMaxMp = monster.getMp() != null ? monster.getMp() : 0;
             }
+        }
+
+        // 构建完整的精灵列表（包含精灵详细信息）
+        List<Map<String, Object>> elves = new ArrayList<>();
+        for (BattleRecordElf recordElf : battleRecordElves) {
+            UserElf userElf = userElfMapper.selectById(recordElf.getElfId());
+            if (userElf != null) {
+                Elf elfTemplate = elfMapper.selectById(userElf.getElfId());
+                Map<String, Object> elfMap = new HashMap<>();
+                elfMap.put("userElfId", userElf.getId());  // 用户精灵ID，用于查询技能
+                elfMap.put("elfId", userElf.getElfId());  // 精灵模板ID，用于显示图片
+                elfMap.put("battleRecordId", recordElf.getId());
+                elfMap.put("currentHp", recordElf.getCurrentHp());
+                elfMap.put("currentMp", recordElf.getCurrentMp());
+                elfMap.put("elfState", recordElf.getElfState());
+                elfMap.put("elfName", elfTemplate != null ? elfTemplate.getElfName() : "");
+                elfMap.put("elementType", elfTemplate != null ? elfTemplate.getElementType() : 0);
+                elfMap.put("level", userElf.getLevel());
+                elfMap.put("maxHp", userElf.getMaxHp());
+                elfMap.put("maxMp", userElf.getMaxMp());
+                elfMap.put("attack", userElf.getAttack());
+                elfMap.put("defense", userElf.getDefense());
+                elfMap.put("speed", userElf.getSpeed());
+                elves.add(elfMap);
+            }
+        }
+
+        // 构建完整的怪物列表
+        List<Map<String, Object>> monsters = new ArrayList<>();
+        for (BattleRecordMonster recordMonster : battleRecordMonsters) {
+            Map<String, Object> monsterMap = new HashMap<>();
+            monsterMap.put("monsterId", recordMonster.getMonsterId());
+            monsterMap.put("currentHp", recordMonster.getCurrentHp());
+            monsterMap.put("currentMp", recordMonster.getCurrentMp());
+            monsterMap.put("isAlive", recordMonster.getIsAlive());
+            monsterMap.put("maxHp", monsterMaxHp);
+            monsterMap.put("maxMp", monsterMaxMp);
+            monsters.add(monsterMap);
         }
 
         // 构建返回结果，与前端期望的数据结构一致

@@ -28,6 +28,8 @@ public class SecurityConfig {
                 .contentTypeOptions(contentType -> contentType.disable())
             )
             .authorizeHttpRequests(authorize -> authorize
+                // 根路径（公开）
+                .requestMatchers("/").permitAll()
                 // 文档相关路径（公开）
                 .requestMatchers("/doc.html", "/v3/api-docs/**", "/webjars/**", "/swagger-ui/**", "/swagger-resources/**", "/favicon.ico").permitAll()
                 .requestMatchers("/api/doc.html", "/api/v3/api-docs/**", "/api/webjars/**", "/api/swagger-ui/**", "/api/swagger-resources/**", "/api/favicon.ico").permitAll()
