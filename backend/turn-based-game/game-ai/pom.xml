@@ -51,24 +51,11 @@
         
 
         
-        <!-- 阿里云 SDK 核心依赖 -->
+        <!-- Spring AI Alibaba Dashscope -->
         <dependency>
-            <groupId>com.aliyun</groupId>
-            <artifactId>aliyun-java-sdk-core</artifactId>
-            <version>4.6.3</version>
-        </dependency>
-        
-        <!-- HTTP 客户端依赖 -->
-        <dependency>
-            <groupId>org.apache.httpcomponents.client5</groupId>
-            <artifactId>httpclient5</artifactId>
-            <version>5.3</version>
-        </dependency>
-        
-        <!-- JSON 解析依赖 -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter</artifactId>
+            <version>1.0.0-M5.1</version>
         </dependency>
         
         <!-- MyBatis-Plus 依赖 -->
@@ -83,8 +70,6 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
-        
-
         
         <!-- 引入game-common模块 -->
         <dependency>

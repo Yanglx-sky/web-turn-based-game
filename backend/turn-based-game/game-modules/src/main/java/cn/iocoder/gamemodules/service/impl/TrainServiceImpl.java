@@ -936,39 +936,12 @@ public class TrainServiceImpl implements TrainService {
             return Result.error("未进入训练或训练未结束");
         }
 
-        // 先保存训练日志到数据库
+        // 保存训练日志到数据库
         saveTrainLogs(trainState);
         
-        // 从train_log表查询完整的训练日志
-        List<TrainLog> trainLogs = trainLogMapper.selectByTrainId(trainState.trainId);
-        
-        // 构建完整的训练日志文本
-        StringBuilder trainLogText = new StringBuilder();
-        trainLogText.append("训练ID: ").append(trainState.trainId).append("\n");
-        trainLogText.append("训练人偶: ").append(getMannequinTypeName(trainState.currentMannequin.getType())).append("\n\n");
-        trainLogText.append("=== 训练过程 ===\n");
-        
-        int currentRound = 0;
-        for (TrainLog log : trainLogs) {
-            // 如果是新回合，添加回合分隔线
-            if (!log.getRound().equals(currentRound)) {
-                currentRound = log.getRound();
-                trainLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
-            }
-            trainLogText.append(log.getLogText()).append("\n");
-        }
-        
         String battleResult = trainState.trainWon ? "胜利" : "失败";
-        trainLogText.append("\n=== 训练结果 ===\n");
-        trainLogText.append(battleResult);
 
-        // 调用AI服务获取训练评分报告
-        String aiReport = aiService.getBattleSummary(trainLogText.toString(), battleResult);
-
-        // 生成AI评分（简单模拟）
-        int aiScore = trainState.trainWon ? 80 + (int) (Math.random() * 20) : 40 + (int) (Math.random() * 30);
-
-        // 保存训练记录（更新已有的记录）
+        // 保存训练记录（不生成AI战报，等待用户手动获取时再生成）
         QueryWrapper<TrainRecord> recordWrapper = new QueryWrapper<>();
         recordWrapper.eq("train_id", trainState.trainId);
         TrainRecord trainRecord = trainRecordMapper.selectOne(recordWrapper);
@@ -980,9 +953,6 @@ public class TrainServiceImpl implements TrainService {
             trainRecord.setUserId(userId);
             trainRecord.setMannequinId(trainState.currentMannequin.getId());
         }
-        
-        trainRecord.setAiScore(aiScore);
-        trainRecord.setAiReport(aiReport);
         
         // 设置训练状态
         if (trainState.trainWon) {
@@ -1008,8 +978,7 @@ public class TrainServiceImpl implements TrainService {
         res.put("roundLogs", trainState.battleLogManager.getRoundLogs());
         res.put("trainResult", trainState.trainLog.contains("你逃跑了！") ? "逃跑" : battleResult);
         res.put("status", trainState.trainWon ? 1 : 2); // 添加status字段：1=胜利 2=失败
-        res.put("aiScore", aiScore);
-        res.put("aiReport", aiReport);
+        // 不返回aiScore和aiReport，等待用户手动获取
         return Result.success(res);
     }
 
@@ -1044,6 +1013,89 @@ public class TrainServiceImpl implements TrainService {
         Map<String, Object> res = new HashMap<>();
         res.put("records", recordList);
         return Result.success(res);
+    }
+
+    @Override
+    public Result<?> getTrainSummary(Long userId) {
+        try {
+            // 查询用户最近的已结束训练（status=1胜利 或 2失败）
+            List<TrainRecord> recentTrains = trainRecordMapper.selectList(
+                new QueryWrapper<TrainRecord>()
+                    .eq("user_id", userId)
+                    .in("status", 1, 2) // 1=胜利, 2=失败
+                    .orderByDesc("id")  // 使用id排序获取最新记录
+                    .last("LIMIT 1")
+            );
+            
+            if (recentTrains == null || recentTrains.isEmpty()) {
+                return Result.error("没有已结束的训练记录");
+            }
+            
+            TrainRecord trainRecord = recentTrains.get(0);
+            String trainId = trainRecord.getTrainId();
+            
+            // 如果已经有AI战报，直接返回
+            if (trainRecord.getAiReport() != null && !trainRecord.getAiReport().isEmpty()) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("aiReport", trainRecord.getAiReport());
+                result.put("aiScore", trainRecord.getAiScore());
+                result.put("trainId", trainId);
+                return Result.success(result);
+            }
+            
+            // 从train_log表查询完整的训练日志
+            List<TrainLog> trainLogs = trainLogMapper.selectByTrainId(trainId);
+            
+            if (trainLogs == null || trainLogs.isEmpty()) {
+                return Result.error("训练日志不存在");
+            }
+            
+            // 构建完整的训练日志文本
+            StringBuilder trainLogText = new StringBuilder();
+            trainLogText.append("训练ID: ").append(trainId).append("\n");
+            
+            // 查询训练人偶信息获取系别
+            TrainMannequin mannequin = trainMannequinMapper.selectById(trainRecord.getMannequinId());
+            String mannequinTypeName = mannequin != null ? getMannequinTypeName(mannequin.getType()) : "未知训练人偶";
+            
+            trainLogText.append("训练人偶: ").append(mannequinTypeName).append("\n\n");
+            trainLogText.append("=== 训练过程 ===\n");
+            
+            int currentRound = 0;
+            for (TrainLog log : trainLogs) {
+                // 如果是新回合，添加回合分隔线
+                if (!log.getRound().equals(currentRound)) {
+                    currentRound = log.getRound();
+                    trainLogText.append("\n--- 第").append(currentRound).append("回合 ---\n");
+                }
+                trainLogText.append(log.getLogText()).append("\n");
+            }
+            
+            String battleResult = trainRecord.getStatus() == 1 ? "胜利" : "失败";
+            trainLogText.append("\n=== 训练结果 ===\n");
+            trainLogText.append(battleResult);
+            
+            // 调用AI服务生成总结
+            String aiReport = aiService.getBattleSummary(trainLogText.toString(), battleResult);
+            
+            // 生成AI评分
+            int aiScore = trainRecord.getStatus() == 1 ? 80 + (int) (Math.random() * 20) : 40 + (int) (Math.random() * 30);
+            
+            // 保存到数据库
+            trainRecord.setAiScore(aiScore);
+            trainRecord.setAiReport(aiReport);
+            trainRecordMapper.updateById(trainRecord);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("aiReport", aiReport);
+            result.put("aiScore", aiScore);
+            result.put("trainId", trainId);
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取AI训练总结失败", e);
+            return Result.error("获取AI训练总结失败: " + e.getMessage());
+        }
     }
 
     /**

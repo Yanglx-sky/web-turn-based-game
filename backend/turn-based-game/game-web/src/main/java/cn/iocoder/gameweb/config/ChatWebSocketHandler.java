@@ -2,7 +2,9 @@ package cn.iocoder.gameweb.config;
 
 import cn.iocoder.gamemodules.entity.ChatContent;
 import cn.iocoder.gamemodules.service.ChatService;
+import cn.iocoder.gamecommon.constants.RedisKeyConstant;
 import cn.iocoder.gamecommon.util.JwtUtil;
+import cn.iocoder.gamecommon.util.RedisUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,9 +33,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Autowired
     private JwtUtil jwtUtil;
+    
+    @Autowired
+    private RedisUtil redisUtil;
 
     /**
      * 存储用户会话：userId -> WebSocketSession
+     * 注意：WebSocketSession不能序列化，仍使用内存存储
+     * 但在线状态使用Redis存储，支持分布式部署
      */
     private static final Map<Long, WebSocketSession> USER_SESSIONS = new ConcurrentHashMap<>();
 
@@ -53,8 +61,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 存储用户会话
+        // 存储用户会话（内存）
         USER_SESSIONS.put(userId, session);
+        
+        // 存储在线状态到Redis
+        String onlineKey = RedisKeyConstant.buildChatOnlineKey(userId);
+        redisUtil.set(onlineKey, System.currentTimeMillis(), RedisKeyConstant.CHAT_ONLINE_EXPIRE_SEC);
+        
+        // 增加在线用户数
+        redisUtil.increment(RedisKeyConstant.CHAT_ONLINE_COUNT, 1L);
+        redisUtil.expire(RedisKeyConstant.CHAT_ONLINE_COUNT, RedisKeyConstant.CHAT_ONLINE_EXPIRE_SEC);
+        
         log.info("用户 {} 建立WebSocket连接，当前在线用户数: {}", userId, USER_SESSIONS.size());
 
         // 发送连接成功消息
@@ -116,12 +133,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         Long userId = getUserIdFromSession(session);
         if (userId != null) {
-            // 移除用户会话
+            // 移除用户会话（内存）
             USER_SESSIONS.remove(userId);
-            // 从所有频道中移除
+            
+            // 从Redis中移除在线状态
+            String onlineKey = RedisKeyConstant.buildChatOnlineKey(userId);
+            redisUtil.delete(onlineKey);
+            
+            // 减少在线用户数
+            redisUtil.increment(RedisKeyConstant.CHAT_ONLINE_COUNT, -1L);
+            
+            // 从所有频道中移除（内存）
             CHANNEL_SUBSCRIBERS.forEach((channelId, subscribers) -> {
                 subscribers.remove(userId);
+                // 从Redis中移除频道订阅
+                String channelKey = RedisKeyConstant.buildChatChannelKey(channelId, userId);
+                redisUtil.delete(channelKey);
             });
+            
             log.info("用户 {} 断开WebSocket连接，当前在线用户数: {}", userId, USER_SESSIONS.size());
         }
     }
@@ -150,7 +179,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 订阅频道
      */
     private void subscribeChannel(Long userId, Long channelId, WebSocketSession session) {
+        // 内存存储
         CHANNEL_SUBSCRIBERS.computeIfAbsent(channelId, k -> new ConcurrentHashMap<>()).put(userId, session);
+        
+        // Redis存储订阅状态
+        String channelKey = RedisKeyConstant.buildChatChannelKey(channelId, userId);
+        redisUtil.set(channelKey, System.currentTimeMillis(), RedisKeyConstant.CHAT_CHANNEL_EXPIRE_SEC);
+        
         sendMessage(session, createMessage("subscribed", "已订阅频道 " + channelId, 
                 Map.of("channelId", channelId)));
         log.info("用户 {} 订阅频道 {}", userId, channelId);
@@ -160,11 +195,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 取消订阅频道
      */
     private void unsubscribeChannel(Long userId, Long channelId) {
+        // 内存存储移除
         Map<Long, WebSocketSession> subscribers = CHANNEL_SUBSCRIBERS.get(channelId);
         if (subscribers != null) {
             subscribers.remove(userId);
-            log.info("用户 {} 取消订阅频道 {}", userId, channelId);
         }
+        
+        // Redis存储移除
+        String channelKey = RedisKeyConstant.buildChatChannelKey(channelId, userId);
+        redisUtil.delete(channelKey);
+        
+        log.info("用户 {} 取消订阅频道 {}", userId, channelId);
     }
 
     /**
@@ -224,6 +265,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 广播消息给频道内所有订阅者
      */
     private void broadcastToChannel(Long channelId, String message) {
+        // 优先使用内存中的订阅者列表（快速）
         Map<Long, WebSocketSession> subscribers = CHANNEL_SUBSCRIBERS.get(channelId);
         if (subscribers != null) {
             subscribers.forEach((userId, session) -> {
@@ -232,6 +274,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             });
         }
+    }
+    
+    /**
+     * 检查用户是否在线
+     */
+    public boolean isUserOnline(Long userId) {
+        String onlineKey = RedisKeyConstant.buildChatOnlineKey(userId);
+        return redisUtil.hasKey(onlineKey);
+    }
+    
+    /**
+     * 获取在线用户数
+     */
+    public long getOnlineCount() {
+        Object count = redisUtil.get(RedisKeyConstant.CHAT_ONLINE_COUNT);
+        return count != null ? Long.parseLong(count.toString()) : 0L;
     }
 
     /**

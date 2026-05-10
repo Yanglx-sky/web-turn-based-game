@@ -45,12 +45,31 @@ public class RedisUtil {
     }
 
     /**
-     * 自增
+     * 检查键是否存在
+     * @param key 键
+     * @return 是否存在
+     */
+    public boolean hasKey(String key) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
+
+    /**
+     * 自增（默认+1）
      * @param key 键
      * @return 自增后的值
      */
     public Long increment(String key) {
         return redisTemplate.opsForValue().increment(key);
+    }
+
+    /**
+     * 自增（自定义增量）
+     * @param key 键
+     * @param delta 增量（可为负数表示递减）
+     * @return 自增后的值
+     */
+    public Long increment(String key, long delta) {
+        return redisTemplate.opsForValue().increment(key, delta);
     }
 
     /**

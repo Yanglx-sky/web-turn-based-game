@@ -2164,30 +2164,6 @@ const useSelectedSkill = async (skill) => {
             // 关闭胜负已分弹窗
             showBattleEndPopup.value = false
             
-            // 训练模式：从数据库查询AI评分和战报
-            if (currentBattleType === 'train') {
-              try {
-                console.log('[DEBUG] 战斗胜利 - 训练模式，从数据库查询训练记录')
-                const recordsResponse = await trainApi.getTrainRecords()
-                console.log('[DEBUG] 战斗胜利 - 训练记录响应:', recordsResponse)
-                if (recordsResponse.code === 200 && recordsResponse.data.records && recordsResponse.data.records.length > 0) {
-                  const latestRecord = recordsResponse.data.records[recordsResponse.data.records.length - 1]
-                  console.log('[DEBUG] 战斗胜利 - 最新训练记录:', latestRecord)
-                  
-                  if (latestRecord.aiReport && !aiSummary.value) {
-                    aiSummary.value = latestRecord.aiReport
-                    console.log('[DEBUG] 战斗胜利 - 已获取aiReport:', aiSummary.value)
-                  }
-                  if (latestRecord.aiScore !== null && latestRecord.aiScore !== undefined) {
-                    aiScoreValue.value = latestRecord.aiScore
-                    console.log('[DEBUG] 战斗胜利 - 已获取aiScore:', aiScoreValue.value)
-                  }
-                }
-              } catch (error) {
-                console.error('[DEBUG] 战斗胜利 - 查询训练记录失败:', error)
-              }
-            }
-            
             // 显示战斗结果
             battleResult.value = '战斗胜利！'
             showResult.value = true
@@ -2302,30 +2278,6 @@ const useSelectedSkill = async (skill) => {
           setTimeout(async () => {
             // 关闭胜负已分弹窗
             showBattleEndPopup.value = false
-            
-            // 训练模式：从数据库查询AI评分和战报
-            if (currentBattleType === 'train') {
-              try {
-                console.log('[DEBUG] 战斗失败 - 训练模式，从数据库查询训练记录')
-                const recordsResponse = await trainApi.getTrainRecords()
-                console.log('[DEBUG] 战斗失败 - 训练记录响应:', recordsResponse)
-                if (recordsResponse.code === 200 && recordsResponse.data.records && recordsResponse.data.records.length > 0) {
-                  const latestRecord = recordsResponse.data.records[recordsResponse.data.records.length - 1]
-                  console.log('[DEBUG] 战斗失败 - 最新训练记录:', latestRecord)
-                  
-                  if (latestRecord.aiReport && !aiSummary.value) {
-                    aiSummary.value = latestRecord.aiReport
-                    console.log('[DEBUG] 战斗失败 - 已获取aiReport:', aiSummary.value)
-                  }
-                  if (latestRecord.aiScore !== null && latestRecord.aiScore !== undefined) {
-                    aiScoreValue.value = latestRecord.aiScore
-                    console.log('[DEBUG] 战斗失败 - 已获取aiScore:', aiScoreValue.value)
-                  }
-                }
-              } catch (error) {
-                console.error('[DEBUG] 战斗失败 - 查询训练记录失败:', error)
-              }
-            }
             
             // 显示战斗结果
             battleResult.value = data.trainResult === '逃跑' ? '你逃跑了' : '战斗失败！'
@@ -3066,29 +3018,23 @@ const getAISummary = async () => {
     // 根据战斗类型调用相应的API
     let response
     if (currentBattleType === 'train') {
-      // 训练模式下，直接从数据库查询最新的训练记录获取AI总结
-      console.log('[DEBUG] getAISummary - 训练模式，从数据库查询训练记录')
-      response = await trainApi.getTrainRecords()
-      console.log('[DEBUG] getAISummary - 训练记录响应:', response)
-      if (response.code === 200 && response.data.records && response.data.records.length > 0) {
-        // 获取最新的训练记录（数组最后一条）
-        const latestRecord = response.data.records[response.data.records.length - 1]
-        console.log('[DEBUG] getAISummary - 最新训练记录:', latestRecord)
-        
-        if (latestRecord.aiReport) {
-          aiSummary.value = latestRecord.aiReport
-          console.log('[DEBUG] getAISummary - 已获取aiReport:', aiSummary.value)
-        }
-        if (latestRecord.aiScore !== null && latestRecord.aiScore !== undefined) {
-          aiScoreValue.value = latestRecord.aiScore
-          console.log('[DEBUG] getAISummary - 已获取aiScore:', aiScoreValue.value)
-        }
+      // 训练模式下，调用后端API实时生成AI总结
+      console.log('[DEBUG] getAISummary - 训练模式，调用API实时生成AI总结')
+      response = await trainApi.getTrainSummary()
+      console.log('[DEBUG] getAISummary - AI总结响应:', response)
+      
+      if (response.code === 200 && response.data) {
+        aiSummary.value = response.data.aiReport || response.data.summary
+        aiScoreValue.value = response.data.aiScore !== null && response.data.aiScore !== undefined 
+          ? response.data.aiScore 
+          : null
+        console.log('[DEBUG] getAISummary - 已获取aiReport:', aiSummary.value)
+        console.log('[DEBUG] getAISummary - 已获取aiScore:', aiScoreValue.value)
       } else {
-        console.warn('[DEBUG] getAISummary - 未查询到训练记录')
-        alert('未找到训练记录')
+        alert('获取AI战报总结失败: ' + (response.msg || '未知错误'))
       }
     } else {
-      // 关卡模式
+      // 关卡模式，使用默认30秒超时
       response = await battleApi.getBattleSummary()
       if (response.code === 200) {
         aiSummary.value = response.data.summary

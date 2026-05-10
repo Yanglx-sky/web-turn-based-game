@@ -536,6 +536,13 @@ const sendMessage = async () => {
         // 解析data: 行
         if (trimmedLine.startsWith('data: ')) {
           const content = trimmedLine.substring(6) // 去掉 "data: " 前缀
+          
+          // 过滤 [DONE] 结束标记
+          if (content === '[DONE]') {
+            console.log('[SSE前端] 收到[DONE]结束信号')
+            break
+          }
+          
           console.log('[SSE前端] 解析到内容:', content)
           streamingContent.value += content
         }

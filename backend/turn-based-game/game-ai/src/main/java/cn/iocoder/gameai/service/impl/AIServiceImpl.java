@@ -1,29 +1,25 @@
 package cn.iocoder.gameai.service.impl;
 
-import cn.iocoder.gameai.config.AIConfig;
+import cn.iocoder.gameai.advisor.ChatMemoryAdvisor;
+import cn.iocoder.gameai.advisor.LoggingAdvisor;
 import cn.iocoder.gameai.entity.ChatMessage;
 import cn.iocoder.gameai.entity.SensitiveWord;
 import cn.iocoder.gameai.mapper.SensitiveWordMapper;
 import cn.iocoder.gameai.service.AIService;
 import cn.iocoder.gameai.service.SessionService;
 import cn.iocoder.gamecommon.util.RedisUtil;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -37,7 +33,13 @@ public class AIServiceImpl implements AIService {
     private final Random random = new Random();
     
     @Autowired
-    private AIConfig aiConfig;
+    private ChatClient chatClient;
+    
+    @Autowired
+    private LoggingAdvisor loggingAdvisor;
+    
+    @Autowired
+    private ChatMemoryAdvisor chatMemoryAdvisor;
     
     @Autowired
     private SessionService sessionService;
@@ -48,8 +50,8 @@ public class AIServiceImpl implements AIService {
     @Autowired
     private SensitiveWordMapper sensitiveWordMapper;
     
-    // Jackson JSON处理
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Value("${spring.ai.dashscope.chat.temperature:0.7}")
+    private double temperature;
     
     private static final String SENSITIVE_WORDS_CACHE_KEY = "ai:sensitive:words";
 
@@ -356,168 +358,60 @@ public class AIServiceImpl implements AIService {
         }
     }
     
-    // 调用大模型API的方法
+    // 调用Spring AI的方法
     private String callAI(String prompt) {
         try {
-            // 使用配置中的API信息
-            URL url = new URL(aiConfig.getApiUrl() + "/v1/chat/completions");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("Authorization", "Bearer " + aiConfig.getApiKey());
-            connection.setDoOutput(true);
+            ChatResponse response = chatClient.prompt()
+                    .user(prompt)
+                    .advisors(loggingAdvisor)
+                    .call()
+                    .chatResponse();
             
-            // 使用Jackson构建请求体
-            ObjectNode rootNode = objectMapper.createObjectNode();
-            rootNode.put("model", aiConfig.getModel());
-            rootNode.put("temperature", 0.7);
-            
-            ArrayNode messagesArray = rootNode.putArray("messages");
-            ObjectNode messageNode = messagesArray.addObject();
-            messageNode.put("role", "user");
-            messageNode.put("content", prompt);
-            
-            String requestBody = objectMapper.writeValueAsString(rootNode);
-            
-            // 发送请求，使用UTF-8编码
-            OutputStream os = connection.getOutputStream();
-            os.write(requestBody.getBytes("UTF-8"));
-            os.flush();
-            os.close();
-            
-            // 读取响应
-            BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) {
-                response.append(line);
-            }
-            br.close();
-            
-            // 使用Jackson解析响应
-            String responseStr = response.toString();
-            JsonNode rootNode_response = objectMapper.readTree(responseStr);
-            
-            // 解析 choices[0].message.content
-            JsonNode choices = rootNode_response.path("choices");
-            if (choices.isArray() && choices.size() > 0) {
-                JsonNode message = choices.get(0).path("message");
-                if (message.has("content")) {
-                    return message.get("content").asText();
-                }
+            if (response != null && response.getResult() != null) {
+                return response.getResult().getOutput().getText();
             }
             
             return "AI处理失败，请重试。";
         } catch (Exception e) {
-            e.printStackTrace();
-            // 如果API调用失败，返回一个默认的响应
+            log.error("调用AI失败", e);
             return "AI处理失败，使用默认回复。";
         }
     }
     
     /**
-     * 真正的SSE流式调用大模型API（边接收边推送）
+     * 真正的SSE流式调用Spring AI（边接收边推送）
      * @param prompt 提示词
      * @param writer PrintWriter用于输出SSE数据到前端
      */
     private void callAIStream(String prompt, PrintWriter writer) {
         try {
-            // 使用配置中的API信息
-            URL url = new URL(aiConfig.getApiUrl() + "/v1/chat/completions");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("Authorization", "Bearer " + aiConfig.getApiKey());
-            connection.setRequestProperty("Accept", "text/event-stream"); // 接受流式响应
-            connection.setDoOutput(true);
+            Flux<String> flux = chatClient.prompt()
+                    .user(prompt)
+                    .advisors(loggingAdvisor)
+                    .stream()
+                    .content();
             
-            // 使用Jackson构建请求体
-            ObjectNode rootNode = objectMapper.createObjectNode();
-            rootNode.put("model", aiConfig.getModel());
-            rootNode.put("temperature", 0.7);
-            rootNode.put("stream", true); // 开启流式输出
-            
-            ArrayNode messagesArray = rootNode.putArray("messages");
-            ObjectNode messageNode = messagesArray.addObject();
-            messageNode.put("role", "user");
-            messageNode.put("content", prompt);
-            
-            String requestBody = objectMapper.writeValueAsString(rootNode);
-            
-            // 发送请求，使用UTF-8编码
-            OutputStream os = connection.getOutputStream();
-            os.write(requestBody.getBytes("UTF-8"));
-            os.flush();
-            os.close();
-            
-            // 读取流式响应
-            BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
-            String line;
-            StringBuilder fullResponse = new StringBuilder();
-            int lineCount = 0; // 添加行计数器
-            
-            while ((line = br.readLine()) != null) {
-                // 调试日志：打印原始响应行（改用info级别）
-                if (lineCount % 10 == 0) { // 每10行打印一次，避免日志过多
-                    log.info("[SSE原始响应] 第{}行: {}", lineCount, line.length() > 100 ? line.substring(0, 100) + "..." : line);
-                }
-                lineCount++;
-                
-                // 跳过空行
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
-                
-                // SSE格式：data: {...}
-                if (line.startsWith("data: ")) {
-                    String jsonStr = line.substring(6);
-                    
-                    // 检查是否结束
-                    if ("[DONE]".equals(jsonStr.trim())) {
-                        log.info("[SSE流式] 收到[DONE]结束信号");
-                        break;
+            flux.subscribe(
+                content -> {
+                    if (content != null && !content.isEmpty()) {
+                        writer.write("data: " + content + "\n\n");
+                        writer.flush();
                     }
-                    
-                    try {
-                        // 解析JSON
-                        JsonNode jsonNode = objectMapper.readTree(jsonStr);
-                        JsonNode choices = jsonNode.path("choices");
-                        
-                        if (choices.isArray() && choices.size() > 0) {
-                            JsonNode delta = choices.get(0).path("delta");
-                            String content = delta.path("content").asText();
-                            
-                            if (content != null && !content.isEmpty()) {
-                                fullResponse.append(content);
-                                
-                                // 立即推送给前端
-                                writer.write("data: " + content + "\n\n");
-                                writer.flush();
-                            }
-                        } else {
-                            log.warn("[SSE解析] choices为空或无效: {}", jsonStr);
-                        }
-                    } catch (Exception e) {
-                        log.warn("[SSE解析] 解析SSE数据失败: {}, 错误: {}", line, e.getMessage());
-                    }
-                } else {
-                    // 非SSE格式，可能是完整JSON响应
-                    log.info("[SSE原始响应] 非SSE格式行: {}", line.length() > 100 ? line.substring(0, 100) + "..." : line);
+                },
+                error -> {
+                    log.error("流式调用AI失败", error);
+                    writer.write("data: AI处理失败，请重试。\n\n");
+                    writer.flush();
+                },
+                () -> {
+                    log.info("[SSE流式] 调用完成");
                 }
-            }
-            br.close();
-            
-            log.info("[SSE流式] 调用完成，总响应长度: {}, 内容: {}", fullResponse.length(), 
-                    fullResponse.length() > 100 ? fullResponse.substring(0, 100) + "..." : fullResponse.toString());
-            
+            );
+
         } catch (Exception e) {
             log.error("流式调用AI失败", e);
-            try {
-                writer.write("data: AI处理失败，请重试。\n\n");
-                writer.flush();
-            } catch (Exception ex) {
-                log.error("写入错误响应失败", ex);
-            }
+            writer.write("data: AI处理失败，请重试。\n\n");
+            writer.flush();
         }
     }
     
@@ -572,7 +466,7 @@ public class AIServiceImpl implements AIService {
             "1. 回合数：回合越少分数越高\n" +
             "2. 战斗效率：是否快速击败敌人\n" +
             "3. 策略运用：是否合理使用技能和属性克制\n\n" +
-            "请严格按照以下JSON格式返回，不要返回其他内容，不要添加任何解释或markdown标记：\n" +
+            "请严格按照以下JSON格式返回，不要返回其他内容，不要添加任何解释或代码标记：\n" +
             "{\"score\": 分数, \"star\": 星级}";
         
         // 调用大模型API
@@ -599,54 +493,51 @@ public class AIServiceImpl implements AIService {
         if (dbSession == null) {
             return "会话不存在，请先创建会话。";
         }
-                    
+                        
         // 使用从数据库获取的userId
         Long sessionUserId = dbSession.getUserId();
-                    
+                        
         // 检查用户AI调用次数（使用Redis）
         if (!checkAICallLimit(sessionUserId)) {
             return "今日AI调用次数已达上限，请明日再试。";
         }
-        
+            
         // 内容过滤
         if (containsSensitiveWords(content)) {
             return "输入内容包含敏感词，请修改后重试。";
         }
-        
+            
         // 长度限制
         if (content.length() > 500) {
-            return "输入内容过长，请控制在500字以内。";
+            return "输入内容过长，请控制500字以内。";
         }
-        
+            
         // 记录用户输入到数据库
         sessionService.addMessage(sessionId, "user", content, "text");
-        
-        // 从数据库加载最近的消息作为上下文（带Redis缓存）
-        List<ChatMessage> recentMessages = sessionService.getRecentMessages(sessionId, 10);
-        
-        // 构建上下文
-        StringBuilder context = new StringBuilder();
-        context.append("你是一个精灵训练师的AI助手，负责帮助训练师分析精灵成长和战斗策略。\n\n");
-        
-        // 倒序遍历消息，构建上下文
-        for (int i = recentMessages.size() - 1; i >= 0; i--) {
-            ChatMessage message = recentMessages.get(i);
-            if (message.getRole().equals("user")) {
-                context.append("训练师：").append(message.getContent()).append("\n");
-            } else if (message.getRole().equals("assistant")) {
-                context.append("AI：").append(message.getContent()).append("\n");
-            }
-        }
-        
-        // 调用AI
-        String response = callAI(context.toString());
-        
+            
+        // 构建系统提示词
+        String systemPrompt = "你是一个精灵训练师游戏的AI助手。请根据对话历史，直接回答训练师的最后一个问题。\n" +
+                "要求：\n" +
+                "1. 回答要简洁明确，直接解决问题\n" +
+                "2. 如果问题与精灵训练、战斗策略相关，给出具体建议\n" +
+                "3. 如果问题超出游戏范围，礼貌地引导回游戏话题\n" +
+                "4. 语言风格要友好、鼓励，符合游戏氛围\n" +
+                "5. 回答长度控制在100字以内\n" +
+                "6. 不要重复对话历史中已经说过的内容\n" +
+                "7. 禁止使用任何Emoji表情符号，只使用纯文本";
+            
+        // 调用AI，使用ChatMemoryAdvisor加载历史消息
+        String response = chatClient.prompt()
+                .system(systemPrompt)
+                .user(content)
+                .advisors(loggingAdvisor, chatMemoryAdvisor)
+                .advisors(advisor -> advisor.param("sessionId", sessionId))
+                .call()
+                .content();
+            
         // 记录AI回复到数据库
         sessionService.addMessage(sessionId, "assistant", response, "text");
-        
-        // 增加AI调用次数（Redis计数已在checkAICallLimit中完成）
-        // incrementAICallCount(userId); // 不需要重复增加
-        
+            
         return response;
     }
     
@@ -705,143 +596,6 @@ public class AIServiceImpl implements AIService {
     }
     
     @Override
-    public void streamAIAnalysis(String sessionIdStr, String content, HttpServletResponse response, Long userId) {
-        // 先设置SSE响应头
-        response.setContentType("text/event-stream");
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader("Cache-Control", "no-cache");
-        response.setHeader("Connection", "keep-alive");
-        
-        try {
-            // 转换sessionId为Long类型
-            Long sessionId = Long.parseLong(sessionIdStr);
-            
-            // 从数据库获取会话信息（带Redis缓存）
-            cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, userId);
-            if (dbSession == null) {
-                try (PrintWriter writer = response.getWriter()) {
-                    writer.write("data: 会话不存在，请先创建会话。\n\n");
-                    writer.write("data: [DONE]\n\n");
-                    writer.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return;
-            }
-            
-            // 使用从数据库获取的userId
-            Long sessionUserId = dbSession.getUserId();
-            
-            // 检查用户AI调用次数（使用Redis）
-            if (!checkAICallLimit(sessionUserId)) {
-                try (PrintWriter writer = response.getWriter()) {
-                    writer.write("data: 今日AI调用次数已达上限，请明日再试。\n\n");
-                    writer.write("data: [DONE]\n\n");
-                    writer.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return;
-            }
-            
-            // 内容过滤
-            if (containsSensitiveWords(content)) {
-                try (PrintWriter writer = response.getWriter()) {
-                    writer.write("data: 输入内容包含敏感词，请修改后重试。\n\n");
-                    writer.write("data: [DONE]\n\n");
-                    writer.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return;
-            }
-            
-            // 长度限制
-            if (content.length() > 500) {
-                try (PrintWriter writer = response.getWriter()) {
-                    writer.write("data: 输入内容过长，请控制在500字以内。\n\n");
-                    writer.write("data: [DONE]\n\n");
-                    writer.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return;
-            }
-            
-            try (PrintWriter writer = response.getWriter()) {
-                // 记录用户输入到数据库
-                sessionService.addMessage(sessionId, "user", content, "text");
-                            
-                // 从数据库加载最近的消息作为上下文（带Redis缓存）
-                List<ChatMessage> recentMessages = sessionService.getRecentMessages(sessionId, 10);
-                
-                log.info("加载到 {} 条历史消息", recentMessages.size());
-                
-                // 构建上下文
-                StringBuilder context = new StringBuilder();
-                context.append("你是一个精灵训练师的AI助手，负责帮助训练师分析精灵成长和战斗策略。\n\n");
-                context.append("请根据对话历史，回答用户的最后一个问题。\n\n");
-                
-                // 倒序遍历消息（因为查询结果是降序），构建正序上下文（从旧到新）
-                for (int i = recentMessages.size() - 1; i >= 0; i--) {
-                    ChatMessage message = recentMessages.get(i);
-                    if (message.getRole().equals("user")) {
-                        context.append("训练师：").append(message.getContent()).append("\n");
-                    } else if (message.getRole().equals("assistant")) {
-                        context.append("AI：").append(message.getContent()).append("\n");
-                    }
-                }
-                
-                log.info("构建的上下文：\n{}", context.toString());
-                
-                // 【伪流式】调用AI，等待完整响应后再逐字播放
-                String responseContent = callAI(context.toString());
-                
-                // 记录AI回复到数据库
-                sessionService.addMessage(sessionId, "assistant", responseContent, "text");
-                
-                // Redis计数已在checkAICallLimit中完成，不需要重复增加
-                
-                // 流式输出（优化性能：按词组输出而非单字符，减少flush次数）
-                // 使用更简单的分割策略：按标点、空格分割，中文按2-3字一组
-                String[] words = responseContent.split("(?<=[，。！？、；：\"\'\u2018\u2019\u201c\u201d（）【】《》])|(?<=\\s)");
-                for (String word : words) {
-                    if (word != null && !word.isEmpty()) {
-                        // 如果是纯中文且长度>3，进一步拆分
-                        if (word.length() > 3 && word.matches("^[\\u4e00-\\u9fa5]+$")) {
-                            for (int i = 0; i < word.length(); i += 3) {
-                                int end = Math.min(i + 3, word.length());
-                                writer.write("data: " + word.substring(i, end) + "\n\n");
-                                writer.flush();
-                                Thread.sleep(10);
-                            }
-                        } else {
-                            writer.write("data: " + word + "\n\n");
-                            writer.flush();
-                            Thread.sleep(10);
-                        }
-                    }
-                }
-                
-                // 结束信号
-                writer.write("data: [DONE]\n\n");
-                writer.flush();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
-        } catch (NumberFormatException e) {
-            try (PrintWriter writer = response.getWriter()) {
-                writer.write("data: 无效的会话ID。\n\n");
-                writer.write("data: [DONE]\n\n");
-                writer.flush();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-    
-    @Override
     public void streamChat(String sessionIdStr, String content, HttpServletResponse response, Long userId) {
         // 先设置SSE响应头
         response.setContentType("text/event-stream");
@@ -849,105 +603,127 @@ public class AIServiceImpl implements AIService {
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no"); // 禁用nginx缓冲
-        
+            
         try {
             // 转换sessionId为Long类型
             Long sessionId = Long.parseLong(sessionIdStr);
-            
+                
             // 从数据库获取会话信息（带Redis缓存）
             cn.iocoder.gameai.entity.ChatSession dbSession = sessionService.getSessionById(sessionId, userId);
             if (dbSession == null) {
-                try (PrintWriter writer = response.getWriter()) {
+                try {
+                    PrintWriter writer = response.getWriter();
                     writer.write("data: 会话不存在，请先创建会话。\n\n");
                     writer.write("data: [DONE]\n\n");
                     writer.flush();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.error("写入响应失败", e);
                 }
                 return;
             }
-            
+                
             // 使用从数据库获取的userId
             Long sessionUserId = dbSession.getUserId();
-            
+                
             // 检查用户AI调用次数（使用Redis）
             if (!checkAICallLimit(sessionUserId)) {
-                try (PrintWriter writer = response.getWriter()) {
+                try {
+                    PrintWriter writer = response.getWriter();
                     writer.write("data: ⚠️ 今日AI调用次数已达上限，请明日再试。\n\n");
                     writer.write("data: [DONE]\n\n");
                     writer.flush();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.error("写入响应失败", e);
                 }
                 return;
             }
-            
+                
             // 内容过滤
             if (containsSensitiveWords(content)) {
-                try (PrintWriter writer = response.getWriter()) {
+                try {
+                    PrintWriter writer = response.getWriter();
                     writer.write("data: ⚠️ 输入内容包含敏感词，请修改后重试。\n\n");
                     writer.write("data: [DONE]\n\n");
                     writer.flush();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.error("写入响应失败", e);
                 }
                 return;
             }
-            
+                
             // 长度限制
             if (content.length() > 500) {
-                try (PrintWriter writer = response.getWriter()) {
-                    writer.write("data: ⚠️ 输入内容过长，请控制在500字以内。\n\n");
+                try {
+                    PrintWriter writer = response.getWriter();
+                    writer.write("data: ⚠️ 输入内容过长，请控制500字以内。\n\n");
                     writer.write("data: [DONE]\n\n");
                     writer.flush();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.error("写入响应失败", e);
                 }
                 return;
             }
+                
+            // 设置SSE响应头
+            response.setContentType("text/event-stream");
+            response.setCharacterEncoding("UTF-8");
+            response.setHeader("Cache-Control", "no-cache");
+            response.setHeader("Connection", "keep-alive");
+            response.setHeader("X-Accel-Buffering", "no");
             
             try (PrintWriter writer = response.getWriter()) {
                 // 记录用户输入到数据库
                 sessionService.addMessage(sessionId, "user", content, "text");
-                            
-                // 从数据库加载最近的消息作为上下文（带Redis缓存）
-                List<ChatMessage> recentMessages = sessionService.getRecentMessages(sessionId, 10);
-                
-                log.info("[真正SSE] 加载到 {} 条历史消息", recentMessages.size());
-                
-                // 构建上下文
-                StringBuilder context = new StringBuilder();
-                context.append("你是一个精灵训练师的AI助手，负责帮助训练师分析精灵成长和战斗策略。\n\n");
-                context.append("请根据对话历史，回答用户的最后一个问题。\n\n");
-                
-                // 倒序遍历消息（因为查询结果是降序），构建正序上下文（从旧到新）
-                for (int i = recentMessages.size() - 1; i >= 0; i--) {
-                    ChatMessage message = recentMessages.get(i);
-                    if (message.getRole().equals("user")) {
-                        context.append("训练师：").append(message.getContent()).append("\n");
-                    } else if (message.getRole().equals("assistant")) {
-                        context.append("AI：").append(message.getContent()).append("\n");
-                    }
-                }
-                
-                log.info("[真正SSE] 构建的上下文：\n{}", context.toString());
-                
-                // 【真正流式】边生成边推送，无需等待完整响应
+                    
+                log.info("[真正SSE] 用户 {} 开始流式聊天, sessionId: {}", userId, sessionId);
+                    
+                // 构建系统提示词
+                String systemPrompt = "你是一个精灵训练师游戏的AI助手。请根据对话历史，直接回答训练师的最后一个问题。\n" +
+                        "要求：\n" +
+                        "1. 回答要简洁明确，直接解决问题\n" +
+                        "2. 如果问题与精灵训练、战斗策略相关，给出具体建议\n" +
+                        "3. 如果问题超出游戏范围，礼貌地引导回游戏话题\n" +
+                        "4. 语言风格要友好、鼓励，符合游戏氛围\n" +
+                        "5. 回答长度控制在100字以内\n" +
+                        "6. 不要重复对话历史中已经说过的内容\n" +
+                        "7. 禁止使用任何Emoji表情符号，只使用纯文本";
+                    
+                // 【真正流式】边生成边推送，使用Spring AI的Flux
                 StringBuilder fullResponse = new StringBuilder();
-                
-                log.info("[真正SSE] 开始调用callAIStream...");
-                // 直接传入真正的writer，让callAIStream实时推送给前端
-                callAIStream(context.toString(), writer);
-                log.info("[真正SSE] callAIStream调用返回");
-                
-                // 发送结束信号
-                writer.write("data: [DONE]\n\n");
-                writer.flush();
-                
-                // 注意：完整响应无法在这里获取，因为callAIStream直接写入了writer
-                // 如果需要保存到数据库，可以在callAIStream内部处理
-                log.info("[真正SSE] 流式输出完成");
-                
+                    
+                Flux<String> flux = chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(content)
+                        .advisors(loggingAdvisor, chatMemoryAdvisor)
+                        .advisors(advisor -> advisor.param("sessionId", sessionId))
+                        .stream()
+                        .content();
+                    
+                // 使用阻塞式遍历，确保在请求线程中写入响应
+                flux.doOnNext(chunk -> {
+                    if (chunk != null && !chunk.isEmpty()) {
+                        fullResponse.append(chunk);
+                        writer.write("data: " + chunk + "\n\n");
+                        writer.flush();
+                    }
+                })
+                .doOnError(error -> {
+                    log.error("[真正SSE] 流式聊天失败", error);
+                    writer.write("data: ❌ AI处理失败，请重试。\n\n");
+                    writer.write("data: [DONE]\n\n");
+                    writer.flush();
+                })
+                .doOnComplete(() -> {
+                    // 完成时保存完整响应到数据库
+                    sessionService.addMessage(sessionId, "assistant", fullResponse.toString(), "text");
+                        
+                    // 发送结束信号
+                    writer.write("data: [DONE]\n\n");
+                    writer.flush();
+                    log.info("[真正SSE] 流式输出完成");
+                })
+                .blockLast(); // 阻塞等待流完成，确保响应在请求线程中写入
+                    
             } catch (Exception e) {
                 log.error("[真正SSE] 流式聊天失败", e);
                 try {
@@ -959,13 +735,14 @@ public class AIServiceImpl implements AIService {
                     log.error("写入错误响应失败", ex);
                 }
             }
-
+    
         } catch (NumberFormatException e) {
-            try (PrintWriter writer = response.getWriter()) {
+            try {
+                PrintWriter writer = response.getWriter();
                 writer.write("data: ❌ 无效的会话ID。\n\n");
                 writer.write("data: [DONE]\n\n");
                 writer.flush();
-            } catch (IOException ex) {
+            } catch (Exception ex) {
                 log.error("写入响应失败", ex);
             }
         }

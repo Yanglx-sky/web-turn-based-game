@@ -34,6 +34,10 @@ export const trainApi = {
   trainSettlement: () => api.post(`/api/train/settlement`),
   // 获取训练记录
   getTrainRecords: () => api.get(`/api/train/records`),
+  // 获取AI训练总结（实时生成）
+  getTrainSummary: () => api.get(`/api/train/ai/summary`, {
+    timeout: 30000  // AI总结可能需要较长时间，默认30秒超时
+  }),
   // 获取训练中的出战精灵
   getBattleElves: () => api.get(`/api/train/battle_elves`),
   // 获取训练日志

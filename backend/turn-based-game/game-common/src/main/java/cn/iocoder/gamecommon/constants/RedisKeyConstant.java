@@ -31,6 +31,17 @@ public class RedisKeyConstant {
     /** 奖励已领取标记（防重复领奖）Key: battle:reward:{userId}:{levelId}:{date}:{battleId} */
     public static final String BATTLE_REWARD = "battle:reward:";
 
+    // ==================== 聊天系统相关 ====================
+    
+    /** 在线用户会话 Key: chat:online:{userId} */
+    public static final String CHAT_ONLINE = "chat:online:";
+    
+    /** 频道订阅用户 Key: chat:channel:{channelId} */
+    public static final String CHAT_CHANNEL_SUB = "chat:channel:";
+    
+    /** 在线用户数统计 Key: chat:online:count */
+    public static final String CHAT_ONLINE_COUNT = "chat:online:count";
+
     // ==================== 每日收益上限相关 ====================
     
     /** 每日经验收益 Key: daily:exp:{userId}:{date} */
@@ -55,6 +66,12 @@ public class RedisKeyConstant {
     
     /** 冷却时间过期（秒） */
     public static final long COOLDOWN_EXPIRE_SEC = 10;
+    
+    /** 聊天在线状态过期时间（秒）- 2小时 */
+    public static final long CHAT_ONLINE_EXPIRE_SEC = 7200;
+    
+    /** 频道订阅过期时间（秒）- 2小时 */
+    public static final long CHAT_CHANNEL_EXPIRE_SEC = 7200;
 
     // ==================== 工具方法 ====================
     
@@ -112,5 +129,15 @@ public class RedisKeyConstant {
     /** 构建奖励领取Key */
     public static String buildBattleRewardKey(Long userId, Integer levelId, String battleId) {
         return BATTLE_REWARD + userId + ":" + levelId + ":" + getTodayStr() + ":" + battleId;
+    }
+    
+    /** 构建聊天在线状态Key */
+    public static String buildChatOnlineKey(Long userId) {
+        return CHAT_ONLINE + userId;
+    }
+    
+    /** 构建频道订阅Key */
+    public static String buildChatChannelKey(Long channelId, Long userId) {
+        return CHAT_CHANNEL_SUB + channelId + ":" + userId;
     }
 }

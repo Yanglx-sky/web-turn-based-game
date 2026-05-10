@@ -287,6 +287,18 @@ public class TrainController {
         }
     }
 
+    @GetMapping("/ai/summary")
+    @Operation(summary = "获取AI训练总结", description = "训练结束后获取AI生成的训练总结")
+    public Result<?> getTrainSummary(HttpServletRequest request) {
+        try {
+            String token = getToken(request);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            return trainService.getTrainSummary(userId);
+        } catch (Exception e) {
+            return Result.error("获取AI训练总结失败: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/battle_elves")
     @Operation(summary = "获取训练中的出战精灵", description = "获取训练模式下的出战精灵列表")
     public Result<List<Map<String, Object>>> getBattleElves(HttpServletRequest request) {
@@ -350,5 +362,19 @@ public class TrainController {
         } catch (Exception e) {
             return Result.error("获取用户信息失败");
         }
+    }
+
+    /**
+     * 从请求头获取token
+     */
+    private String getToken(HttpServletRequest request) {
+        String token = request.getHeader("Authorization");
+        if (token == null || token.isEmpty()) {
+            throw new RuntimeException("未登录，无权限访问");
+        }
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        return token;
     }
 }

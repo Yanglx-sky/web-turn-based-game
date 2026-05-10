@@ -52,8 +52,11 @@ export const battleApi = {
   },
   
   // 获取AI战报总结
-  getBattleSummary: () => {
-    return api.get('/api/battle/ai/summary')
+  getBattleSummary: (config = {}) => {
+    // AI总结可能需要较长时间，默认30秒超时
+    return api.get('/api/battle/ai/summary', {
+      timeout: config.timeout || 30000
+    })
   },
   
   // 获取战斗策略推荐

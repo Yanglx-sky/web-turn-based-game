@@ -21,9 +21,8 @@ spring:
     bucket-name: dorm-repair-system
   # Spring AI 配置
   ai:
-    openai:
+    dashscope:
       api-key: ${API_KEY}
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
       chat:
         model: qwen-turbo
         temperature: 0.7
