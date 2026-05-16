@@ -1,1 +1,2 @@
-以main分支为展示版本
+main分支下的ai模块使用的是httpurlconnection调用大模型api
+second分支下的ai模块是spring ai
